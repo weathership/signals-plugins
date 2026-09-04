@@ -11,5 +11,6 @@ into `$HERMES_HOME/plugins/<name>/`.
 - This repository is not a pip package. Hermes discovers plugins by finding
   `plugin.yaml` and `__init__.py` on its plugin search path.
 
-Do not copy plugin trees into `hermes-agent`. Its `plugins/memory/` tree is
-closed; Signals memory lives in this repository on purpose.
+These plugins live in this repository so they can integrate a Hermes
+profile with a Signals federated workspace. Signals memory is provided
+here rather than by Hermes's bundled `plugins/memory/`.

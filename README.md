@@ -1,9 +1,9 @@
 # signals-plugins
 
-This repository holds standalone Hermes plugins for the
-[Signals lattice](https://github.com/weathership/signals). Clone it, then
-symlink the plugins into `$HERMES_HOME/plugins/` or install them with
-`hermes plugins install`. Do not vendor them into `hermes-agent`.
+These standalone Hermes plugins integrate Hermes with a
+[Signals](https://github.com/weathership/signals) federated workspace.
+Clone this repository, then symlink the plugins into `$HERMES_HOME/plugins/`
+or install them with `hermes plugins install`.
 
 | Directory | Hermes kind | Activate |
 |-----------|-------------|----------|
