@@ -1,4 +1,4 @@
-"""install.sh links plugin dirs into a temp HERMES_HOME (hermes-lcm packaging shape)."""
+"""install.sh links plugin dirs into a temp HERMES_HOME."""
 from __future__ import annotations
 
 import os

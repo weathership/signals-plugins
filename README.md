@@ -1,10 +1,8 @@
 # signals-plugins
 
 Standalone Hermes plugins for the [Signals lattice](https://github.com/weathership/signals).
-Same install shape as [rtk-rewrite](https://github.com/rtk-ai/rtk/tree/develop/hooks/hermes)
-and [hermes-lcm](https://github.com/stephenschoettler/hermes-lcm): a checkout you
-symlink (or `hermes plugins install`) into `$HERMES_HOME/plugins/`. Not vendored
-into `hermes-agent`.
+A checkout you symlink (or `hermes plugins install`) into `$HERMES_HOME/plugins/`.
+Not vendored into `hermes-agent`.
 
 | Directory | Hermes kind | Activate |
 |-----------|-------------|----------|
@@ -27,8 +25,7 @@ From this checkout (profile-aware; refuses to clobber a non-symlink):
 # ./scripts/install.sh --uninstall
 ```
 
-That is the rtk/lcm path: the repo stays the source of truth;
-`$HERMES_HOME/plugins/<name>` is a symlink.
+The repo stays the source of truth; `$HERMES_HOME/plugins/<name>` is a symlink.
 
 One plugin via Hermes (subdir clone):
 
@@ -77,7 +74,7 @@ tests/
 ```
 
 Do not use `plugins/` in this repo as the Hermes runtime path — that is
-what `install.sh` is for (same warning as rtk's `hooks/hermes/`).
+what `install.sh` is for.
 
 ## Tests
 

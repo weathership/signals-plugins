@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Signals Hermes plugins into the active HERMES_HOME (rtk / hermes-lcm pattern).
+# Install Signals Hermes plugins into the active HERMES_HOME.
 #
 # Symlinks each plugins/<name>/ directory to $HERMES_HOME/plugins/<name>/.
 # Does not clone into the runtime path — the checkout stays the source of truth.

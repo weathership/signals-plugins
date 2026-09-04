@@ -1,7 +1,6 @@
 # Packaging
 
-Canonical install is clone-or-symlink into `$HERMES_HOME/plugins/<name>/`,
-the same contract as hermes-lcm and rtk's Hermes adapter.
+Canonical install is clone-or-symlink into `$HERMES_HOME/plugins/<name>/`.
 
 - `scripts/install.sh` preflights, then `ln -s` each `plugins/<name>` into
   the active profile's plugin directory (`HERMES_HOME` or
