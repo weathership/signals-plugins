@@ -14,3 +14,9 @@ into `$HERMES_HOME/plugins/<name>/`.
 These plugins live in this repository so they can integrate a Hermes
 profile with a Signals federated workspace. Signals memory is provided
 here rather than by Hermes's bundled `plugins/memory/`.
+
+Going forward, that workspace requires
+[impala_fdw](https://github.com/weathership/impala_fdw) on Signals
+Postgres so Hermes can reach Kudu-backed tables through foreign tables
+instead of a first-class Impala JDBC client. The README Impala FDW
+section describes that requirement.
