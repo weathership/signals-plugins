@@ -17,6 +17,7 @@ here rather than by Hermes's bundled `plugins/memory/`.
 
 Going forward, that workspace requires
 [impala_fdw](https://github.com/weathership/impala_fdw) on Signals
-Postgres so Hermes can reach Kudu-backed tables through foreign tables
-instead of a first-class Impala JDBC client. The README Impala FDW
+Postgres so Impala's transparent hierarchical storage (Kudu hot, Iceberg
+cold, unified SQL views) is available as foreign tables. Certain local
+plugin functions may assume those tables exist. The README Impala FDW
 section describes that requirement.

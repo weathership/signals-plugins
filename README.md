@@ -69,14 +69,13 @@ Restart Hermes. `hermes plugins list` should list the three plugins;
 
 Going forward, a Signals federated workspace must expose its data plane
 through [impala_fdw](https://github.com/weathership/impala_fdw). That
-PostgreSQL foreign data wrapper lets AGE graph and governance SQL join
-Kudu hot-tier tables (and Impala Iceberg cold-tier views) without copying
-bulk rows into Postgres.
+PostgreSQL foreign data wrapper surfaces Impala's transparent hierarchical
+storage: Kudu for the hot mutable tier, Iceberg for the cold tier, and
+unified Impala SQL views over both.
 
-Hermes does not talk to Impala over JDBC. These plugins will query the
-workspace through PostgreSQL, so `impala_fdw` has to be installed on the
-Signals Postgres instance. Build and usage are documented in that
-repository; this checkout does not ship the extension.
+Certain local plugin functions may assume those foreign tables are
+available on the Signals Postgres instance. Build and usage are documented
+in that repository; this checkout does not ship the extension.
 
 ## Layout
 
