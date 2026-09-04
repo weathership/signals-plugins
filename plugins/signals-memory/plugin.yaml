@@ -1,0 +1,6 @@
+name: signals-memory
+version: 0.1.0
+description: Signals-local memory (profile-scoped JSONL; on_pre_compress handoff)
+author: zndx
+hooks:
+  - on_session_end

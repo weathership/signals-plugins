@@ -1,0 +1,4 @@
+name: signals-compact
+version: 0.1.0
+description: Signals context engine (ContextCompressor, lattice-owned)
+author: zndx
