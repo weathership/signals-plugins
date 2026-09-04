@@ -1,8 +1,9 @@
 # signals-plugins
 
-Standalone Hermes plugins for the [Signals lattice](https://github.com/weathership/signals).
-A checkout you symlink (or `hermes plugins install`) into `$HERMES_HOME/plugins/`.
-Not vendored into `hermes-agent`.
+This repository holds standalone Hermes plugins for the
+[Signals lattice](https://github.com/weathership/signals). Clone it, then
+symlink the plugins into `$HERMES_HOME/plugins/` or install them with
+`hermes plugins install`. Do not vendor them into `hermes-agent`.
 
 | Directory | Hermes kind | Activate |
 |-----------|-------------|----------|
@@ -10,14 +11,15 @@ Not vendored into `hermes-agent`.
 | `plugins/signals-memory` | `MemoryProvider` | `memory.provider: signals-memory` |
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
 
-`signals-oip` lowers OpenAI-shaped `tools` / `messages` to OIP `llm_tools_v1`
-when the peer advertises that extension, otherwise `Engine/Complete`
-(`tools_json`). Requires the Hermes **signals** extra (`hsengine`) for generated
-stubs.
+`signals-oip` converts OpenAI-shaped `tools` and `messages` to OIP
+`llm_tools_v1` when the peer advertises that extension; otherwise it uses
+`Engine/Complete` (`tools_json`). It requires the Hermes **signals** extra
+(`hsengine`) for generated stubs.
 
 ## Install
 
-From this checkout (profile-aware; refuses to clobber a non-symlink):
+From this checkout, `scripts/install.sh` is profile-aware and refuses to
+overwrite a path that is not already our symlink:
 
 ```bash
 ./scripts/install.sh
@@ -25,9 +27,10 @@ From this checkout (profile-aware; refuses to clobber a non-symlink):
 # ./scripts/install.sh --uninstall
 ```
 
-The repo stays the source of truth; `$HERMES_HOME/plugins/<name>` is a symlink.
+This repository remains the source of truth. Each
+`$HERMES_HOME/plugins/<name>` entry is a symlink back to it.
 
-One plugin via Hermes (subdir clone):
+To install a single plugin through Hermes (subdirectory clone):
 
 ```bash
 hermes plugins install file://$PWD#plugins/signals-oip
@@ -35,7 +38,7 @@ hermes plugins install file://$PWD#plugins/signals-memory
 hermes plugins install file://$PWD#plugins/signals-compact
 ```
 
-After a GitHub publish:
+After this repository is published on GitHub:
 
 ```bash
 hermes plugins install weathership/signals-plugins/plugins/signals-oip
@@ -59,8 +62,8 @@ context:
   engine: signals
 ```
 
-Restart Hermes. `hermes plugins list` should show the three names;
-`hermes doctor` should see provider `signals`.
+Restart Hermes. `hermes plugins list` should list the three plugins;
+`hermes doctor` should report provider `signals`.
 
 ## Layout
 
@@ -73,8 +76,8 @@ scripts/install.sh
 tests/
 ```
 
-Do not use `plugins/` in this repo as the Hermes runtime path — that is
-what `install.sh` is for.
+Do not point Hermes at `plugins/` in this repository. Use `install.sh` so
+the runtime path is `$HERMES_HOME/plugins/`.
 
 ## Tests
 
