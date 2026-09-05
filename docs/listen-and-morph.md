@@ -94,8 +94,8 @@ ICE/TURN only when this ships.
 
 ## Implement order (when we leave design)
 
-1. Dashboard plugin tab: mic → `/api/audio/transcribe` → show text; morph
-   canvas with a placeholder still.
+1. Dashboard plugin tab: mic → `/api/audio/transcribe` → show text; viewer
+   placeholder until hsengine has a still.
 2. `signals-graph` hooks writing `ctx.state`.
 3. `Engine/Render` client; hsengine LIGHT forward-sim (YK one 4090); plugin viewer.
 4. Plugin-local agent turn so listen is a conversation, not a notepad.
