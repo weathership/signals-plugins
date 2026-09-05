@@ -20,7 +20,7 @@ take it.
 
 | Dir | Hermes kind | Job |
 |-----|-------------|-----|
-| `plugins/signals-listen` | dashboard UI + `plugin_api.py` | Mic, morph canvas, plugin HTTP/WS |
+| `plugins/signals-listen` | dashboard UI + `plugin_api.py` | Mic, **viewer** of hsengine forward-sim, plugin HTTP/WS |
 | `plugins/signals-graph` | general plugin (`post_llm_call`, `post_tool_call`) | Conversation graph JSON (points, edges, κ stubs) |
 | existing `signals-oip` / `signals-memory` | already shipped | Lattice model + turn memory for the graph |
 
@@ -37,7 +37,7 @@ once duplex exists. Not this pass.
 | TTS | `POST /api/audio/speak` / speak-stream WS — same |
 | Graph updates | `post_llm_call` / `post_tool_call` → `ctx.state` JSON |
 | Gaius keyframe | `plugin_api` is a gRPC client of `zndx.engine.v1.Engine/Render` (see signals-protocol `keyframe.md`). Still bytes live on RustFS (`data_uri`); optional `preview_jpeg` on the RPC. |
-| Live picture | Plugin canvas: last still + WebGL morph; blend when `GET /api/plugins/signals-listen/keyframe` returns a new URL |
+| Live picture | **hsengine** forward-sim: stream I-frame from `Render` `data_uri`, ask YK for **one 4090 LIGHT**, emit frames, store on Hermes RustFS, serve the plugin viewer. Gaius = LuxCore only. |
 | Voice turn → agent | `plugin_api` runs a one-shot `AIAgent.chat()` / `hermes -q` in the dashboard process (plugins may import Hermes). Result shown on the plugin page. Does **not** type into Chat PTY. |
 | Auth | Plugin routes sit behind the dashboard gate (already) |
 
@@ -54,7 +54,7 @@ laptop mic  --getUserMedia-->  plugin JS
          plugin_api: agent turn       LuxCore still → RustFS data_uri
                  |                    |  (+ preview_jpeg on the RPC)
                  +--> signals-graph --graph_json--+
-                 +--> morph canvas (P-frames; blend on new preview/URI)
+                 +--> hsengine LIGHT 4090 (YK) forward-sim → local RustFS → plugin viewer
 ```
 
 Cadence:
@@ -63,9 +63,13 @@ Cadence:
 - **Graph:** append on each `post_llm_call` (role, tokens hash, tool names). κ can be a cheap local stub until Gaius returns curvature with the still.
 - **Keyframe:** after N turns or a topic shift, `plugin_api` calls
   `Engine/Render` on Gaius with `graph_json`. Response `data_uri` is the
-  SoR still on Signals RustFS; `preview_jpeg` (optional, ≤256 KiB) starts
-  the morph without a second GET. Interpolator never calls pyluxcore.
-- **Morph:** two textures + mix; Procrustes/layout lock is Gaius’s job on the still (stable camera). Hermes only crossfades.
+  SoR still on Signals RustFS. **hsengine** streams that object, replicas
+  it on Hermes RustFS, and runs forward-sim as a **LIGHT** workload
+  (one 4090; YuniKorn admits). A new `tx_id` blends in **in hsengine**.
+  Gaius never interpolates. Browser never interpolates. No pyluxcore
+  in this checkout.
+- **Layout lock** on the still is Gaius (stable camera / Procrustes).
+  Hermes interpolates pixels, not Ricci.
 
 ## Protocol contract (`Engine/Render`)
 
@@ -77,9 +81,9 @@ recompute Ricci.
 ## WebRTC (explicitly later)
 
 Same plugin, new transport: `RTCPeerConnection` in the JS bundle, signaling
-JSON on `plugin_api`. Audio track = laptop; video track = interpolator
-canvas `captureStream()`. Still not `zndx.engine.v1`. ICE/TURN only when
-this ships.
+JSON on `plugin_api`. Audio track = laptop; video track = **hsengine
+forward-sim** (not a browser canvas). Still not `zndx.engine.v1`.
+ICE/TURN only when this ships.
 
 ## Out of scope (would be upstream)
 
@@ -93,6 +97,6 @@ this ships.
 1. Dashboard plugin tab: mic → `/api/audio/transcribe` → show text; morph
    canvas with a placeholder still.
 2. `signals-graph` hooks writing `ctx.state`.
-3. `Engine/Render` client + morph on `preview_jpeg` / `data_uri`.
+3. `Engine/Render` client; hsengine LIGHT forward-sim (YK one 4090); plugin viewer.
 4. Plugin-local agent turn so listen is a conversation, not a notepad.
 5. WebRTC mux when barge-in needs it.
