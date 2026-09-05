@@ -2,8 +2,8 @@
 
 These standalone Hermes plugins integrate Hermes with a
 [Signals](https://github.com/weathership/signals) federated workspace.
-Clone this repository, then symlink the plugins into `$HERMES_HOME/plugins/`
-or install them with `hermes plugins install`.
+Install them from GitHub with `hermes plugins install` (same subdirectory
+clone as other third-party plugins).
 
 | Directory | Hermes kind | Activate |
 |-----------|-------------|----------|
@@ -21,30 +21,26 @@ branch carries the Signals engine integration and the generated stubs.
 
 ## Install
 
-From this checkout, `scripts/install.sh` is profile-aware and refuses to
-overwrite a path that is not already our symlink:
+Canonical — clone each plugin from GitHub into `$HERMES_HOME/plugins/`:
+
+```bash
+hermes plugins install weathership/signals-plugins/plugins/signals-oip --enable
+hermes plugins install weathership/signals-plugins/plugins/signals-memory --enable
+hermes plugins install weathership/signals-plugins/plugins/signals-compact --enable
+```
+
+All three:
+
+```bash
+./scripts/install-from-github.sh --enable
+```
+
+Developer checkout (symlink this tree; not the published path):
 
 ```bash
 ./scripts/install.sh
 # HERMES_PROFILE=coder ./scripts/install.sh
 # ./scripts/install.sh --uninstall
-```
-
-This repository remains the source of truth. Each
-`$HERMES_HOME/plugins/<name>` entry is a symlink back to it.
-
-To install a single plugin through Hermes (subdirectory clone):
-
-```bash
-hermes plugins install file://$PWD#plugins/signals-oip
-hermes plugins install file://$PWD#plugins/signals-memory
-hermes plugins install file://$PWD#plugins/signals-compact
-```
-
-To install a plugin from GitHub:
-
-```bash
-hermes plugins install weathership/signals-plugins/plugins/signals-oip
 ```
 
 ## Activate
@@ -91,8 +87,8 @@ scripts/install.sh
 tests/
 ```
 
-Do not point Hermes at `plugins/` in this repository. Use `install.sh` so
-the runtime path is `$HERMES_HOME/plugins/`.
+Do not point Hermes at `plugins/` in this repository. Published installs
+clone into `$HERMES_HOME/plugins/` via `hermes plugins install`.
 
 ## Tests
 

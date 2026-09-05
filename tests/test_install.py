@@ -8,6 +8,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 INSTALL = REPO / "scripts" / "install.sh"
+INSTALL_GH = REPO / "scripts" / "install-from-github.sh"
 PLUGINS = ("signals-oip", "signals-memory", "signals-compact")
 
 
@@ -16,6 +17,9 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(INSTALL.is_file())
         self.assertTrue(os.access(INSTALL, os.X_OK))
         subprocess.run(["bash", "-n", str(INSTALL)], check=True)
+        self.assertTrue(INSTALL_GH.is_file())
+        self.assertTrue(os.access(INSTALL_GH, os.X_OK))
+        subprocess.run(["bash", "-n", str(INSTALL_GH)], check=True)
 
     def test_install_symlinks_and_is_idempotent(self) -> None:
         import tempfile
