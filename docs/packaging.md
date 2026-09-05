@@ -13,7 +13,11 @@ into `$HERMES_HOME/plugins/<name>/`.
 
 These plugins live in this repository so they can integrate a Hermes
 profile with a Signals federated workspace. Signals memory is provided
-here rather than by Hermes's bundled `plugins/memory/`.
+here rather than by Hermes's bundled `plugins/memory/`. The **signals**
+extra (`hsengine`) comes from
+[zndx/oss-hermes-agent](https://github.com/zndx/oss-hermes-agent) on the
+[`rch/devenv`](https://github.com/zndx/oss-hermes-agent/tree/rch/devenv)
+branch, which has the Signals engine integration.
 
 Going forward, that workspace requires
 [impala_fdw](https://github.com/weathership/impala_fdw) on Signals

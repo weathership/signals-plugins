@@ -13,8 +13,11 @@ or install them with `hermes plugins install`.
 
 `signals-oip` converts OpenAI-shaped `tools` and `messages` to OIP
 `llm_tools_v1` when the peer advertises that extension; otherwise it uses
-`Engine/Complete` (`tools_json`). It requires the Hermes **signals** extra
-(`hsengine`) for generated stubs.
+`Engine/Complete` (`tools_json`). It requires the **signals** extra
+(`hsengine`) from the
+[zndx/oss-hermes-agent](https://github.com/zndx/oss-hermes-agent) fork.
+The [`rch/devenv`](https://github.com/zndx/oss-hermes-agent/tree/rch/devenv)
+branch carries the Signals engine integration and the generated stubs.
 
 ## Install
 
