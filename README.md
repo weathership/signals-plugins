@@ -41,7 +41,7 @@ hermes plugins install file://$PWD#plugins/signals-memory
 hermes plugins install file://$PWD#plugins/signals-compact
 ```
 
-After this repository is published on GitHub:
+To install a plugin from GitHub:
 
 ```bash
 hermes plugins install weathership/signals-plugins/plugins/signals-oip
