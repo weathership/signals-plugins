@@ -1,0 +1,14 @@
+{
+  "name": "signals-listen",
+  "label": "Listen",
+  "description": "WebRTC viewer of the hsengine forward-sim clip; mic is an inbound audio track.",
+  "icon": "Radio",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/listen",
+    "position": "after:skills"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}

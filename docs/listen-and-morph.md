@@ -1,9 +1,9 @@
 # Hermes-side listen + morph — plugins only
 
-LuxCore stays on **Gaius**. WebRTC stays **engine-local, later**. This pass
-uses only documented Hermes plugin seams (no `run_agent.py` / `web/` /
-`tui_gateway` patches). Install from this repo like the other Signals
-plugins.
+LuxCore stays on **Gaius**. WebRTC is **engine-local** on hsengine
+(`HermesEngine.WebRtcOffer`). This pass uses only documented Hermes plugin
+seams (no `run_agent.py` / `web/` / `tui_gateway` patches). Install from
+this repo like the other Signals plugins.
 
 ## Constraint
 
@@ -87,12 +87,13 @@ Gaius implements `Render`; other engines `UNIMPLEMENTED`. Product id
 `gaius.viz.keyframes`; `kappa_json` rides the response so Hermes does not
 recompute Ricci.
 
-## WebRTC (explicitly later)
+## WebRTC (this pass)
 
-Same plugin, new transport: `RTCPeerConnection` in the JS bundle, signaling
-JSON on `plugin_api`. Audio track = laptop; video track = **hsengine
-forward-sim** (not a browser canvas). Still not `zndx.engine.v1`.
-ICE/TURN only when this ships.
+Same plugin: `RTCPeerConnection` in the JS bundle, signaling JSON on
+`plugin_api` (`POST /offer` → `HermesEngine.WebRtcOffer`). Audio track =
+laptop mic (inbound on the engine, STT later); video track = **hsengine
+forward-sim** (the Grok Imagine clip of a published Gaius card, looping).
+Still not `zndx.engine.v1`. Host ICE + Google STUN; no TURN yet.
 
 ## Out of scope (would be upstream)
 
@@ -138,19 +139,21 @@ inactivity). One-shot `run_claim` TTL is separate (up to 1800s).
 allowlist `video` toolset, model-pin policy, 3-minute *agent loop* risk.
 `no_agent` script imports the same xAI video plugin Python the tool uses.
 
-**Viewer:** plugin tab polls `GET /api/plugins/signals-listen/latest` and
-plays the last clip on a loop until the next receipt. That is the morph
-stand-in until LIGHT interpolator exists.
+**Viewer:** plugin tab is a WebRTC peer of hsengine (`Connect` on the
+Listen tab). A cron receipt can replace the looping clip on RustFS; the
+next `WebRtcOffer` picks up `HERMES_WEBRTC_VIDEO` / `demo.mp4`. Polling
+`GET /latest` is a fallback, not the primary transport.
 
 **Delivery:** `deliver: local` (file under `cron/output/`); `[SILENT]` if
 we do not want chat noise. Do not `bot-chat` every 15m.
 
 ## Implement order (when we leave design)
 
-1. `no_agent` cron script: still (fixture or Render) → Imagine i2v if
-   OAuth else skip → write `latest.mp4`; plugin tab loops it.
-2. `signals-graph` hooks writing `ctx.state` for the script to read.
-3. Wire `Engine/Render` when Gaius implements it.
-4. Replace Ken-Burns/Imagine-loop with hsengine LIGHT interpolator when YK
+1. WebRTC serving: `HermesEngine.WebRtcOffer` + Listen tab (this).
+2. `no_agent` cron script: still (fixture or Render) → Imagine i2v if
+   OAuth else skip → write `demo.mp4` on Hermes RustFS.
+3. `signals-graph` hooks writing `ctx.state` for the script to read.
+4. Wire `Engine/Render` when Gaius implements it.
+5. Replace the Imagine-loop clip with hsengine LIGHT interpolator when YK
    admits a 4090.
-5. Plugin-local agent turn; WebRTC mux last.
+6. Plugin-local agent turn / STT on the inbound mic track.

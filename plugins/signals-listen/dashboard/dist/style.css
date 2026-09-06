@@ -1,0 +1,35 @@
+.signals-listen video {
+  display: block;
+  width: 100%;
+  max-width: 960px;
+  background: #0b0b12;
+  border-radius: 8px;
+  aspect-ratio: 1200 / 630;
+  object-fit: contain;
+}
+
+.signals-listen .signals-listen-poster {
+  width: 100%;
+  max-width: 960px;
+  border-radius: 8px;
+  display: block;
+}
+
+.signals-listen .signals-listen-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.signals-listen .signals-listen-status {
+  font-size: 0.85rem;
+  color: var(--muted-foreground, #9aa3b5);
+}
+
+.signals-listen .signals-listen-source {
+  font-size: 0.75rem;
+  word-break: break-all;
+  color: var(--muted-foreground, #9aa3b5);
+}

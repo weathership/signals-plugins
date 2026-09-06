@@ -1,0 +1,185 @@
+(function () {
+  "use strict";
+
+  const SDK = window.__HERMES_PLUGIN_SDK__;
+  if (!SDK || !window.__HERMES_PLUGINS__) return;
+
+  const React = SDK.React;
+  const { useState, useEffect, useRef } = SDK.hooks;
+  const C = SDK.components;
+  const API = "/api/plugins/signals-listen";
+  const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
+
+  function h(type, props) {
+    const children = Array.prototype.slice.call(arguments, 2);
+    return React.createElement.apply(React, [type, props].concat(children));
+  }
+
+  function waitIce(pc, ms) {
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise(function (resolve) {
+      const t = setTimeout(resolve, ms);
+      pc.addEventListener("icegatheringstatechange", function onChange() {
+        if (pc.iceGatheringState === "complete") {
+          pc.removeEventListener("icegatheringstatechange", onChange);
+          clearTimeout(t);
+          resolve();
+        }
+      });
+    });
+  }
+
+  function ListenPage() {
+    const videoRef = useRef(null);
+    const pcRef = useRef(null);
+    const [status, setStatus] = useState(null);
+    const [statusErr, setStatusErr] = useState("");
+    const [conn, setConn] = useState("idle");
+    const [detail, setDetail] = useState("");
+    const [source, setSource] = useState("");
+    const [sendMic, setSendMic] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    useEffect(function () {
+      let cancelled = false;
+      SDK.fetchJSON(API + "/status")
+        .then(function (data) {
+          if (!cancelled) {
+            setStatus(data);
+            setStatusErr("");
+          }
+        })
+        .catch(function (err) {
+          if (!cancelled) setStatusErr(String(err && err.message ? err.message : err));
+        });
+      return function () {
+        cancelled = true;
+        if (pcRef.current) {
+          try { pcRef.current.close(); } catch (_e) {}
+          pcRef.current = null;
+        }
+      };
+    }, []);
+
+    async function connect() {
+      if (busy || (pcRef.current && pcRef.current.connectionState === "connected")) return;
+      setBusy(true);
+      setDetail("");
+      try {
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
+        pcRef.current = pc;
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: sendMic ? "sendrecv" : "recvonly" });
+        if (sendMic) {
+          try {
+            const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            mic.getAudioTracks().forEach(function (t) { pc.addTrack(t, mic); });
+          } catch (micErr) {
+            setDetail("mic unavailable (" + micErr + "); video-only");
+          }
+        }
+        pc.ontrack = function (ev) {
+          const el = videoRef.current;
+          if (!el) return;
+          if (ev.streams && ev.streams[0]) el.srcObject = ev.streams[0];
+          else {
+            const ms = el.srcObject instanceof MediaStream ? el.srcObject : new MediaStream();
+            ms.addTrack(ev.track);
+            el.srcObject = ms;
+          }
+        };
+        pc.onconnectionstatechange = function () {
+          setConn(pc.connectionState || "unknown");
+        };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await waitIce(pc, 4000);
+        const answer = await SDK.fetchJSON(API + "/offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sdp: pc.localDescription.sdp,
+            type: pc.localDescription.type,
+          }),
+        });
+        await pc.setRemoteDescription({ sdp: answer.sdp, type: answer.type || "answer" });
+        setSource(answer.source || "");
+        setConn(pc.connectionState || "connecting");
+      } catch (err) {
+        setConn("failed");
+        setDetail(String(err && err.message ? err.message : err));
+        if (pcRef.current) {
+          try { pcRef.current.close(); } catch (_e) {}
+          pcRef.current = null;
+        }
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function disconnect() {
+      if (pcRef.current) {
+        try { pcRef.current.close(); } catch (_e) {}
+        pcRef.current = null;
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setConn("idle");
+      setSource("");
+    }
+
+    const webrtcReady = status && status.webrtc;
+    const Card = C.Card || "div";
+    const CardHeader = C.CardHeader || "div";
+    const CardTitle = C.CardTitle || "h2";
+    const CardContent = C.CardContent || "div";
+    const Button = C.Button || "button";
+    const Badge = C.Badge || "span";
+    const Checkbox = C.Checkbox || "input";
+
+    return h("div", { className: "signals-listen space-y-4" },
+      h(Card, null,
+        h(CardHeader, null,
+          h(CardTitle, null, "Listen"),
+        ),
+        h(CardContent, null,
+          h("p", { className: "text-sm text-muted-foreground" },
+            "WebRTC-first viewer of the hsengine forward-sim clip. Signaling is HermesEngine.WebRtcOffer; media is UDP from the engine, not zndx.engine.v1.",
+          ),
+          h("div", { className: "signals-listen-row" },
+            h(Badge, null, conn),
+            status ? h(Badge, null, status.webrtc ? "engine webrtc" : "engine up, no webrtc") : null,
+            statusErr ? h("span", { className: "signals-listen-status" }, statusErr) : null,
+          ),
+          h("div", { className: "signals-listen-row" },
+            h("label", { className: "text-sm", style: { display: "flex", gap: "0.4rem", alignItems: "center" } },
+              h(Checkbox, {
+                checked: sendMic,
+                onCheckedChange: function (v) { setSendMic(!!v); },
+                onChange: function (e) { setSendMic(!!(e.target && e.target.checked)); },
+                type: "checkbox",
+              }),
+              "send mic (inbound audio track; STT later)",
+            ),
+          ),
+          h("div", { className: "signals-listen-row" },
+            h(Button, { onClick: connect, disabled: busy || !webrtcReady }, busy ? "Negotiating…" : "Connect"),
+            h(Button, { onClick: disconnect, disabled: conn === "idle" }, "Disconnect"),
+          ),
+          h("p", { className: "signals-listen-status" }, detail),
+          h("video", {
+            ref: videoRef,
+            autoPlay: true,
+            playsInline: true,
+            controls: true,
+            poster: POSTER,
+          }),
+          source ? h("p", { className: "signals-listen-source" }, "source " + source) : null,
+        ),
+      ),
+    );
+  }
+
+  window.__HERMES_PLUGINS__.register("signals-listen", ListenPage);
+})();

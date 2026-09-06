@@ -41,7 +41,7 @@ else
 fi
 
 PLUGIN_ROOT="$TARGET_ROOT/plugins"
-PLUGINS=(signals-oip signals-memory signals-compact)
+PLUGINS=(signals-oip signals-memory signals-compact signals-listen)
 
 preflight_link() {
   local dest="$1" src="$2"
@@ -56,7 +56,8 @@ preflight_link() {
     die "$dest is a symlink to $current (expected $want). Remove it or pass --uninstall."
   fi
   if [[ -e "$dest" ]]; then
-    die "$dest already exists and is not our symlink."
+    say "skip $(basename "$dest") (already at $dest; not our symlink)"
+    return 2
   fi
 }
 
@@ -81,7 +82,13 @@ for name in "${PLUGINS[@]}"; do
   src="$PLUGINS_SRC/$name"
   dest="$PLUGIN_ROOT/$name"
   [[ -d "$src" && -f "$src/plugin.yaml" ]] || die "missing plugin $src"
-  preflight_link "$dest" "$src"
+  st=0
+  preflight_link "$dest" "$src" && st=0 || st=$?
+  if [[ $st -eq 2 ]]; then
+    continue
+  elif [[ $st -ne 0 ]]; then
+    exit "$st"
+  fi
   if [[ ! -e "$dest" && ! -L "$dest" ]]; then
     ln -s "$src" "$dest"
   fi
@@ -97,6 +104,7 @@ say "    enabled:"
 say "      - signals-oip"
 say "      - signals-memory"
 say "      - signals-compact"
+say "      - signals-listen"
 say "  model:"
 say "    provider: signals"
 say "    model: thinking"

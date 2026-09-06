@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the three Signals Hermes plugins from GitHub (canonical).
+# Install the Signals Hermes plugins from GitHub (canonical).
 #
 #   ./scripts/install-from-github.sh
 #   ./scripts/install-from-github.sh --force
@@ -34,7 +34,7 @@ die() { printf 'DENY: %s\n' "$*" >&2; exit 1; }
 command -v hermes >/dev/null 2>&1 || die "hermes is not on PATH"
 
 REPO="${SIGNALS_PLUGINS_GIT:-weathership/signals-plugins}"
-PLUGINS=(signals-oip signals-memory signals-compact)
+PLUGINS=(signals-oip signals-memory signals-compact signals-listen)
 
 if [[ -n "${HERMES_PROFILE:-}" ]]; then
   PLUGIN_ROOT="$HOME/.hermes/profiles/${HERMES_PROFILE}/plugins"
@@ -64,7 +64,7 @@ done
 say ""
 say "Installed from github.com/${REPO}"
 say "Activate in config.yaml:"
-say "  plugins.enabled: [signals-oip, signals-memory, signals-compact]"
+say "  plugins.enabled: [signals-oip, signals-memory, signals-compact, signals-listen]"
 say "  model.provider: signals"
 say "  memory.provider: signals-memory"
 say "  context.engine: signals"

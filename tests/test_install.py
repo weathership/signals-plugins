@@ -9,7 +9,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 INSTALL = REPO / "scripts" / "install.sh"
 INSTALL_GH = REPO / "scripts" / "install-from-github.sh"
-PLUGINS = ("signals-oip", "signals-memory", "signals-compact")
+PLUGINS = ("signals-oip", "signals-memory", "signals-compact", "signals-listen")
 
 
 class InstallTests(unittest.TestCase):
@@ -38,6 +38,25 @@ class InstallTests(unittest.TestCase):
             subprocess.run([str(INSTALL), "--uninstall", "--quiet"], check=True, env=env)
             for name in PLUGINS:
                 self.assertFalse((home / "plugins" / name).exists(), name)
+
+    def test_install_skips_existing_real_dirs_and_links_the_rest(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".hermes"
+            plugin_root = home / "plugins"
+            plugin_root.mkdir(parents=True)
+            real = plugin_root / "signals-oip"
+            real.mkdir()
+            (real / "plugin.yaml").write_text("name: signals-oip\n")
+            env = {**os.environ, "HERMES_HOME": str(home)}
+            env.pop("HERMES_PROFILE", None)
+            subprocess.run([str(INSTALL), "--quiet"], check=True, env=env)
+            self.assertTrue(real.is_dir())
+            self.assertFalse(real.is_symlink())
+            listen = plugin_root / "signals-listen"
+            self.assertTrue(listen.is_symlink(), "signals-listen")
+            self.assertEqual((REPO / "plugins" / "signals-listen").resolve(), listen.resolve())
 
 
 if __name__ == "__main__":

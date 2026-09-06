@@ -6,7 +6,7 @@ The canonical install clones from GitHub into `$HERMES_HOME/plugins/<name>/`:
 hermes plugins install weathership/signals-plugins/plugins/signals-oip
 ```
 
-- `scripts/install-from-github.sh` runs that for all three plugins.
+- `scripts/install-from-github.sh` runs that for all four plugins.
 - Hermes accepts `owner/repo/subdir` (and `#subdir` on a full Git URL).
 - `scripts/install.sh` is the developer path: symlink a local checkout
   into the active profile (`HERMES_HOME` or

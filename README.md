@@ -10,6 +10,7 @@ clone as other third-party plugins).
 | `plugins/signals-oip` | model-provider (`create_client`) | `model.provider: signals` |
 | `plugins/signals-memory` | `MemoryProvider` | `memory.provider: signals-memory` |
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
+| `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer of hsengine forward-sim |
 
 `signals-oip` converts OpenAI-shaped `tools` and `messages` to OIP
 `llm_tools_v1` when the peer advertises that extension; otherwise it uses
@@ -27,9 +28,10 @@ Canonical — clone each plugin from GitHub into `$HERMES_HOME/plugins/`:
 hermes plugins install weathership/signals-plugins/plugins/signals-oip --enable
 hermes plugins install weathership/signals-plugins/plugins/signals-memory --enable
 hermes plugins install weathership/signals-plugins/plugins/signals-compact --enable
+hermes plugins install weathership/signals-plugins/plugins/signals-listen --enable
 ```
 
-All three:
+All four:
 
 ```bash
 ./scripts/install-from-github.sh --enable
@@ -52,6 +54,7 @@ plugins:
     - signals-oip
     - signals-memory
     - signals-compact
+    - signals-listen
 model:
   provider: signals
   model: thinking
@@ -61,7 +64,7 @@ context:
   engine: signals
 ```
 
-Restart Hermes. `hermes plugins list` should list the three plugins;
+Restart Hermes. `hermes plugins list` should list the four plugins;
 `hermes doctor` should report provider `signals`.
 
 ## Impala FDW
@@ -83,6 +86,7 @@ plugins/
   signals-oip/       plugin.yaml + __init__.py + client.py
   signals-memory/    plugin.yaml + __init__.py
   signals-compact/   plugin.yaml + __init__.py
+  signals-listen/    plugin.yaml + dashboard/ (WebRTC tab)
 scripts/install.sh
 tests/
 ```
