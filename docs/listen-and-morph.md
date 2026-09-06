@@ -37,7 +37,7 @@ once duplex exists. Not this pass.
 | TTS | `POST /api/audio/speak` / speak-stream WS — same |
 | Graph updates | `post_llm_call` / `post_tool_call` → `ctx.state` JSON |
 | Gaius keyframe | `plugin_api` is a gRPC client of `zndx.engine.v1.Engine/Render` (see signals-protocol `keyframe.md`). Still bytes live on RustFS (`data_uri`); optional `preview_jpeg` on the RPC. |
-| Live picture | **hsengine** forward-sim. Preferred: YK **one 4090 LIGHT**. Optional offload: bundled `video_gen` xAI **image-to-video** (`grok-imagine-video-1.5`) via **Grok OAuth** (`auth.json` / `xai-oauth`), not `XAI_API_KEY`. Plugin is a viewer. Gaius = LuxCore only. |
+| Live picture | **hsengine** forward-sim. Default: YK **one 4090 LIGHT** (accept quality vs Imagine). Enthusiastic: Grok **premium/Heavy subscription** Imagine i2v (`xai-oauth` only). **DENY** `XAI_API_KEY` / token-metered Imagine for this feature. Plugin is a viewer. Gaius = LuxCore only. |
 | Voice turn → agent | `plugin_api` runs a one-shot `AIAgent.chat()` / `hermes -q` in the dashboard process (plugins may import Hermes). Result shown on the plugin page. Does **not** type into Chat PTY. |
 | Auth | Plugin routes sit behind the dashboard gate (already) |
 
@@ -68,13 +68,15 @@ Cadence:
   (one 4090; YuniKorn admits). A new `tx_id` blends in **in hsengine**.
   Gaius never interpolates. Browser never interpolates. No pyluxcore
   in this checkout.
-- **Imagine i2v (optional):** same I-frame into `grok-imagine-video-1.5`
-  using Hermes `resolve_xai_http_credentials()` (OAuth first). Yields a
-  6–10s clip (~60–240s to generate), stored on Hermes RustFS, looped or
-  concatenated until the next key. Prompt: camera-only motion — busy Ricci
-  geometry warps if the model is asked to “act.” Not a substitute for the
-  LIGHT interpolator when YK admits a 4090; it is the no-GPU / first-clip
-  path. Do not put Imagine on `zndx.engine.v1`.
+- **Imagine i2v (subscription only):** if `providers.xai-oauth` (Grok
+  premium / Heavy) has a live access token, send the I-frame to
+  `grok-imagine-video-1.5` and **enthusiastically** use the clip. If the
+  only credential is `XAI_API_KEY` (token-metered), **do not call Imagine**
+  — fall through to local LIGHT interpolator. Never `prefer_api_key` on
+  this path. Prompt: camera-only motion. Do not put Imagine on
+  `zndx.engine.v1`.
+- **Local i2v (always acceptable):** YK LIGHT 4090 interpolator. Quality
+  delta vs Imagine is accepted so we never pay API token rates.
 - **Layout lock** on the still is Gaius (stable camera / Procrustes).
   Hermes interpolates pixels, not Ricci.
 
@@ -104,7 +106,7 @@ ICE/TURN only when this ships.
 1. Dashboard plugin tab: mic → `/api/audio/transcribe` → show text; viewer
    placeholder until hsengine has a still.
 2. `signals-graph` hooks writing `ctx.state`.
-3. `Engine/Render` client; hsengine LIGHT forward-sim (YK one 4090) **or**
-   Grok Imagine i2v (OAuth); plugin viewer.
+3. `Engine/Render` client; Imagine i2v **only** if Grok OAuth is live,
+   else hsengine LIGHT 4090; plugin viewer.
 4. Plugin-local agent turn so listen is a conversation, not a notepad.
 5. WebRTC mux when barge-in needs it.
