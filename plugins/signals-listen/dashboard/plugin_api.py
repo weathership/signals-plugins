@@ -72,6 +72,7 @@ async def engine_status() -> dict:
         "version": reply.version,
         "capabilities": caps,
         "webrtc": "webrtc" in caps,
+        "stt": "stt" in caps,
         "poster": "/dashboard-plugins/signals-listen/poster.jpg",
     }
 

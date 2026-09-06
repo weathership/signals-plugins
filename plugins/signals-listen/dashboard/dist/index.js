@@ -166,6 +166,7 @@
           h("div", { className: "signals-listen-row" },
             h(Badge, null, conn),
             status ? h(Badge, null, status.webrtc ? "engine webrtc" : "engine up, no webrtc") : null,
+            status && status.stt ? h(Badge, null, "captions") : null,
             statusErr ? h("span", { className: "signals-listen-status" }, statusErr) : null,
           ),
           h("div", { className: "signals-listen-row" },
