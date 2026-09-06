@@ -6,9 +6,10 @@ see jobs in the **Hermes dashboard `/cron` UI**; a **local Nautilus**
 beside this engine (`hsengine` `:50651`, supervisor on a loopback port
 like Gaius `:50061`) verifies they actually fire.
 
-Hermes devenv today is engine + dashboard + Caddy + RustFS. Nautilus
-installs **alongside** the engine (follow-only, `RESTART_STRATEGY_NONE`
-until promotion), not inside `run_agent.py`. Observation of cron is
+Hermes devenv runs **engine + dashboard + Caddy + RustFS + Nautilus**
+(`devenv up -d`). systemd: `hermes.service` (oneshot devenv up) plus
+`hermes-nautilus-tick.timer`. Follow-only (`RESTART_STRATEGY_NONE`) until
+promotion; not inside `run_agent.py`. Cron observation is
 `SOURCE_KIND_HERMES_CRON` on `executions.db` / `jobs.json` — Nautilus
 never scrapes the dashboard.
 
@@ -93,8 +94,10 @@ interpret in kinds; everything else in attrs.
    unless the JSON edit is newer than `spec_version` timestamp — record
    `attrs { key: "hermes_mtime" }` on reverse sync.
 
-Plugin-only: a `signals-cron-sync` CLI (`register_cli_command`) plus a
-`no_agent` job that runs the projector. No `run_agent.py` patches.
+Plugin-only: `signals-cron-sync` (CLI + projector) lives in this repo
+with the other Signals Hermes plugins. Dashboard `/cron` is already
+core Hermes — we do not replace it; we **fill** it from the instance.
+No `run_agent.py` patches.
 
 ## Imagine prototype as an instance row
 
@@ -119,8 +122,11 @@ processes {
 }
 ```
 
-Nautilus scores the job; Hermes cron fires it; Gaius is not in this
-tree except as `Engine/Render` `via` the engine process.
+Nautilus scores the job; Hermes cron fires it; the dashboard lists it.
+Gaius is not in this tree except as `Engine/Render` `via` the engine
+process. Verification: Backlog cell for `cron.imagine_keyframe` goes
+`Ok` when `executions.db` shows a completed run inside the admission
+window — the same id Signals users see under Automations.
 
 ## Not this
 
