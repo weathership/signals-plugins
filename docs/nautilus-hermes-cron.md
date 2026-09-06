@@ -1,5 +1,19 @@
 # Nautilus FSM DSL ↔ Hermes cron (bidirectional)
 
+This is the **Signals–Hermes integration plugin**: one name in the
+Nautilus instance, the same name in Hermes automations. Signals operators
+see jobs in the **Hermes dashboard `/cron` UI**; a **local Nautilus**
+beside this engine (`hsengine` `:50651`, supervisor on a loopback port
+like Gaius `:50061`) verifies they actually fire.
+
+Hermes devenv today is engine + dashboard + Caddy + RustFS. Nautilus
+installs **alongside** the engine (follow-only, `RESTART_STRATEGY_NONE`
+until promotion), not inside `run_agent.py`. Observation of cron is
+`SOURCE_KIND_HERMES_CRON` on `executions.db` / `jobs.json` — Nautilus
+never scrapes the dashboard.
+
+---
+
 Gaius’s **canonical workflow serialization** is not `jobs.json` and not
 `gaius.engine.fsm.FsmPosition`. It is the Nautilus **instance**:
 `zndx.supervision.v1.Supervisor` textproto
