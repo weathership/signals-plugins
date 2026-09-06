@@ -32,6 +32,8 @@
   function ListenPage() {
     const videoRef = useRef(null);
     const pcRef = useRef(null);
+    const sessionRef = useRef(null);
+    const micRef = useRef(null);
     const [status, setStatus] = useState(null);
     const [statusErr, setStatusErr] = useState("");
     const [conn, setConn] = useState("idle");
@@ -54,10 +56,7 @@
         });
       return function () {
         cancelled = true;
-        if (pcRef.current) {
-          try { pcRef.current.close(); } catch (_e) {}
-          pcRef.current = null;
-        }
+        hangupLocal();
       };
     }, []);
 
@@ -75,7 +74,9 @@
         if (sendMic) {
           try {
             const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            micRef.current = mic;
             mic.getAudioTracks().forEach(function (t) { pc.addTrack(t, mic); });
+            setDetail("mic track attached (no STT yet)");
           } catch (micErr) {
             setDetail("mic unavailable (" + micErr + "); video-only");
           }
@@ -105,26 +106,41 @@
           }),
         });
         await pc.setRemoteDescription({ sdp: answer.sdp, type: answer.type || "answer" });
+        sessionRef.current = answer.session_id || null;
         setSource(answer.source || "");
         setConn(pc.connectionState || "connecting");
       } catch (err) {
         setConn("failed");
         setDetail(String(err && err.message ? err.message : err));
-        if (pcRef.current) {
-          try { pcRef.current.close(); } catch (_e) {}
-          pcRef.current = null;
-        }
+        hangupLocal();
       } finally {
         setBusy(false);
       }
     }
 
-    function disconnect() {
+    function hangupLocal() {
+      const sid = sessionRef.current;
+      sessionRef.current = null;
+      if (micRef.current) {
+        micRef.current.getTracks().forEach(function (t) { t.stop(); });
+        micRef.current = null;
+      }
       if (pcRef.current) {
         try { pcRef.current.close(); } catch (_e) {}
         pcRef.current = null;
       }
       if (videoRef.current) videoRef.current.srcObject = null;
+      if (sid) {
+        SDK.fetchJSON(API + "/hangup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sid }),
+        }).catch(function () {});
+      }
+    }
+
+    function disconnect() {
+      hangupLocal();
       setConn("idle");
       setSource("");
     }

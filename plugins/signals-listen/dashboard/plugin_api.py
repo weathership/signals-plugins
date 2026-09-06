@@ -42,6 +42,10 @@ class OfferBody(BaseModel):
     type: str = "offer"
 
 
+class HangupBody(BaseModel):
+    session_id: str = Field(min_length=1)
+
+
 def _http_for_rpc(err: grpc.RpcError) -> HTTPException:
     code = err.code()
     detail = err.details() or str(err)
@@ -89,6 +93,18 @@ async def webrtc_offer(sdp: str, typ: str = "offer") -> dict:
     }
 
 
+async def webrtc_hangup(session_id: str) -> dict:
+    pb, pb_grpc = _stubs()
+    target = _engine_target()
+    async with grpc.aio.insecure_channel(target) as ch:
+        stub = pb_grpc.HermesEngineStub(ch)
+        reply = await stub.WebRtcHangup(
+            pb.WebRtcHangupRequest(session_id=session_id),
+            timeout=5,
+        )
+    return {"dropped": bool(reply.dropped), "session_id": session_id}
+
+
 @router.get("/status")
 async def status():
     try:
@@ -108,6 +124,17 @@ async def offer(body: OfferBody):
         return await webrtc_offer(body.sdp, body.type)
     except grpc.RpcError as e:
         log.warning("listen offer rpc: %s", e)
+        raise _http_for_rpc(e) from e
+    except ImportError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+
+
+@router.post("/hangup")
+async def hangup(body: HangupBody):
+    try:
+        return await webrtc_hangup(body.session_id)
+    except grpc.RpcError as e:
+        log.warning("listen hangup rpc: %s", e)
         raise _http_for_rpc(e) from e
     except ImportError as e:
         raise HTTPException(status_code=501, detail=str(e)) from e
