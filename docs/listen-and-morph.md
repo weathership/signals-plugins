@@ -101,12 +101,56 @@ ICE/TURN only when this ships.
 - `tui_gateway` `voice.record` using browser audio
 - Duplex WebRTC on `zndx.engine.v1` (Render is stills only)
 
+## Prototype via Hermes automations (cron)
+
+Imagine i2v is **60–240s**. A live hsengine loop is the wrong first cut.
+Hermes **cron** (dashboard `/cron`, `hermes cron`, `cronjob` tool) is the
+automation surface.
+
+**Shape:** `no_agent=True` + `script` (stdout is the job; **zero LLM**).
+Do not use an agent turn for the prototype — no model pin, no toolset
+widening, no paid-provider drift. The script:
+
+1. Read graph JSON from plugin state / a well-known file under
+   `get_hermes_home()` (cron uses `skip_memory=True`; do not rely on
+   memory.prefetch).
+2. Optionally `Engine/Render` on Gaius; if `UNIMPLEMENTED`, reuse the last
+   still or a fixture image (prototype).
+3. **If** `xai-oauth` has a live access token → `grok-imagine-video-1.5`
+   image-to-video (camera-only prompt). **If** only `XAI_API_KEY` → skip
+   Imagine, log `DENY token-metered`, exit 0 (or run a cheap local ffmpeg
+   Ken-Burns on the still).
+4. Write `latest.mp4` (and `tx_id`) to Hermes RustFS / profile dir.
+5. Print a one-line receipt (URI, duration, auth=`xai-oauth`).
+
+**Schedule:** `every 15m` or slower while iterating; `hermes cron run
+<name>` for on-demand. Gateway must be ticking (`hermes gateway` / dashboard
+cron). devenv today is engine+dashboard+caddy+rustfs — **add a gateway
+process or run jobs by hand**.
+
+**Timeouts:** cron inactivity watchdog defaults to **600s**
+(`HERMES_CRON_TIMEOUT`; 0 = unlimited). Imagine’s 60–240s fits if the HTTP
+client is not silent for 10 minutes. Heartbeat or raise the timeout; do not
+assume the old “3 minute hard interrupt” still applies as wall-clock (it is
+inactivity). One-shot `run_claim` TTL is separate (up to 1800s).
+
+**Why not an agent cron with `video_generate`:** extra inference, must
+allowlist `video` toolset, model-pin policy, 3-minute *agent loop* risk.
+`no_agent` script imports the same xAI video plugin Python the tool uses.
+
+**Viewer:** plugin tab polls `GET /api/plugins/signals-listen/latest` and
+plays the last clip on a loop until the next receipt. That is the morph
+stand-in until LIGHT interpolator exists.
+
+**Delivery:** `deliver: local` (file under `cron/output/`); `[SILENT]` if
+we do not want chat noise. Do not `bot-chat` every 15m.
+
 ## Implement order (when we leave design)
 
-1. Dashboard plugin tab: mic → `/api/audio/transcribe` → show text; viewer
-   placeholder until hsengine has a still.
-2. `signals-graph` hooks writing `ctx.state`.
-3. `Engine/Render` client; Imagine i2v **only** if Grok OAuth is live,
-   else hsengine LIGHT 4090; plugin viewer.
-4. Plugin-local agent turn so listen is a conversation, not a notepad.
-5. WebRTC mux when barge-in needs it.
+1. `no_agent` cron script: still (fixture or Render) → Imagine i2v if
+   OAuth else skip → write `latest.mp4`; plugin tab loops it.
+2. `signals-graph` hooks writing `ctx.state` for the script to read.
+3. Wire `Engine/Render` when Gaius implements it.
+4. Replace Ken-Burns/Imagine-loop with hsengine LIGHT interpolator when YK
+   admits a 4090.
+5. Plugin-local agent turn; WebRTC mux last.
