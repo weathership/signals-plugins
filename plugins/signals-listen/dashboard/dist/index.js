@@ -84,15 +84,25 @@
         } else {
           pc.addTransceiver("audio", { direction: "recvonly" });
         }
-        pc.ontrack = function (ev) {
+        function attachTrack(track) {
           const el = videoRef.current;
-          if (!el) return;
-          if (ev.streams && ev.streams[0]) el.srcObject = ev.streams[0];
-          else {
-            const ms = el.srcObject instanceof MediaStream ? el.srcObject : new MediaStream();
-            ms.addTrack(ev.track);
+          if (!el || !track) return;
+          let ms = el.srcObject;
+          if (!(ms instanceof MediaStream)) {
+            ms = new MediaStream();
             el.srcObject = ms;
           }
+          if (!ms.getTracks().some(function (t) { return t.id === track.id; })) {
+            ms.addTrack(track);
+          }
+          el.muted = false;
+          el.defaultMuted = false;
+          el.volume = 1;
+          const p = el.play();
+          if (p && p.catch) p.catch(function () {});
+        }
+        pc.ontrack = function (ev) {
+          attachTrack(ev.track);
         };
         pc.onconnectionstatechange = function () {
           setConn(pc.connectionState || "unknown");
@@ -109,6 +119,7 @@
           }),
         });
         await pc.setRemoteDescription({ sdp: answer.sdp, type: answer.type || "answer" });
+        pc.getReceivers().forEach(function (r) { attachTrack(r.track); });
         sessionRef.current = answer.session_id || null;
         setSource(answer.source || "");
         setConn(pc.connectionState === "connected" ? "connected" : "connecting");
