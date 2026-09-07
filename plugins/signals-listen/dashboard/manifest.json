@@ -3,12 +3,12 @@
   "label": "Listen",
   "description": "Listen: WebRTC clip + Kyutai captions from your mic.",
   "icon": "Radio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "tab": {
     "path": "/listen",
     "position": "after:skills"
   },
-  "entry": "dist/index.js",
+  "entry": "dist/listen-v20260907f.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"
 }
