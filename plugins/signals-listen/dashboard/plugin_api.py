@@ -84,7 +84,7 @@ async def webrtc_offer(sdp: str, typ: str = "offer") -> dict:
         stub = pb_grpc.HermesEngineStub(ch)
         reply = await stub.WebRtcOffer(
             pb.WebRtcOfferRequest(sdp=sdp, type=typ or "offer"),
-            timeout=20,
+            timeout=300,
         )
     return {
         "sdp": reply.sdp,
