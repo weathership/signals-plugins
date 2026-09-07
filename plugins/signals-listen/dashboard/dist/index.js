@@ -61,8 +61,9 @@
     }, []);
 
     async function connect() {
-      if (busy || (pcRef.current && pcRef.current.connectionState === "connected")) return;
+      if (busy || pcRef.current) return;
       setBusy(true);
+      setConn("connecting");
       setDetail("");
       try {
         const pc = new RTCPeerConnection({
@@ -70,16 +71,18 @@
         });
         pcRef.current = pc;
         pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: sendMic ? "sendrecv" : "recvonly" });
         if (sendMic) {
           try {
             const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             micRef.current = mic;
             mic.getAudioTracks().forEach(function (t) { pc.addTrack(t, mic); });
-            setDetail("mic track attached (no STT yet)");
+            setDetail("mic attached — captions burn into the video");
           } catch (micErr) {
+            pc.addTransceiver("audio", { direction: "recvonly" });
             setDetail("mic unavailable (" + micErr + "); video-only");
           }
+        } else {
+          pc.addTransceiver("audio", { direction: "recvonly" });
         }
         pc.ontrack = function (ev) {
           const el = videoRef.current;
@@ -108,7 +111,10 @@
         await pc.setRemoteDescription({ sdp: answer.sdp, type: answer.type || "answer" });
         sessionRef.current = answer.session_id || null;
         setSource(answer.source || "");
-        setConn(pc.connectionState || "connecting");
+        setConn(pc.connectionState === "connected" ? "connected" : "connecting");
+        SDK.fetchJSON(API + "/status")
+          .then(function (data) { setStatus(data); })
+          .catch(function () {});
       } catch (err) {
         setConn("failed");
         setDetail(String(err && err.message ? err.message : err));
@@ -146,6 +152,7 @@
     }
 
     const webrtcReady = status && status.webrtc;
+    const live = busy || conn === "connecting" || conn === "connected";
     const Card = C.Card || "div";
     const CardHeader = C.CardHeader || "div";
     const CardTitle = C.CardTitle || "h2";
@@ -160,9 +167,6 @@
           h(CardTitle, null, "Listen"),
         ),
         h(CardContent, null,
-          h("p", { className: "text-sm text-muted-foreground" },
-            "WebRTC-first viewer of the hsengine forward-sim clip. Signaling is HermesEngine.WebRtcOffer; media is UDP from the engine, not zndx.engine.v1.",
-          ),
           h("div", { className: "signals-listen-row" },
             h(Badge, null, conn),
             status ? h(Badge, null, status.webrtc ? "engine webrtc" : "engine up, no webrtc") : null,
@@ -177,12 +181,15 @@
                 onChange: function (e) { setSendMic(!!(e.target && e.target.checked)); },
                 type: "checkbox",
               }),
-              "send mic (inbound audio track; STT later)",
+              "send mic for captions (Kyutai STT)",
             ),
           ),
           h("div", { className: "signals-listen-row" },
-            h(Button, { onClick: connect, disabled: busy || !webrtcReady }, busy ? "Negotiating…" : "Connect"),
-            h(Button, { onClick: disconnect, disabled: conn === "idle" }, "Disconnect"),
+            h(Button, {
+              onClick: connect,
+              disabled: live || !webrtcReady,
+            }, busy ? "Negotiating…" : (live ? "Connected" : "Connect")),
+            h(Button, { onClick: disconnect, disabled: !live && conn === "idle" }, "Disconnect"),
           ),
           h("p", { className: "signals-listen-status" }, detail),
           h("video", {

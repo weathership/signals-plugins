@@ -1,7 +1,7 @@
 {
   "name": "signals-listen",
   "label": "Listen",
-  "description": "WebRTC viewer of the hsengine forward-sim clip; mic is an inbound audio track.",
+  "description": "Listen: WebRTC clip + Kyutai captions from your mic.",
   "icon": "Radio",
   "version": "0.1.0",
   "tab": {
