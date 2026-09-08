@@ -8,7 +8,7 @@
     "path": "/listen",
     "position": "after:skills"
   },
-  "entry": "dist/listen-v20260907g.js",
+  "entry": "dist/listen-v20260908a.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"
 }
