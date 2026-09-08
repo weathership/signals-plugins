@@ -86,6 +86,7 @@ async def webrtc_offer(sdp: str, typ: str = "offer", agenda: str = "") -> dict:
         kwargs = {"sdp": sdp, "type": typ or "offer"}
         if agenda:
             kwargs["agenda_id"] = agenda
+        log.info("listen offer agenda=%s", agenda or "-")
         reply = await stub.WebRtcOffer(
             pb.WebRtcOfferRequest(**kwargs),
             timeout=300,
