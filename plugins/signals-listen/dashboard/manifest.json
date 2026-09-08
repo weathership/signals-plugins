@@ -6,7 +6,7 @@
   "version": "0.1.1",
   "tab": {
     "path": "/listen",
-    "position": "after:skills"
+    "position": "after:chat"
   },
   "entry": "dist/listen-v20260908b.js",
   "css": "dist/style.css",
