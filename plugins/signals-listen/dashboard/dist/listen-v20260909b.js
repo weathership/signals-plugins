@@ -60,6 +60,17 @@
     });
   }
 
+  (function bounceHttpListen() {
+    var dest = window.__HERMES_LISTEN_URL__;
+    if (!dest || window.isSecureContext) return;
+    try {
+      var u = new URL(dest);
+      u.search = window.location.search;
+      u.hash = window.location.hash;
+      window.location.replace(u.toString());
+    } catch (_e) {}
+  })();
+
   function ListenPage() {
     const videoRef = useRef(null);
     const pcRef = useRef(null);
