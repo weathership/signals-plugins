@@ -8,7 +8,7 @@
     "path": "/listen",
     "position": "after:chat"
   },
-  "entry": "dist/listen-v20260908b.js",
+  "entry": "dist/listen-v20260909a.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"
 }
