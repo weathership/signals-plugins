@@ -123,8 +123,11 @@
             });
             setDetail(JS_VERSION + " · mic attached (" + tracks.length + ")");
           } catch (micErr) {
-            pc.addTransceiver("audio", { direction: "recvonly" });
-            setDetail("mic unavailable (" + micErr + "); captions off");
+            hangupLocal();
+            setConn("idle");
+            setDetail("mic unavailable (" + micErr + "). Allow the microphone for this site and Connect again.");
+            setBusy(false);
+            return;
           }
         } else {
           pc.addTransceiver("audio", { direction: "recvonly" });
