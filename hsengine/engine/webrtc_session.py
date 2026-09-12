@@ -248,13 +248,16 @@ class WebRtcHub:
 
         async def _opening() -> None:
             try:
-                from hsengine.engine.agenda_deck import (
-                    load_agenda_session,
-                    propose_opening_prompt,
-                    spoken_opening_prompt,
-                    strip_invented_prompt,
+                from hsengine.engine.agenda_deck import load_agenda_session
+                from hsengine.engine.context_pack import (
+                    conversational_context,
+                    pipeline_block,
                 )
-                from hsengine.engine.context_pack import conversational_context
+                from hsengine.engine.named_bots import (
+                    bishop_run,
+                    ensure_bots,
+                    ripley_opening_prompts,
+                )
 
                 aid = self._agenda.get(session_id, "")
                 session = {}
@@ -270,39 +273,34 @@ class WebRtcHub:
                         "yes" if session.get("public") else "no",
                     )
                 pack = await asyncio.to_thread(conversational_context, agenda_id=aid)
+                glance = pipeline_block(pack)
                 log.info(
-                    "webrtc opening pack=%s",
+                    "webrtc opening pack=%s agent-mediated bishop→ripley",
                     ",".join(sorted(pack)) or "empty",
                 )
-                invent_u, invent_s, invent_n = propose_opening_prompt(
-                    session, agenda_id=aid, pipeline=pack, seed=session_id
+                await asyncio.to_thread(ensure_bots)
+                outcome = await asyncio.to_thread(
+                    bishop_run,
+                    session_id=session_id,
+                    move="open",
+                    glance=glance,
                 )
-                invented_raw = await asyncio.to_thread(
-                    interactive.complete_cerebras,
-                    prompt=invent_u,
-                    system_prompt=invent_s,
-                    max_tokens=invent_n,
-                    temperature=0.7,
-                    reasoning_effort="none",
-                    tools=False,
-                    speak=False,
-                )
-                invented = strip_invented_prompt(invented_raw.text)
-                if not invented:
-                    raise RuntimeError("opening invent returned empty; no fallback")
-                log.info("webrtc opening invented prompt=%s", invented[:240])
-                speak_u, speak_s, speak_n = spoken_opening_prompt(
-                    invented, session, agenda_id=aid, pipeline=pack
+                speak_s, speak_u = ripley_opening_prompts(outcome)
+                log.info(
+                    "webrtc opening bishop steer=%s monologue=%s",
+                    "yes" if outcome.steer else "no",
+                    "yes" if outcome.monologue else "no",
                 )
                 result = await asyncio.to_thread(
                     interactive.complete_cerebras,
                     prompt=speak_u,
                     system_prompt=speak_s,
-                    max_tokens=speak_n,
+                    max_tokens=280,
                     temperature=0.55,
                     reasoning_effort="none",
                     tools=False,
                     speak=True,
+                    session_id=session_id,
                 )
                 from hsengine.engine import session_history
 

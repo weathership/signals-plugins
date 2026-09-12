@@ -1,9 +1,13 @@
 """Named Bots for AgentRTC: Ripley (spoken) and Bishop (silent).
 
+Agent-mediated: an agent sits between workspace products and the human.
+Named agents and sub-agents are that pattern, not a sideline. Bishop
+invents (tools, up to two ``delegate_task`` children). Ripley speaks.
+Connect and later quiet both use that invent-then-execute pass.
+
 A Bot is a Hermes profile under ``~/.hermes/profiles/<name>/`` with Bot-Mode
 ``ui_meta['hermes-bots']``. Created on first interactive enter if missing.
-Both use Cerebras while the AgentRTC Activity is in force (session overlay);
-Bishop's profile caps ``delegate_task`` at two concurrent children.
+Both use Cerebras while the AgentRTC Activity is in force (session overlay).
 """
 from __future__ import annotations
 
@@ -261,7 +265,19 @@ def bishop_prompt(
     glance_txt = " ".join((glance or "").split())
     if glance_txt:
         lines.append("Cognition glance:\n" + glance_txt)
-    if move == "thought":
+    if move == "open":
+        lines.append(
+            "This is Connect — invent the first thing they will hear, not a pause. "
+            "A greeting is allowed. Call recent_thoughts; kb_search, web_search, or "
+            "hermes (delegate_task, at most two children) only if it earns a place. "
+            "Prefer MONOLOGUE Ripley can speak now in first person. STEER is optional "
+            "color for that line. Do not use a formula "
+            "(no casual-hello-plus-two-ideas-then-ask). Do not mention Bishop, "
+            "pipelines, or how the notes arrived. If the workspace glance is stale "
+            "or empty, have her say the workspace has gone quiet — do not invent "
+            "today's news."
+        )
+    elif move == "thought":
         lines.append("Call conversation, then recent_thoughts.")
     elif move == "kb":
         lines.append("Call conversation, then kb_search once on something from the thread.")
@@ -278,7 +294,7 @@ def bishop_prompt(
     else:
         lines.append("Call conversation. Deepen the last live thread. Do not web-search.")
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")
-    return system, "\n".join(lines), 200
+    return system, "\n".join(lines), 200 if move != "open" else 240
 
 
 def bishop_run(
@@ -308,3 +324,24 @@ def bishop_run(
             session_id=session_id,
         )
     return parse_bishop_reply(getattr(result, "text", "") or "")
+
+
+def ripley_opening_prompts(outcome: BishopOutcome) -> tuple[str, str]:
+    """Execute pass: Ripley speaks Bishop's invented opening. No canned stand-in."""
+    from hsengine.engine.webrtc_silence import apply_steer_system
+
+    system = apply_steer_system(ripley_spoken_system(), outcome.steer)
+    if outcome.monologue:
+        user = (
+            "The call just connected. Speak this as the first thing they hear, "
+            "in your voice — not a briefing, not a formula:\n"
+            + outcome.monologue
+        )
+    elif outcome.steer:
+        user = (
+            "The call just connected. Speak first. Natural, specific, unhurried. "
+            "Do not use a two-ideas-then-ask formula. Do not name Bishop."
+        )
+    else:
+        raise RuntimeError("bishop opening returned empty; no fallback")
+    return system, user

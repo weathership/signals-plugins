@@ -73,6 +73,8 @@ _VOICE_RAILS = (
     "failure: say the workspace has gone quiet. Do not paper over it."
 )
 
+# Kept for tests of the old prompt-invent pass. Connect now uses named agents
+# (Bishop invents, Ripley speaks) — same agent-mediated invent-then-execute.
 _INVENT_SYSTEM = (
     "You write prompts. You do not speak to a listener. Output ONLY the prompt "
     "another voice model will execute — no preamble, no markdown fences, no "

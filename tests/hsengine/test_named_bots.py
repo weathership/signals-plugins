@@ -49,6 +49,30 @@ def test_bishop_prompt_varies_the_move():
     assert max_tokens >= 120
     _, world, _ = bishop_prompt(move="world", glance="HN: Show HN: aperture")
     assert "aperture" in world
+    _, open_p, n = bishop_prompt(move="open", glance="Latest thoughts brief: the Lilly gap")
+    assert "Connect" in open_p
+    assert "two-ideas" in open_p or "formula" in open_p.lower()
+    assert "Lilly" in open_p
+    assert n >= 200
+
+
+def test_ripley_opening_prompts_prefer_monologue():
+    from hsengine.engine.named_bots import ripley_opening_prompts
+
+    system, user = ripley_opening_prompts(
+        BishopOutcome(steer="float the gap", monologue="The 10-K is still sitting there.")
+    )
+    assert "Ripley" in system
+    assert "float the gap" in system
+    assert "10-K" in user
+    assert "two-ideas" not in user.lower() or "formula" in user.lower()
+    _, steer_only = ripley_opening_prompts(BishopOutcome(steer="keep going on the book."))
+    assert "just connected" in steer_only.lower()
+    try:
+        ripley_opening_prompts(BishopOutcome())
+        raise AssertionError("empty opening must fail")
+    except RuntimeError as e:
+        assert "no fallback" in str(e)
 
 
 def test_ensure_bots_creates_managed_profiles(tmp_path, monkeypatch):

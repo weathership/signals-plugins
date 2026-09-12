@@ -1,9 +1,8 @@
-"""Agent-mediated AgentRTC opening: Cerebras reads live workspace outputs.
+"""Agent-mediated AgentRTC: named agents sit between workflow products and the human.
 
-Signals parlance: the agent sits between workflow products and the human.
-Connect loads agenda + thoughts briefs over ServerQuery and a short
-Cerebras pass turns them into the first spoken turn. Freshness is a
-property of those workflows — a stale or empty greeting is the first-turn
+Connect loads agenda + thoughts briefs over ServerQuery. Bishop (silent,
+tools and up to two delegate_task children) invents; Ripley speaks. Freshness
+is a property of those workflows — a stale or empty opening is the first-turn
 signal that the workspace is failing, not a cue to invent today's news.
 """
 from __future__ import annotations
