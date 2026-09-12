@@ -332,6 +332,12 @@ def bishop_run(
     """Silent Cerebras turn as Bishop. Never speaks."""
     from hsengine.engine import interactive
 
+    try:
+        from hsengine.engine.webrtc_activity import pulse
+
+        pulse("bishop")
+    except Exception:
+        pass
     del idle_s  # reserved: phase still chosen by the silence director
     system, prompt, max_tokens = bishop_prompt(
         move=move, glance=glance, last_steer=last_steer, handoff=handoff

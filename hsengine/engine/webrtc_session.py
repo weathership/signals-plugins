@@ -162,6 +162,7 @@ class WebRtcHub:
         self._started[session_id] = time.monotonic()
 
         from hsengine.engine import interactive
+        from hsengine.engine.webrtc_activity import ActivityBoard, bind as bind_activity
         from hsengine.engine.webrtc_captions import CaptionBoard, caption_track
         from hsengine.engine.webrtc_mix import SpeechBoard, mix_audio_track
         from hsengine.engine.webrtc_stt import follow_audio, stt_available
@@ -184,6 +185,8 @@ class WebRtcHub:
         )
         try:
             board = CaptionBoard()
+            activity = ActivityBoard()
+            bind_activity(activity)
             loop = asyncio.get_running_loop()
             captions = stt_available()
             if not captions:
@@ -196,7 +199,7 @@ class WebRtcHub:
         self._speech[session_id] = speech
         tracks: list[object] = []
         if video is not None:
-            painted = caption_track(video, board) if captions else video
+            painted = caption_track(video, board, activity) if captions else video
             pc.addTrack(painted)  # type: ignore[arg-type]
             tracks.append(painted)
         mixed = mix_audio_track(None, speech)
@@ -380,6 +383,9 @@ class WebRtcHub:
         for task in self._tasks.pop(session_id, []):
             task.cancel()
         self._speech.pop(session_id, None)
+        from hsengine.engine.webrtc_activity import unbind as unbind_activity
+
+        unbind_activity()
         self._agenda.pop(session_id, None)
         self._tz.pop(session_id, None)
         self._started.pop(session_id, None)

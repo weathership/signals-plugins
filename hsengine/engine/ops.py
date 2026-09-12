@@ -1041,4 +1041,10 @@ def dispatch(name: str, args: dict[str, Any] | None = None) -> str:
     fn = _DISPATCH.get(name)
     if fn is None:
         return json.dumps({"ok": False, "error": f"unknown tool {name}"})
+    try:
+        from hsengine.engine.webrtc_activity import pulse
+
+        pulse(name)
+    except Exception:
+        pass
     return fn(args)

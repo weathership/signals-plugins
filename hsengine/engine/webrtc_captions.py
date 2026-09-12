@@ -77,9 +77,9 @@ def paint_caption(image: Any, text: str) -> Any:
     return image
 
 
-def overlay_frame(frame: Any, text: str) -> Any:
-    """Return a new VideoFrame with *text* burned in, or the original on failure."""
-    if not text:
+def overlay_frame(frame: Any, text: str, activity: str = "") -> Any:
+    """Return a new VideoFrame with caption and optional activity chip burned in."""
+    if not text and not activity:
         return frame
     try:
         import numpy as np
@@ -90,7 +90,12 @@ def overlay_frame(frame: Any, text: str) -> Any:
     try:
         arr = frame.to_ndarray(format="rgb24")
         image = Image.fromarray(arr)
-        paint_caption(image, text)
+        if text:
+            paint_caption(image, text)
+        if activity:
+            from hsengine.engine.webrtc_activity import paint_activity
+
+            paint_activity(image, activity)
         out = av.VideoFrame.from_ndarray(np.asarray(image), format="rgb24")
         out.pts = frame.pts
         tb = getattr(frame, "time_base", None)
@@ -102,7 +107,7 @@ def overlay_frame(frame: Any, text: str) -> Any:
         return frame
 
 
-def caption_track(inner: Any, board: CaptionBoard) -> Any:
+def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) -> Any:
     from aiortc import MediaStreamTrack
     from aiortc.mediastreams import MediaStreamError
 
@@ -117,7 +122,8 @@ def caption_track(inner: Any, board: CaptionBoard) -> Any:
             if self.readyState != "live":
                 raise MediaStreamError
             frame = await self._inner.recv()
-            return overlay_frame(frame, board.get())
+            act = activity.get() if activity is not None else ""
+            return overlay_frame(frame, board.get(), act)
 
         def stop(self) -> None:
             try:
