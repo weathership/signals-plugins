@@ -219,7 +219,9 @@ def sample_sequence(
         w = _anti_repeat(float(g.weight), g.id, recent)
         if g.id == "headline" and "has_fresh" in facts and "has_thoughts" in facts:
             w *= 1.35  # notable thread jumps the queue
-        if g.id == "rundown" and "has_fresh" in facts:
+        if g.id == "headline" and "has_zettel" in facts:
+            w *= 2.2
+        if g.id == "rundown" and ("has_fresh" in facts or "has_zettel" in facts):
             w *= 0.4
         weights[g.id] = max(weights.get(g.id, 0.0), w)
     pool = [(gid, w) for gid, w in weights.items() if w > 0]
@@ -238,7 +240,17 @@ def sample_sequence(
         remaining = [(i, w) for i, w in remaining if i != choice]
     if not picked and pool:
         picked = [pool[0][0]]
+    if lane == "open" and "has_zettel" in facts and any(gid == "headline" for gid, _ in pool):
+        picked = _pin_headline(picked)
     return _insert_pause(picked, catalog.sequence, rng)
+
+
+def _pin_headline(picked: list[str]) -> list[str]:
+    """A just-filed zettel is opening entropy — headline is not optional."""
+    rest = [gid for gid in picked if gid != "headline"]
+    if rest and rest[0] == "greet_tod":
+        return ["greet_tod", "headline", *rest[1:]]
+    return ["headline", *rest]
 
 
 def _instruction(catalog: opening_pb2.Catalog, gid: str, facts: frozenset[str]) -> str:
@@ -275,7 +287,8 @@ def bishop_handoff(
         "Invent MONOLOGUE Ripley speaks, honoring this sequence. "
         "Mark a sequence pause as [pause] in the MONOLOGUE. "
         "Do not name the gestures. Do not mention Bishop. "
-        "No rumination frames (sitting with, turning over, returning to a thread)."
+        "No rumination frames (sitting with, turning over, returning to a thread). "
+        "If a just-filed zettel is in the glance, that is required entropy."
     )
     return "\n".join(lines)
 
@@ -294,28 +307,33 @@ def compose_opening(
     if returning is None:
         returning = bool(_returning(exclude=session_id))
     facts = facts_from_pack(pack, returning=returning)
-    if _has_fresh_zettel():
+    zettel = _fresh_zettel_glance()
+    if zettel:
         facts = frozenset(set(facts) | {"has_zettel", "has_fresh"})
     seq = sample_sequence(cat, facts, lane="open", rng=rng)
     from hsengine.engine.context_pack import pipeline_block
 
     glance = pipeline_block(pack)
+    if zettel:
+        glance = (
+            "Just-filed zettel — this is the opening's entropy, use it "
+            "(one hook, not a rundown):\n"
+            + zettel
+            + (("\n\n" + glance) if glance.strip() else "")
+        )
     handoff = bishop_handoff(seq, listener=listener, facts=facts, glance=glance, catalog=cat)
     remember_sequence(seq, session_id=session_id)
     log.info("opening sequence=%s facts=%s tz=%s tod=%s", seq, sorted(facts), listener.timezone, listener.tod)
     return OpeningPlan(sequence=seq, facts=facts, listener=listener, handoff=handoff)
 
 
-def _has_fresh_zettel() -> bool:
+def _fresh_zettel_glance() -> str:
     try:
-        import time as time_mod
+        from hsengine.engine.recall import fresh_zettel_glance
 
-        from hermes_constants import get_hermes_home
-        from hsengine.engine.recall import _fresh_hits
-
-        return bool(_fresh_hits(hermes_home=get_hermes_home(), now=time_mod.time()))
+        return (fresh_zettel_glance(limit=1) or "").strip()
     except Exception:
-        return False
+        return ""
 
 
 def _returning(*, exclude: str = "") -> bool:

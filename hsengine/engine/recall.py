@@ -161,6 +161,33 @@ def _fresh_hits(
     return hits[: max(1, limit)]
 
 
+def fresh_zettel_glance(
+    *,
+    hermes_home: Path | None = None,
+    now: float | None = None,
+    limit: int = 1,
+) -> str:
+    """Plain-text block of zettels filed in the last few minutes. Empty if none."""
+    import time as time_mod
+
+    from hermes_constants import get_hermes_home
+
+    home = Path(hermes_home) if hermes_home is not None else get_hermes_home()
+    clock = float(now if now is not None else time_mod.time())
+    hits = _fresh_hits(hermes_home=home, now=clock, limit=max(1, limit))
+    if not hits:
+        return ""
+    lines: list[str] = []
+    for h in hits:
+        age_m = float(h.get("age_minutes") or 0)
+        when = "just now" if age_m < 1 else f"{age_m:.0f}m ago"
+        title = str(h.get("title") or "")
+        path = str(h.get("path") or "")
+        snippet = str(h.get("snippet") or "")
+        lines.append(f"{when} {path} ({title}): {snippet}")
+    return "\n".join(lines)
+
+
 def _wiki_files(root: Path) -> list[Path]:
     if not root.is_dir():
         return []

@@ -108,11 +108,49 @@ def test_split_spoken_beats():
     ]
 
 
+def test_sample_sequence_pins_headline_when_zettel():
+    cat = load_catalog()
+    facts = frozenset({"always", "has_zettel", "has_fresh"})
+    seq = sample_sequence(cat, facts, rng=lambda: 0.9, recent=[["greet_tod", "pause"]])
+    assert "headline" in seq
+    content = [g for g in seq if g != "pause"]
+    assert content[0] in {"headline", "greet_tod"}
+    if content[0] == "greet_tod":
+        assert content[1] == "headline"
+    else:
+        assert content[0] == "headline"
+
+
+def test_compose_opening_handoff_uses_zettel_entropy(monkeypatch, tmp_path):
+    from hsengine.engine import opening as op
+
+    monkeypatch.setattr(op, "_ledger_path", lambda: tmp_path / "seq.jsonl")
+    monkeypatch.setattr(op, "_returning", lambda exclude="": False)
+    monkeypatch.setattr(
+        op,
+        "_fresh_zettel_glance",
+        lambda: "just now wiki/scratch/x.md (Acquaintance): Atiq on attention as agency.",
+    )
+    plan = compose_opening(
+        pack={"workspace": "empty", "thoughts_spoken": "", "agenda_spoken": ""},
+        timezone="America/Denver",
+        session_id="z1",
+        returning=False,
+        rng=lambda: 0.5,
+    )
+    assert "has_zettel" in plan.facts
+    assert "headline" in plan.sequence
+    assert "opening's entropy" in plan.handoff
+    assert "Atiq" in plan.handoff
+    assert "required entropy" in plan.handoff
+
+
 def test_compose_opening_handoff_for_bishop(monkeypatch, tmp_path):
     from hsengine.engine import opening as op
 
     monkeypatch.setattr(op, "_ledger_path", lambda: tmp_path / "seq.jsonl")
     monkeypatch.setattr(op, "_returning", lambda exclude="": False)
+    monkeypatch.setattr(op, "_fresh_zettel_glance", lambda: "")
     plan = compose_opening(
         pack={
             "workspace": "fresh",

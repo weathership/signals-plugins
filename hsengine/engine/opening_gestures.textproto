@@ -32,7 +32,7 @@ gesture {
   lane: "open"
   when: "has_zettel"
   weight: 1.85
-  instruction: "A zettel was filed in the last few minutes. You may glance at it — the thing itself, not that you have been sitting with it. Skip the rundown."
+  instruction: "They just filed a zettel. That is the opening's entropy — use it. One hook from the note as shared work they just put down, then the floor. The thing itself, not that you have been sitting with it. Not a rundown of the whole page."
 }
 gesture {
   id: "rundown"

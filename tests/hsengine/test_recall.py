@@ -133,6 +133,20 @@ def test_fresh_zettel_within_minutes_not_hours(tmp_path):
     assert "rundown" in text.lower()
 
 
+def test_fresh_zettel_glance_is_opening_entropy(tmp_path):
+    home = tmp_path / ".hermes"
+    scratch = home / "wiki" / "scratch"
+    scratch.mkdir(parents=True)
+    note = scratch / "note.md"
+    note.write_text("# Acquaintance\nAtiq on attention as agency.\n", encoding="utf-8")
+    now = time.time()
+    os.utime(note, (now - 60, now - 60))
+    block = recall.fresh_zettel_glance(hermes_home=home, now=now, limit=1)
+    assert "Acquaintance" in block
+    assert "Atiq" in block
+    assert "wiki/scratch" in block
+
+
 def test_fresh_zettel_absent_when_older_than_window(tmp_path):
     home = tmp_path / ".hermes"
     scratch = home / "wiki" / "scratch"

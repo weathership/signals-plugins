@@ -281,18 +281,20 @@ def bishop_prompt(
     elif move == "open":
         lines.append(
             "This is Connect — invent the first thing they will hear, not a pause. "
-            "A greeting is allowed. Call recent_thoughts; kb_search, web_search, or "
-            "hermes (delegate_task, at most two children) only if it earns a place. "
-            "Prefer MONOLOGUE Ripley can speak now in first person. STEER is optional "
-            "color for that line. Do not use a formula "
+            "A greeting is allowed. Prefer MONOLOGUE Ripley can speak now in first "
+            "person. STEER is optional color for that line. Do not use a formula "
             "(no casual-hello-plus-two-ideas-then-ask). Do not mention Bishop, "
             "pipelines, or how the notes arrived. Banned rumination frames: "
             "'I've been sitting with', 'turning something over', 'thread I'm "
-            "returning to', 'keeps surfacing', 'good to be back'. If a thought or "
-            "just-filed zettel earns a place, name the thing in the world — not "
-            "your having been sitting with it. A glance, not a rundown. Older "
-            "notes stay quiet. If the workspace glance is stale or empty, have "
-            "her say the workspace has gone quiet — do not invent today's news."
+            "returning to', 'keeps surfacing', 'good to be back'. "
+            "If the handoff includes a just-filed zettel, that is the entropy "
+            "for this opening — required, not optional. Start from one hook in "
+            "it as shared work they just put down, then the floor. Do not skip "
+            "it for a generic greeting-plus-thought. Do not rundown the whole "
+            "note. Do not call recent_thoughts unless the zettel block is "
+            "missing. Name the thing in the world. Older notes stay quiet. "
+            "If the workspace glance is stale or empty and there is no zettel, "
+            "have her say the workspace has gone quiet — do not invent today's news."
         )
     elif move == "thought":
         lines.append("Call conversation, then recent_thoughts.")
