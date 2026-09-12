@@ -44,6 +44,8 @@ else
 fi
 
 PLUGIN_ROOT="$TARGET_ROOT/plugins"
+SKILL_ROOT="$TARGET_ROOT/skills/note-taking"
+ZETTEL_SKILL_DEST="$SKILL_ROOT/zettel"
 PLUGINS=(signals-oip signals-memory signals-compact signals-listen signals-zettel)
 
 preflight_link() {
@@ -74,6 +76,10 @@ if [[ "$UNINSTALL" -eq 1 ]]; then
       die "$dest exists and is not a symlink; not removing."
     fi
   done
+  if [[ -L "$ZETTEL_SKILL_DEST" ]]; then
+    rm "$ZETTEL_SKILL_DEST"
+    say "removed $ZETTEL_SKILL_DEST"
+  fi
   say "uninstalled Signals plugins from $PLUGIN_ROOT"
   exit 0
 fi
@@ -97,6 +103,18 @@ for name in "${PLUGINS[@]}"; do
   fi
   say "linked $dest -> $src"
 done
+
+# Dashboard Skills page scans $HERMES_HOME/skills, not plugin register_skill.
+mkdir -p "$SKILL_ROOT"
+zettel_src="$PLUGINS_SRC/signals-zettel/skills/zettel"
+if [[ -d "$zettel_src" ]]; then
+  st=0
+  preflight_link "$ZETTEL_SKILL_DEST" "$zettel_src" && st=0 || st=$?
+  if [[ $st -eq 0 && ! -e "$ZETTEL_SKILL_DEST" && ! -L "$ZETTEL_SKILL_DEST" ]]; then
+    ln -s "$zettel_src" "$ZETTEL_SKILL_DEST"
+  fi
+  [[ $st -eq 2 ]] || say "linked $ZETTEL_SKILL_DEST -> $zettel_src"
+fi
 
 say ""
 if [[ "$INSTALL_ENGINE" -eq 1 ]]; then
@@ -122,6 +140,7 @@ say "      - signals-oip"
 say "      - signals-memory"
 say "      - signals-compact"
 say "      - signals-listen"
+say "      - signals-zettel"
 say "  model:"
 say "    provider: signals"
 say "    model: thinking"

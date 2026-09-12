@@ -95,6 +95,11 @@ Details: [docs/memory.md](docs/memory.md).
 
 ## Scratch zettel (`/zettel`)
 
+The dashboard **Plugin catalog** is Nous-reviewed pins only — local Signals
+plugins show under **installed plugins** on that page, not in the catalog
+search. The zettel skill is linked into `$HERMES_HOME/skills/note-taking/zettel`
+so it appears on the Skills page.
+
 `signals-zettel` files host clipboard text as a Gaius-style scratch note in
 the Hermes wiki vault (`OBSIDIAN_VAULT_PATH` or `WIKI_PATH` or
 `${HERMES_HOME}/wiki`):

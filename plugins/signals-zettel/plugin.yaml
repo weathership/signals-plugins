@@ -1,5 +1,7 @@
 name: signals-zettel
+kind: standalone
 version: 0.1.0
 description: Capture clipboard text as a scratch zettel in the Hermes wiki vault
 author: zndx
 hooks: []
+tags: [zettel, wiki, clipboard]

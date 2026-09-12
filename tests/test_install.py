@@ -34,10 +34,14 @@ class InstallTests(unittest.TestCase):
                 self.assertTrue(dest.is_symlink(), name)
                 self.assertEqual((REPO / "plugins" / name).resolve(), dest.resolve())
                 self.assertTrue((dest / "plugin.yaml").is_file())
+            skill = home / "skills" / "note-taking" / "zettel"
+            self.assertTrue(skill.is_symlink())
+            self.assertTrue((skill / "SKILL.md").is_file())
             subprocess.run([str(INSTALL), "--quiet"], check=True, env=env)
             subprocess.run([str(INSTALL), "--uninstall", "--quiet"], check=True, env=env)
             for name in PLUGINS:
                 self.assertFalse((home / "plugins" / name).exists(), name)
+            self.assertFalse((home / "skills" / "note-taking" / "zettel").exists())
 
     def test_install_skips_existing_real_dirs_and_links_the_rest(self) -> None:
         import tempfile
