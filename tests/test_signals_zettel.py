@@ -44,16 +44,15 @@ def test_capture_writes_body_and_resource(tmp_path):
     vault.mkdir()
     now = datetime(2026, 9, 12, 8, 1, 2)
     out = cap.capture(
-        title="Nautilus",
-        body="Air-gap FSM with a Brier ledger.",
+        body="Nautilus air-gap\n\nFSM with a Brier ledger.",
         vault=vault,
         now=now,
     )
     assert out["ok"] is True
-    assert out["relpath"] == "scratch/2026-09-12/080102_nautilus.md"
-    assert out["resource"] == "wiki:scratch/2026-09-12/080102_nautilus.md"
+    assert out["relpath"] == "scratch/2026-09-12/080102_nautilus-air-gap.md"
+    assert out["resource"] == "wiki:scratch/2026-09-12/080102_nautilus-air-gap.md"
     text = Path(out["path"]).read_text(encoding="utf-8")
-    assert text.startswith("# Nautilus\n")
+    assert text.startswith("# Nautilus air-gap\n")
     assert "Brier ledger" in text
 
 
@@ -61,7 +60,6 @@ def test_capture_keeps_existing_heading(tmp_path):
     vault = tmp_path / "wiki"
     vault.mkdir()
     out = cap.capture(
-        title="ignored",
         body="# Already titled\n\nBody.\n",
         vault=vault,
         now=datetime(2026, 9, 12, 9, 0, 0),
@@ -69,13 +67,13 @@ def test_capture_keeps_existing_heading(tmp_path):
     text = Path(out["path"]).read_text(encoding="utf-8")
     assert text.startswith("# Already titled\n")
     assert text.count("# ") == 1
+    assert out["relpath"].endswith("_already-titled.md")
 
 
-def test_capture_empty_body_fails(tmp_path, monkeypatch):
-    monkeypatch.setattr(cap, "read_clipboard_text", lambda: "")
-    out = cap.capture(vault=tmp_path / "wiki", body=None)
+def test_capture_empty_body_fails(tmp_path):
+    out = cap.capture(vault=tmp_path / "wiki", body="  \n")
     assert out["ok"] is False
-    assert "Clipboard" in out["error"]
+    assert out["error"] == "usage: /zettel <pasted text>"
 
 
 def test_capture_appends_wiki_log(tmp_path):
@@ -83,8 +81,7 @@ def test_capture_appends_wiki_log(tmp_path):
     vault.mkdir()
     (vault / "log.md").write_text("# Log\n", encoding="utf-8")
     out = cap.capture(
-        title="Probe",
-        body="hello",
+        body="Probe\nhello",
         vault=vault,
         now=datetime(2026, 9, 12, 10, 0, 0),
     )

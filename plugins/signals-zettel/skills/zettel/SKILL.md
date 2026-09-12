@@ -1,26 +1,26 @@
 ---
 name: zettel
-description: File a clipboard zettel into the Hermes wiki vault.
-version: 0.1.0
+description: File pasted text as a scratch zettel in the wiki vault.
+version: 0.1.1
 author: Ryan Hill (@rch), Weathership
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [zettel, wiki, clipboard, notes]
+    tags: [zettel, wiki, notes]
     category: note-taking
 ---
 
 # Zettel Skill
 
-Capture a scratch zettel under the Hermes wiki vault in one step: Gaius-style
-filename plus clipboard (or pasted) body. Does not use the bundled `obsidian`
-skill or `/paste` (images only).
+Capture a scratch zettel under the Hermes wiki vault in one step. The
+filename is Gaius-style; the body is the pasted argument. Does not use
+the bundled `obsidian` skill, `/paste`, or the OS clipboard.
 
 ## When to Use
 
-- User runs `/zettel` or asks to file clipboard / pasted notes into the wiki.
-- User wants a scratch zettel without walking Obsidian or llm-wiki ingest.
+- User runs `/zettel` with the note text after the command.
+- User asks to file pasted notes into the wiki vault.
 
 ## Prerequisites
 
@@ -29,14 +29,12 @@ or `${HERMES_HOME}/wiki`.
 
 ## How to Run
 
-Prefer the slash command (reads the host clipboard in this process):
-
 ```
-/zettel optional title
+/zettel <pasted text>
 ```
 
-From the agent, call `zettel_capture`. Omit `body` to read the clipboard.
-If the user already pasted the note in the chat, pass that text as `body`.
+The slug is the first line (heading if present). From the agent, call
+`zettel_capture` with `body` set to that same text.
 
 ## Quick Reference
 
@@ -48,18 +46,16 @@ If the user already pasted the note in the chat, pass that text as `body`.
 
 ## Procedure
 
-1. If the user invoked `/zettel`, the plugin already wrote the file — report
-   the returned `relpath` and `resource`. Do not rewrite it.
-2. Otherwise call `zettel_capture` with `title` when they named the note.
-3. On `ok: false` and empty clipboard, ask them to copy the text and run
-   `/zettel` again. Do not probe the OS clipboard with `terminal`.
+1. If the user invoked `/zettel` with a body, the plugin already wrote the
+   file — report `relpath` and `resource`. Do not rewrite it.
+2. Otherwise call `zettel_capture` with `body` equal to the pasted markdown.
+3. On empty body, tell them the usage is `/zettel <pasted text>`.
 4. Leave Gaius lattice KB alone; this vault is Hermes-local.
 
 ## Pitfalls
 
 - `/paste` is clipboard **images**. It will not fill a zettel.
-- Jail/SSH sessions often have no host clipboard — `/zettel` then fails;
-  the user should paste the body into chat and you pass `body`.
+- Do not probe the OS clipboard with `terminal`.
 
 ## Verification
 

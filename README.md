@@ -11,7 +11,7 @@ clone as other third-party plugins).
 | `plugins/signals-memory` | `MemoryProvider` | `memory.provider: signals-memory` |
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
 | `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer / AgentRTC Listen tab |
-| `plugins/signals-zettel` | general (`/zettel`, `zettel_capture`) | Clipboard → scratch zettel in the wiki vault |
+| `plugins/signals-zettel` | general (`/zettel`, `zettel_capture`) | Pasted text → scratch zettel in the wiki vault |
 | `hsengine/` (pip extra `signals-hsengine`) | sidecar process | Lattice engine + AgentRTC (`python -m hsengine`) |
 
 Listen is a Hermes **plugin**. The voice/media plane is a **sidecar**
@@ -100,18 +100,17 @@ plugins show under **installed plugins** on that page, not in the catalog
 search. The zettel skill is linked into `$HERMES_HOME/skills/note-taking/zettel`
 so it appears on the Skills page.
 
-`signals-zettel` files host clipboard text as a Gaius-style scratch note in
+`signals-zettel` files pasted text as a Gaius-style scratch note in
 the Hermes wiki vault (`OBSIDIAN_VAULT_PATH` or `WIKI_PATH` or
 `${HERMES_HOME}/wiki`):
 
 ```
-/zettel optional title
+/zettel <pasted text>
 ```
 
-Writes `scratch/YYYY-MM-DD/HHMMSS_slug.md` and returns `wiki:scratch/…`.
-`/paste` stays image-only. If the process cannot see the host clipboard
-(jail/SSH), paste the body into chat and the `zettel_capture` tool uses
-`body`. Does not change the bundled `obsidian` skill.
+The slug is the first line. Writes `scratch/YYYY-MM-DD/HHMMSS_slug.md`
+and returns `wiki:scratch/…`. `/paste` stays image-only. Does not change
+the bundled `obsidian` skill.
 
 ## Install
 
@@ -183,7 +182,7 @@ plugins/
   signals-memory/       MemoryProvider + hybrid.py (tiered recall)
   signals-compact/      ContextEngine
   signals-listen/       dashboard Listen tab + plugin_api
-  signals-zettel/       /zettel clipboard capture into wiki/scratch
+  signals-zettel/       /zettel <pasted text> into wiki/scratch
 hsengine/               sidecar: AgentRTC, named bots, overlay, ops
   bots/{ripley,bishop}/ SOUL.md
 docs/

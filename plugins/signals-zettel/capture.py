@@ -4,14 +4,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 _SLUG = re.compile(r"[^a-z0-9]+")
-_TEXT = dict(capture_output=True, text=True, encoding="utf-8", errors="replace")
+_USAGE = "usage: /zettel <pasted text>"
 
 
 def vault_root(*, env: dict[str, str] | None = None, hermes_home: Path | None = None) -> Path:
@@ -39,9 +37,7 @@ def zettel_relpath(title: str, *, now: datetime | None = None) -> str:
     return f"scratch/{day}/{stamp}_{slugify(title)}.md"
 
 
-def title_from_body(body: str, *, explicit: str = "") -> str:
-    if (explicit or "").strip():
-        return explicit.strip()
+def title_from_body(body: str) -> str:
     for line in (body or "").splitlines():
         t = line.strip().lstrip("#").strip()
         if t:
@@ -49,49 +45,17 @@ def title_from_body(body: str, *, explicit: str = "") -> str:
     return "note"
 
 
-def read_clipboard_text() -> str:
-    """Host clipboard text. Empty when no backend works (jail, SSH, missing tools)."""
-    candidates: list[list[str]] = []
-    if sys.platform == "darwin":
-        candidates.append(["pbpaste"])
-    elif sys.platform == "win32":
-        candidates.append(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard"]
-        )
-    else:
-        if os.environ.get("WAYLAND_DISPLAY"):
-            candidates.append(["wl-paste", "--type", "text/plain"])
-            candidates.append(["wl-paste", "--type", "text"])
-        candidates.append(["xclip", "-selection", "clipboard", "-out"])
-        candidates.append(["xsel", "--clipboard", "--output"])
-    for argv in candidates:
-        try:
-            r = subprocess.run(argv, timeout=5, **_TEXT)
-        except (FileNotFoundError, subprocess.SubprocessError, OSError):
-            continue
-        if r.returncode == 0 and (r.stdout or "").strip():
-            return r.stdout
-    return ""
-
-
 def capture(
     *,
-    title: str = "",
-    body: str | None = None,
+    body: str = "",
     vault: Path | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Create ``scratch/YYYY-MM-DD/HHMMSS_slug.md``. *body* None → clipboard."""
-    text = body if body is not None else read_clipboard_text()
-    if not (text or "").strip():
-        return {
-            "ok": False,
-            "error": (
-                "Clipboard is empty (or unreachable from this process). "
-                "Copy the note text, then run /zettel again — or pass body=."
-            ),
-        }
-    heading = title_from_body(text, explicit=title)
+    """Create ``scratch/YYYY-MM-DD/HHMMSS_slug.md`` from *body*."""
+    text = body or ""
+    if not text.strip():
+        return {"ok": False, "error": _USAGE}
+    heading = title_from_body(text)
     root = Path(vault) if vault is not None else vault_root()
     rel = zettel_relpath(heading, now=now)
     path = root / rel
@@ -135,7 +99,10 @@ def resource_line(rel: str) -> str:
 
 def format_slash_result(data: dict[str, Any]) -> str:
     if not data.get("ok"):
-        return f"  /zettel failed: {data.get('error') or 'unknown error'}"
+        err = str(data.get("error") or "unknown error")
+        if err == _USAGE:
+            return f"  {_USAGE}"
+        return f"  /zettel failed: {err}"
     return (
         f"  Zettel {data['relpath']}\n"
         f"  {data['resource']}\n"

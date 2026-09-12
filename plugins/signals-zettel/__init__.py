@@ -1,8 +1,7 @@
-"""Clipboard → scratch zettel in the Hermes wiki vault.
+"""Slash ``/zettel <pasted text>`` → scratch zettel in the Hermes wiki vault.
 
-Slash ``/zettel [title]`` reads the host clipboard and writes
-``scratch/YYYY-MM-DD/HHMMSS_slug.md`` under ``OBSIDIAN_VAULT_PATH`` /
-``WIKI_PATH`` / ``${HERMES_HOME}/wiki``.
+Filename is ``scratch/YYYY-MM-DD/HHMMSS_slug.md`` under ``OBSIDIAN_VAULT_PATH``
+/ ``WIKI_PATH`` / ``${HERMES_HOME}/wiki``. Slug comes from the first line.
 """
 from __future__ import annotations
 
@@ -15,45 +14,38 @@ _SKILL = Path(__file__).resolve().parent / "skills" / "zettel" / "SKILL.md"
 _TOOL = {
     "name": "zettel_capture",
     "description": (
-        "Create a scratch zettel in the Hermes wiki vault from clipboard "
-        "text (or an explicit body). One shot: filename + content."
+        "Create a scratch zettel in the Hermes wiki vault from pasted text. "
+        "Filename slug is the first line. Required: body."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "title": {
-                "type": "string",
-                "description": "Note title / slug. Default: first heading or line of the body.",
-            },
             "body": {
                 "type": "string",
-                "description": "Note markdown. Omit to read the host clipboard.",
+                "description": "Full note markdown (the pasted text).",
             },
         },
+        "required": ["body"],
         "additionalProperties": False,
     },
 }
 
 
 def _slash(raw_args: str) -> str:
-    title = (raw_args or "").strip()
-    return format_slash_result(capture(title=title))
+    return format_slash_result(capture(body=raw_args or ""))
 
 
 def _tool(args: dict, **_kw) -> str:
-    title = str(args.get("title") or "")
-    body = args.get("body")
-    if body is not None:
-        body = str(body)
-    return tool_result(capture(title=title, body=body))
+    return tool_result(capture(body=str(args.get("body") or "")))
 
 
 def register(ctx) -> None:
     ctx.register_command(
         "zettel",
         handler=_slash,
-        description="File clipboard text as a scratch zettel in the wiki vault.",
-        args_hint="[title]",
+        description="File pasted text as a scratch zettel in the wiki vault.",
+        args_hint="<pasted text>",
+        argument_mode="text",
     )
     ctx.register_tool(
         name="zettel_capture",
@@ -67,5 +59,5 @@ def register(ctx) -> None:
         ctx.register_skill(
             "zettel",
             _SKILL,
-            description="File a clipboard zettel into the Hermes wiki vault.",
+            description="File pasted text as a scratch zettel in the wiki vault.",
         )
