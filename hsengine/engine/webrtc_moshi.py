@@ -22,22 +22,17 @@ SPOKEN_SYSTEM = (
     "code, or URLs. Never introduce yourself by name or as Hermes. "
     "For greetings and small talk that is "
     "not about the systems, one or two short sentences and do not call tools. "
-    "When they ask how things are going, what's happening, whether anything "
-    "is down, a briefing, or any operational check-in — even casually — "
-    "call sitrep first (and list_activities only if you need a closer look), "
-    "then talk about what you found in a few sentences. When they ask what "
+    "When they ask what's next, the agenda, the schedule, how's it going, "
+    "or operating posture — do not read a briefing or a peer inventory. "
+    "Talk like a person on the call. A silent named agent may already have "
+    "invented that turn. If you still need a fact, call agenda or sitrep "
+    "and then say one or two sentences in your own words — never dump the "
+    "payload. When they ask about ONE specific meeting, call agenda with "
+    "that item's id. When they ask what "
     "you have been thinking about, what's on your mind, whether you've had any "
     "new ideas, insights or connections, or what the research has turned up — "
-    "call recent_thoughts: it returns a ready Thoughts Brief in plain speech "
-    "(briefs[].spoken) written by the cognition itself — say that in your own "
-    "words as the federation's cognition, then offer detail from the individual "
-    "thoughts only if they want more; if there is no brief or the note says "
-    "cognition is idle, say so plainly instead of inventing thoughts. When they "
-    "ask about the agenda, the schedule, meetings, reminders, or what's coming up "
-    "today, tomorrow or this week — call agenda: it returns a ready Agenda Brief "
-    "in plain speech (briefs[].spoken) plus an index of items with ids; speak the "
-    "brief, and when they ask about one item, call agenda again with that item's "
-    "id as item_id and tell them from its content. When they ask what we already "
+    "call recent_thoughts and speak in your own words; if cognition is idle, "
+    "say so plainly instead of inventing thoughts. When they ask what we already "
     "know, to follow a note from the deck, or to look something up in our notes "
     "— call kb_search. When they ask about the wider world, news, or a fact you "
     "do not have — call web_search. When they ask about a ticker, a listed "
@@ -104,10 +99,12 @@ class TurnTaker:
         quiet_s: float = _TURN_QUIET_S,
         *,
         session_id: str = "",
+        speech: Any | None = None,
     ) -> None:
         self._loop = loop
         self._quiet_s = quiet_s
         self._session_id = session_id
+        self._speech = speech
         self._words: list[str] = []
         self._gen = 0
         self._task: asyncio.Task | None = None
@@ -159,6 +156,39 @@ class TurnTaker:
             from hsengine.engine.webrtc_silence import apply_steer_system
 
             session_history.record_turn(self._session_id, user=text)
+            from hsengine.engine.opening import compose_next, wants_mediation
+
+            if wants_mediation(text):
+                from hsengine.engine.context_pack import conversational_context, pipeline_block
+                from hsengine.engine.named_bots import bishop_run, ripley_speak_outcome
+                from hsengine.engine.webrtc_session import HUB
+
+                pack = await asyncio.to_thread(conversational_context)
+                plan = await asyncio.to_thread(
+                    compose_next,
+                    pack=pack,
+                    utterance=text,
+                    timezone=getattr(HUB, "_tz", {}).get(self._session_id, ""),
+                    session_id=self._session_id,
+                )
+                outcome = await asyncio.to_thread(
+                    bishop_run,
+                    session_id=self._session_id,
+                    move="next",
+                    glance=pipeline_block(pack),
+                    handoff=plan.handoff,
+                )
+                spoken = await ripley_speak_outcome(
+                    outcome, session_id=self._session_id, speech=self._speech
+                )
+                if spoken:
+                    session_history.record_turn(
+                        self._session_id, assistant=spoken, model="ripley"
+                    )
+                    session_history.remember_turn(
+                        self._session_id, user=text, assistant=spoken
+                    )
+                return
             steer = self.pending_steer
             self.pending_steer = ""
             result = await asyncio.to_thread(
@@ -223,7 +253,7 @@ async def follow_audio(
     import websockets
 
     captioner = MoshiCaptioner(board)
-    turns = TurnTaker(asyncio.get_running_loop(), session_id=session_id)
+    turns = TurnTaker(asyncio.get_running_loop(), session_id=session_id, speech=speech)
     from hsengine.engine.webrtc_silence import SilenceDirector
 
     director = SilenceDirector(

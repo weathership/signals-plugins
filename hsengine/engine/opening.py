@@ -105,8 +105,17 @@ def usable(text: str | None) -> bool:
     return bool((text or "").strip()) and len((text or "").strip()) >= 24
 
 
-def _eligible(g: opening_pb2.Gesture, facts: frozenset[str]) -> bool:
+def _in_lane(g: opening_pb2.Gesture, lane: str) -> bool:
+    lanes = [x for x in g.lane if x]
+    if not lanes:
+        return True
+    return lane in lanes
+
+
+def _eligible(g: opening_pb2.Gesture, facts: frozenset[str], *, lane: str = "open") -> bool:
     if g.id == "pause" or g.weight <= 0:
+        return False
+    if not _in_lane(g, lane):
         return False
     needed = [t for t in g.when if t and t != "always"]
     return all(t in facts for t in needed)
@@ -197,6 +206,7 @@ def sample_sequence(
     catalog: opening_pb2.Catalog,
     facts: frozenset[str],
     *,
+    lane: str = "open",
     rng: Rng | None = None,
     recent: list[list[str]] | None = None,
 ) -> list[str]:
@@ -204,7 +214,7 @@ def sample_sequence(
     recent = recent if recent is not None else _recent_ids(_ledger_path())
     weights: dict[str, float] = {}
     for g in catalog.gesture:
-        if not _eligible(g, facts):
+        if not _eligible(g, facts, lane=lane):
             continue
         w = _anti_repeat(float(g.weight), g.id, recent)
         if g.id == "headline" and "has_fresh" in facts and "has_thoughts" in facts:
@@ -236,7 +246,7 @@ def _instruction(catalog: opening_pb2.Catalog, gid: str, facts: frozenset[str]) 
     if not matches:
         return gid
     for g in matches:
-        if _eligible(g, facts) or gid == "pause":
+        if gid == "pause" or _eligible(g, facts, lane="open") or _eligible(g, facts, lane="next"):
             return g.instruction
     return matches[0].instruction
 
@@ -283,7 +293,7 @@ def compose_opening(
     if returning is None:
         returning = bool(_returning(exclude=session_id))
     facts = facts_from_pack(pack, returning=returning)
-    seq = sample_sequence(cat, facts, rng=rng)
+    seq = sample_sequence(cat, facts, lane="open", rng=rng)
     from hsengine.engine.context_pack import pipeline_block
 
     glance = pipeline_block(pack)
@@ -332,6 +342,54 @@ def last_connect_age_hours(*, exclude: str = "") -> float | None:
 
 
 _PAUSE = re.compile(r"\s*\[pause\]\s*", re.I)
+
+_MEDIATE = re.compile(
+    r"(?i)\b("
+    r"what'?s\s+up\s+next|what\s+is\s+up\s+next|what'?s\s+next|"
+    r"coming\s+up|on\s+the\s+agenda|\bagenda\b|schedule|"
+    r"how'?s\s+it\s+going|how\s+are\s+things|how'?s\s+the\s+lattice|"
+    r"operating\s+posture|sitrep|anything\s+down|what'?s\s+happening|"
+    r"up\s+next"
+    r")\b"
+)
+
+
+def wants_mediation(text: str) -> bool:
+    """Agenda / posture / what's-next questions — Bishop invents, Ripley speaks."""
+    return bool(_MEDIATE.search(text or ""))
+
+
+def compose_next(
+    *,
+    pack: dict[str, str] | None = None,
+    utterance: str = "",
+    timezone: str = "",
+    session_id: str = "",
+    rng: Rng | None = None,
+    catalog: opening_pb2.Catalog | None = None,
+) -> OpeningPlan:
+    cat = catalog or load_catalog()
+    listener = local_clock(timezone)
+    returning = bool(_returning(exclude=session_id))
+    tags = set(facts_from_pack(pack, returning=returning))
+    if wants_mediation(utterance) and re.search(
+        r"(?i)\b(how'?s\s+it\s+going|how\s+are\s+things|lattice|sitrep|down|posture)\b",
+        utterance or "",
+    ):
+        tags.add("ops_ask")
+    facts = frozenset(tags)
+    seq = sample_sequence(cat, facts, lane="next", rng=rng)
+    from hsengine.engine.context_pack import pipeline_block
+
+    glance = pipeline_block(pack)
+    asked = " ".join((utterance or "").split())
+    extra = f"They said: {asked}" if asked else ""
+    handoff = bishop_handoff(seq, listener=listener, facts=facts, glance=glance, catalog=cat)
+    if extra:
+        handoff = extra + "\n" + handoff
+    remember_sequence(seq, session_id=session_id)
+    log.info("next sequence=%s facts=%s asked=%s", seq, sorted(facts), asked[:80])
+    return OpeningPlan(sequence=seq, facts=facts, listener=listener, handoff=handoff)
 
 
 def split_spoken_beats(text: str) -> list[str]:

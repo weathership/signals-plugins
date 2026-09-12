@@ -637,10 +637,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "sitrep",
             "description": (
-                "How the lattice is doing right now: Hermes health, which "
-                "peers answered, and what work is in force. Call this for "
-                "ordinary check-ins — how's it going, what's happening, any "
-                "trouble, a briefing — even if they never say a tool name."
+                "How the lattice is doing right now (health, peers, in-force "
+                "work). For a silent invent pass. Ripley must not read this "
+                "aloud as a briefing or operating-posture readout — one or "
+                "two spoken sentences only, and only if something is actually "
+                "wrong or they asked."
             ),
             "parameters": {
                 "type": "object",
@@ -687,7 +688,7 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "whenever they ask what's on your mind, what you've been thinking, "
                 "any new ideas, insights or connections, or what the research has "
                 "turned up — casual phrasing counts. Speak the brief in your own "
-                "words first; use the individual thoughts only for follow-ups. If "
+                "words — not as a readout. If "
                 "there is no brief or the note says cognition is idle, say that "
                 "plainly."
             ),
@@ -710,19 +711,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "agenda",
             "description": (
-                "The agenda: what is on today, what matters tomorrow and in the "
-                "coming week. Returns each project's pre-prepared Agenda BRIEF "
-                "(briefs[].spoken is plain speech, written by its own workflow "
-                "with judgement about what to include) plus the index of the "
-                "items it covered — each with an id, when, kind (session, "
-                "reminder, brief) and title. Call this whenever they ask about "
-                "the agenda, the schedule, meetings, reminders, what's coming up, "
-                "what's planned for today or this week — casual phrasing counts. "
-                "Speak the brief in your own words. When they ask about ONE item "
-                "('tell me about that meeting tomorrow'), call agenda again with "
-                "item_id set to that item's id from the index to get its full "
-                "content. If there is no brief or the note says the agenda is "
-                "empty, say so plainly."
+                "The agenda: today's items, tomorrow, the week. Returns briefs "
+                "and an item index (id, when, kind, title). For a silent invent "
+                "pass or a follow-up on ONE item (item_id). Ripley must not read "
+                "the brief aloud as a scheduler readout — talk like a person. "
+                "If the agenda is empty, say so plainly."
             ),
             "parameters": {
                 "type": "object",

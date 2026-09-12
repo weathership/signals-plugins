@@ -7,16 +7,18 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class Gesture(_message.Message):
-    __slots__ = ("id", "when", "weight", "instruction")
+    __slots__ = ("id", "when", "weight", "instruction", "lane")
     ID_FIELD_NUMBER: _ClassVar[int]
     WHEN_FIELD_NUMBER: _ClassVar[int]
     WEIGHT_FIELD_NUMBER: _ClassVar[int]
     INSTRUCTION_FIELD_NUMBER: _ClassVar[int]
+    LANE_FIELD_NUMBER: _ClassVar[int]
     id: str
     when: _containers.RepeatedScalarFieldContainer[str]
     weight: float
     instruction: str
-    def __init__(self, id: _Optional[str] = ..., when: _Optional[_Iterable[str]] = ..., weight: _Optional[float] = ..., instruction: _Optional[str] = ...) -> None: ...
+    lane: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, id: _Optional[str] = ..., when: _Optional[_Iterable[str]] = ..., weight: _Optional[float] = ..., instruction: _Optional[str] = ..., lane: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PauseAfter(_message.Message):
     __slots__ = ("after", "p")

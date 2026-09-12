@@ -130,6 +130,23 @@ def test_compose_opening_handoff_for_bishop(monkeypatch, tmp_path):
     assert "greet_tod" in plan.sequence or plan.sequence
 
 
+def test_wants_mediation_for_whats_next():
+    from hsengine.engine.opening import wants_mediation
+
+    assert wants_mediation("what's up next")
+    assert wants_mediation("What's next on the agenda")
+    assert wants_mediation("how's it going")
+    assert not wants_mediation("tell me about the Lilly 10-K")
+
+
+def test_next_lane_includes_whats_next_not_greet():
+    cat = load_catalog()
+    facts = frozenset({"always", "has_agenda"})
+    seq = sample_sequence(cat, facts, lane="next", rng=lambda: 0.0, recent=[])
+    assert "greet_tod" not in seq
+    assert "whats_next" in seq or "offer_floor" in seq
+
+
 def test_bishop_open_prompt_includes_handoff():
     from hsengine.engine.named_bots import bishop_prompt
 
@@ -140,3 +157,11 @@ def test_bishop_open_prompt_includes_handoff():
     assert "America/Los_Angeles" in prompt
     assert "Handoff" in prompt
     assert "formula" in prompt.lower() or "two-ideas" in prompt
+
+
+def test_bishop_next_prompt_is_not_a_scheduler():
+    from hsengine.engine.named_bots import bishop_prompt
+
+    _, prompt, _ = bishop_prompt(move="next", handoff="Opening sequence: whats_next → offer_floor")
+    assert "whats_next" in prompt
+    assert "not a briefing" in prompt.lower() or "scheduler" in prompt.lower()

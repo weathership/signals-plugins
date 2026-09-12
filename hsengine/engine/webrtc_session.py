@@ -265,10 +265,9 @@ class WebRtcHub:
                     pipeline_block,
                 )
                 from hsengine.engine.named_bots import (
-                    BishopOutcome,
                     bishop_run,
                     ensure_bots,
-                    ripley_opening_prompts,
+                    ripley_speak_outcome,
                 )
 
                 aid = self._agenda.get(session_id, "")
@@ -285,7 +284,7 @@ class WebRtcHub:
                         "yes" if session.get("public") else "no",
                     )
                 pack = await asyncio.to_thread(conversational_context, agenda_id=aid)
-                from hsengine.engine.opening import compose_opening, split_spoken_beats
+                from hsengine.engine.opening import compose_opening
 
                 plan = await asyncio.to_thread(
                     compose_opening,
@@ -312,41 +311,16 @@ class WebRtcHub:
                     "yes" if outcome.steer else "no",
                     "yes" if outcome.monologue else "no",
                 )
-                beats = split_spoken_beats(outcome.monologue) if outcome.monologue else [""]
-                spoken: list[str] = []
-                speech = self._speech.get(session_id)
-                for i, beat in enumerate(beats):
-                    if i:
-                        await asyncio.sleep(0.55)
-                        for _ in range(36):
-                            speaking = getattr(speech, "speaking", None)
-                            if not callable(speaking) or not speaking():
-                                break
-                            await asyncio.sleep(0.12)
-                        await asyncio.sleep(0.4)
-                    chunk = BishopOutcome(
-                        steer=outcome.steer if i == 0 else "",
-                        monologue=beat,
-                    )
-                    speak_s, speak_u = ripley_opening_prompts(chunk)
-                    result = await asyncio.to_thread(
-                        interactive.complete_cerebras,
-                        prompt=speak_u,
-                        system_prompt=speak_s,
-                        max_tokens=220 if i else 280,
-                        temperature=0.55,
-                        reasoning_effort="none",
-                        tools=False,
-                        speak=True,
-                        session_id=session_id,
-                    )
-                    if result.text:
-                        spoken.append(result.text)
+                spoken = await ripley_speak_outcome(
+                    outcome,
+                    session_id=session_id,
+                    speech=self._speech.get(session_id),
+                )
                 from hsengine.engine import session_history
 
                 if spoken:
                     session_history.record_turn(
-                        session_id, assistant=" ".join(spoken), model="ripley"
+                        session_id, assistant=spoken, model="ripley"
                     )
             except Exception:
                 log.exception("cerebras opening line failed")

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ropening.proto\x12\x10hsengine.opening\"H\n\x07Gesture\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04when\x18\x02 \x03(\t\x12\x0e\n\x06weight\x18\x03 \x01(\x02\x12\x13\n\x0binstruction\x18\x04 \x01(\t\"&\n\nPauseAfter\x12\r\n\x05\x61\x66ter\x18\x01 \x01(\x05\x12\t\n\x01p\x18\x02 \x01(\x02\"o\n\x0eSequencePolicy\x12\x14\n\x0cmin_gestures\x18\x01 \x01(\x05\x12\x14\n\x0cmax_gestures\x18\x02 \x01(\x05\x12\x31\n\x0bpause_after\x18\x03 \x03(\x0b\x32\x1c.hsengine.opening.PauseAfter\"i\n\x07\x43\x61talog\x12*\n\x07gesture\x18\x01 \x03(\x0b\x32\x19.hsengine.opening.Gesture\x12\x32\n\x08sequence\x18\x02 \x01(\x0b\x32 .hsengine.opening.SequencePolicyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ropening.proto\x12\x10hsengine.opening\"V\n\x07Gesture\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04when\x18\x02 \x03(\t\x12\x0e\n\x06weight\x18\x03 \x01(\x02\x12\x13\n\x0binstruction\x18\x04 \x01(\t\x12\x0c\n\x04lane\x18\x05 \x03(\t\"&\n\nPauseAfter\x12\r\n\x05\x61\x66ter\x18\x01 \x01(\x05\x12\t\n\x01p\x18\x02 \x01(\x02\"o\n\x0eSequencePolicy\x12\x14\n\x0cmin_gestures\x18\x01 \x01(\x05\x12\x14\n\x0cmax_gestures\x18\x02 \x01(\x05\x12\x31\n\x0bpause_after\x18\x03 \x03(\x0b\x32\x1c.hsengine.opening.PauseAfter\"i\n\x07\x43\x61talog\x12*\n\x07gesture\x18\x01 \x03(\x0b\x32\x19.hsengine.opening.Gesture\x12\x32\n\x08sequence\x18\x02 \x01(\x0b\x32 .hsengine.opening.SequencePolicyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,11 +32,11 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'opening_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_GESTURE']._serialized_start=35
-  _globals['_GESTURE']._serialized_end=107
-  _globals['_PAUSEAFTER']._serialized_start=109
-  _globals['_PAUSEAFTER']._serialized_end=147
-  _globals['_SEQUENCEPOLICY']._serialized_start=149
-  _globals['_SEQUENCEPOLICY']._serialized_end=260
-  _globals['_CATALOG']._serialized_start=262
-  _globals['_CATALOG']._serialized_end=367
+  _globals['_GESTURE']._serialized_end=121
+  _globals['_PAUSEAFTER']._serialized_start=123
+  _globals['_PAUSEAFTER']._serialized_end=161
+  _globals['_SEQUENCEPOLICY']._serialized_start=163
+  _globals['_SEQUENCEPOLICY']._serialized_end=274
+  _globals['_CATALOG']._serialized_start=276
+  _globals['_CATALOG']._serialized_end=381
 # @@protoc_insertion_point(module_scope)

@@ -11,10 +11,12 @@ package hsengine.opening;
 message Gesture {
   string id = 1;
   // Eligibility tags (AND). "always" is a tautology.
-  // Known tags: always, returning, has_thoughts, has_fresh, has_agenda, stale, empty
+  // Known tags: always, returning, has_thoughts, has_fresh, has_agenda, stale, empty, ops_ask
   repeated string when = 2;
   float weight = 3;
   string instruction = 4;
+  // "open" | "next". Empty means both lanes.
+  repeated string lane = 5;
 }
 
 message PauseAfter {

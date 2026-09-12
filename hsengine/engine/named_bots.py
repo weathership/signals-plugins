@@ -269,7 +269,16 @@ def bishop_prompt(
     handoff_txt = (handoff or "").strip()
     if handoff_txt:
         lines.append("Handoff (opening sequence):\n" + handoff_txt)
-    if move == "open":
+    if move == "next":
+        lines.append(
+            "They asked what's next, the agenda, or how things are. Invent "
+            "Ripley's spoken reply from the handoff sequence. Collaborator, "
+            "not scheduler. Not a briefing. Not a peer list or operating-posture "
+            "readout. Prefer MONOLOGUE. Mark sequence pauses as [pause]. "
+            "You may call agenda, sitrep, or recent_thoughts to inform the "
+            "invent pass — Ripley will not read those payloads aloud."
+        )
+    elif move == "open":
         lines.append(
             "This is Connect — invent the first thing they will hear, not a pause. "
             "A greeting is allowed. Call recent_thoughts; kb_search, web_search, or "
@@ -298,7 +307,7 @@ def bishop_prompt(
     else:
         lines.append("Call conversation. Deepen the last live thread. Do not web-search.")
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")
-    return system, "\n".join(lines), 200 if move != "open" else 240
+    return system, "\n".join(lines), 240 if move in ("open", "next") else 200
 
 
 def bishop_run(
@@ -352,3 +361,47 @@ def ripley_opening_prompts(outcome: BishopOutcome) -> tuple[str, str]:
     else:
         raise RuntimeError("bishop opening returned empty; no fallback")
     return system, user
+
+
+async def ripley_speak_outcome(
+    outcome: BishopOutcome,
+    *,
+    session_id: str,
+    speech: Any | None = None,
+) -> str:
+    """Execute pass: Ripley speaks Bishop's invent, honoring [pause] beats."""
+    import asyncio
+
+    from hsengine.engine import interactive
+    from hsengine.engine.opening import split_spoken_beats
+
+    beats = split_spoken_beats(outcome.monologue) if outcome.monologue else [""]
+    spoken: list[str] = []
+    for i, beat in enumerate(beats):
+        if i:
+            await asyncio.sleep(0.55)
+            for _ in range(36):
+                speaking = getattr(speech, "speaking", None)
+                if not callable(speaking) or not speaking():
+                    break
+                await asyncio.sleep(0.12)
+            await asyncio.sleep(0.4)
+        chunk = BishopOutcome(
+            steer=outcome.steer if i == 0 else "",
+            monologue=beat,
+        )
+        speak_s, speak_u = ripley_opening_prompts(chunk)
+        result = await asyncio.to_thread(
+            interactive.complete_cerebras,
+            prompt=speak_u,
+            system_prompt=speak_s,
+            max_tokens=220 if i else 280,
+            temperature=0.55,
+            reasoning_effort="none",
+            tools=False,
+            speak=True,
+            session_id=session_id,
+        )
+        if getattr(result, "text", ""):
+            spoken.append(result.text)
+    return " ".join(spoken).strip()
