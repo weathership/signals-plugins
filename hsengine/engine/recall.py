@@ -81,6 +81,15 @@ def _clip(text: str, n: int = _SNIPPET) -> str:
     return t[: n - 1].rstrip() + "…"
 
 
+def _body_snippet(text: str) -> str:
+    body = text or ""
+    if body.lstrip().startswith("---"):
+        parts = body.split("---", 2)
+        if len(parts) >= 3:
+            body = parts[2]
+    return _clip(body)
+
+
 def _frontmatter_title(text: str, fallback: str) -> str:
     m = _TITLE.search(text or "")
     if not m:
@@ -103,7 +112,7 @@ def _file_ts(path: Path, text: str) -> float:
 
 def _matches(text: str, tokens: Iterable[str]) -> int:
     blob = (text or "").lower()
-    return sum(1 for t in tokens if t in blob)
+    return sum(blob.count(t) for t in tokens)
 
 
 def _wiki_files(root: Path) -> list[Path]:
@@ -134,14 +143,23 @@ def _citation_hits(
         rel = path.relative_to(hermes_home).as_posix()
         age = _age_hours(_file_ts(path, text), now)
         name_bonus = 1.5 if any(t in path.stem.lower() for t in tokens) else 1.0
+        parts = {p.lower() for p in path.parts}
+        if path.stem.lower() in {"log", "index", "schema"}:
+            loc_w = 0.35
+        elif "entities" in parts or "concepts" in parts:
+            loc_w = 1.8
+        elif "raw" in parts:
+            loc_w = 0.7
+        else:
+            loc_w = 1.0
         hits.append(
             {
                 "kind": "wiki",
                 "path": rel,
                 "title": _frontmatter_title(text, path.stem),
-                "snippet": _clip(text),
+                "snippet": _body_snippet(text),
                 "age_hours": age,
-                "score": recency_weight(age) * n * name_bonus,
+                "score": recency_weight(age) * n * name_bonus * loc_w,
             }
         )
     memory = hermes_home / "memories" / "MEMORY.md"

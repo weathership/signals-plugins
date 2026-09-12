@@ -68,6 +68,10 @@ def test_wiki_and_memory_citations_match_query(tmp_path):
         encoding="utf-8",
     )
     (home / "wiki" / "unrelated.md").write_text("# Other\nNo match here.\n", encoding="utf-8")
+    (home / "wiki" / "log.md").write_text(
+        "## [2026-09-12] ingest | Nautilus\n- Created: entities/nautilus.md\n",
+        encoding="utf-8",
+    )
     mem = home / "memories"
     mem.mkdir()
     (mem / "MEMORY.md").write_text(
@@ -87,7 +91,7 @@ def test_wiki_and_memory_citations_match_query(tmp_path):
         now=now,
     )
     paths = [c["path"] for c in pack["citations"]]
-    assert "wiki/entities/nautilus.md" in paths
+    assert paths[0] == "wiki/entities/nautilus.md"
     assert "memories/MEMORY.md" in paths
     assert all("unrelated" not in p.lower() for p in paths)
     text = recall.format_recall(pack)
