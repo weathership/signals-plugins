@@ -10,7 +10,7 @@ def test_session_wants_cerebras_follows_in_process_flag(monkeypatch):
     monkeypatch.setattr("hsengine.engine.interactive.is_active", lambda: False)
     monkeypatch.setattr(
         "hsengine.engine.coordination.list_activities",
-        lambda **k: [],
+        lambda **k: [{"kind": "interactive_session"}],
     )
     assert session_wants_cerebras() is False
 

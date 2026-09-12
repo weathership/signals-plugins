@@ -11,20 +11,16 @@ from typing import Any
 
 
 def session_wants_cerebras() -> bool:
+    """True only in the AgentRTC engine process that entered interactive posture.
+
+    Dashboard / CLI chat must keep the configured provider (xAI Grok OAuth).
+    A live lattice ``interactive_session`` Activity is not a process-wide
+    model swap — surface is session-scoped.
+    """
     try:
         from hsengine.engine.interactive import is_active
 
-        if is_active():
-            return True
-    except Exception:
-        pass
-    try:
-        from hsengine.engine import coordination
-
-        rows = coordination.list_activities(
-            kind=coordination.KIND_INTERACTIVE, active_only=True
-        )
-        return bool(rows)
+        return bool(is_active())
     except Exception:
         return False
 
