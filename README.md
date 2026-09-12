@@ -11,6 +11,7 @@ clone as other third-party plugins).
 | `plugins/signals-memory` | `MemoryProvider` | `memory.provider: signals-memory` |
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
 | `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer / AgentRTC Listen tab |
+| `plugins/signals-zettel` | general (`/zettel`, `zettel_capture`) | Clipboard → scratch zettel in the wiki vault |
 | `hsengine/` (pip extra `signals-hsengine`) | sidecar process | Lattice engine + AgentRTC (`python -m hsengine`) |
 
 Listen is a Hermes **plugin**. The voice/media plane is a **sidecar**
@@ -92,6 +93,21 @@ Lexical talks and wiki always outrank Gaius. A Gaius outage fails open.
 
 Details: [docs/memory.md](docs/memory.md).
 
+## Scratch zettel (`/zettel`)
+
+`signals-zettel` files host clipboard text as a Gaius-style scratch note in
+the Hermes wiki vault (`OBSIDIAN_VAULT_PATH` or `WIKI_PATH` or
+`${HERMES_HOME}/wiki`):
+
+```
+/zettel optional title
+```
+
+Writes `scratch/YYYY-MM-DD/HHMMSS_slug.md` and returns `wiki:scratch/…`.
+`/paste` stays image-only. If the process cannot see the host clipboard
+(jail/SSH), paste the body into chat and the `zettel_capture` tool uses
+`body`. Does not change the bundled `obsidian` skill.
+
 ## Install
 
 Canonical — clone each plugin from GitHub into `$HERMES_HOME/plugins/`:
@@ -101,6 +117,7 @@ hermes plugins install weathership/signals-plugins/plugins/signals-oip --enable
 hermes plugins install weathership/signals-plugins/plugins/signals-memory --enable
 hermes plugins install weathership/signals-plugins/plugins/signals-compact --enable
 hermes plugins install weathership/signals-plugins/plugins/signals-listen --enable
+hermes plugins install weathership/signals-plugins/plugins/signals-zettel --enable
 ```
 
 All four:
@@ -128,6 +145,7 @@ plugins:
     - signals-memory
     - signals-compact
     - signals-listen
+    - signals-zettel
 model:
   provider: signals
   model: thinking
@@ -160,6 +178,7 @@ plugins/
   signals-memory/       MemoryProvider + hybrid.py (tiered recall)
   signals-compact/      ContextEngine
   signals-listen/       dashboard Listen tab + plugin_api
+  signals-zettel/       /zettel clipboard capture into wiki/scratch
 hsengine/               sidecar: AgentRTC, named bots, overlay, ops
   bots/{ripley,bishop}/ SOUL.md
 docs/

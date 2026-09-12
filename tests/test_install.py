@@ -9,7 +9,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 INSTALL = REPO / "scripts" / "install.sh"
 INSTALL_GH = REPO / "scripts" / "install-from-github.sh"
-PLUGINS = ("signals-oip", "signals-memory", "signals-compact", "signals-listen")
+PLUGINS = ("signals-oip", "signals-memory", "signals-compact", "signals-listen", "signals-zettel")
 
 
 class InstallTests(unittest.TestCase):

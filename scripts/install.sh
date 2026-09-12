@@ -44,7 +44,7 @@ else
 fi
 
 PLUGIN_ROOT="$TARGET_ROOT/plugins"
-PLUGINS=(signals-oip signals-memory signals-compact signals-listen)
+PLUGINS=(signals-oip signals-memory signals-compact signals-listen signals-zettel)
 
 preflight_link() {
   local dest="$1" src="$2"
