@@ -68,3 +68,27 @@ def test_moshi_ld_path_includes_cuda():
     path = _ld_library_path(None)
     assert "/usr/local/cuda/lib64" in path
     assert "nvidia-libs" in path
+
+
+def test_stt_config_is_the_packaged_toml(tmp_path, monkeypatch):
+    from hsengine.engine import moshi_supervisor as ms
+
+    monkeypatch.delenv("MOSHI_STT_CONFIG", raising=False)
+    path = ms.stt_config_path()
+    assert path.is_file()
+    assert path.name == "stt-1b.toml"
+    assert "hsengine" in str(path)
+    override = tmp_path / "custom.toml"
+    override.write_text("static_dir = './static/'\n")
+    monkeypatch.setenv("MOSHI_STT_CONFIG", str(override))
+    assert ms.stt_config_path() == override
+
+
+def test_devenv_root_prefers_env_not_package_file(tmp_path, monkeypatch):
+    from hsengine.engine import moshi_supervisor as ms
+
+    monkeypatch.setenv("DEVENV_ROOT", str(tmp_path))
+    assert ms.devenv_root() == tmp_path
+    monkeypatch.delenv("DEVENV_ROOT", raising=False)
+    monkeypatch.setenv("HERMES_ROOT", str(tmp_path / "hermes"))
+    assert ms.devenv_root() == tmp_path / "hermes"

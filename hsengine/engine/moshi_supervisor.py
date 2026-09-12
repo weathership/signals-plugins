@@ -29,18 +29,54 @@ log = logging.getLogger("hsengine.engine.moshi_supervisor")
 
 CONTROL_PORT = int(os.environ.get("MOSHI_CONTROL_PORT", "5081"))
 MOSHI_PORT = int(os.environ.get("MOSHI_STT_PORT", "5080"))
-ROOT = Path(__file__).resolve().parents[2]
-STATE = ROOT / ".devenv" / "state" / "moshi"
-PID_FILE = STATE / "moshi-stt.pid"
-_WRAP = ROOT / ".devenv" / "profile" / "bin" / "moshi-server"
 _CARGO = Path.home() / ".cargo" / "bin" / "moshi-server"
+
+
+def package_dir() -> Path:
+    """``hsengine/`` on disk (this file is ``hsengine/engine/moshi_supervisor.py``)."""
+    return Path(__file__).resolve().parents[1]
+
+
+def devenv_root() -> Path:
+    """Hermes checkout that owns ``.devenv/`` (wrap, nvidia-libs, moshi state).
+
+    Not the Python package path — after signals-hsengine moved, ``__file__``
+    is under signals-plugins, not the devenv root.
+    """
+    for key in ("HERMES_ROOT", "DEVENV_ROOT"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            return Path(raw)
+    cwd = Path.cwd()
+    if (cwd / ".devenv").is_dir():
+        return cwd
+    return cwd
+
+
+def stt_config_path() -> Path:
+    raw = (os.environ.get("MOSHI_STT_CONFIG") or "").strip()
+    if raw:
+        return Path(raw)
+    packaged = package_dir() / "moshi" / "stt-1b.toml"
+    if packaged.is_file():
+        return packaged
+    raise RuntimeError(f"STT config missing: {packaged}")
+
+
+def _state_dir() -> Path:
+    return devenv_root() / ".devenv" / "state" / "moshi"
+
+
+def _wrap_bin() -> Path:
+    return devenv_root() / ".devenv" / "profile" / "bin" / "moshi-server"
 
 
 def _ld_library_path(torch_lib: Path | None) -> str:
     """Same layout as the devenv moshi-server wrap: nvidia + CUDA + Nix libs + torch."""
-    nvidia = ROOT / ".devenv" / "nvidia-libs"
+    nvidia = devenv_root() / ".devenv" / "nvidia-libs"
     parts = [str(nvidia), "/usr/local/cuda/lib64"]
-    wrap = _WRAP.resolve() if _WRAP.exists() else _WRAP
+    wrap = _wrap_bin()
+    wrap = wrap.resolve() if wrap.exists() else wrap
     try:
         for line in wrap.read_text().splitlines():
             stripped = line.strip()
@@ -62,13 +98,14 @@ _worker: subprocess.Popen | None = None
 def _moshi_env(gpu: int) -> dict[str, str]:
     """CUDA_VISIBLE_DEVICES + CUDA/Nix/torch libs. Do not rely on the wrap alone."""
     env = os.environ.copy()
-    profile_bin = ROOT / ".devenv" / "profile" / "bin"
+    root = devenv_root()
+    profile_bin = root / ".devenv" / "profile" / "bin"
     cargo_bin = Path.home() / ".cargo" / "bin"
     env["PATH"] = f"{profile_bin}:{env.get('PATH', '')}:{cargo_bin}"
     env["CUDA_HOME"] = env.get("CUDA_HOME", "/usr/local/cuda")
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     env["HF_HOME"] = env.get("HF_HOME", "/raid/cache/huggingface")
-    tts_site = ROOT / ".devenv" / "state" / "tts-venv" / "lib" / "python3.11" / "site-packages"
+    tts_site = root / ".devenv" / "state" / "tts-venv" / "lib" / "python3.11" / "site-packages"
     torch_lib = tts_site / "torch" / "lib" if tts_site.is_dir() else None
     if tts_site.is_dir():
         env["PYTHONPATH"] = f"{tts_site}{os.pathsep}{env.get('PYTHONPATH', '')}".rstrip(os.pathsep)
@@ -78,8 +115,9 @@ def _moshi_env(gpu: int) -> dict[str, str]:
 
 
 def _moshi_binary() -> str:
-    if _WRAP.is_file():
-        return str(_WRAP)
+    wrap = _wrap_bin()
+    if wrap.is_file():
+        return str(wrap)
     if _CARGO.is_file():
         return str(_CARGO)
     raise RuntimeError("moshi-server not on PATH (need devenv wrap or ~/.cargo/bin)")
@@ -95,22 +133,25 @@ def activate() -> dict:
             release_gpu_lease()
         binary = _moshi_binary()
         gpu = lease_one_gpu(os.getpid())
-        STATE.mkdir(parents=True, exist_ok=True)
-        (STATE / "static").mkdir(exist_ok=True)
-        (STATE / "logs").mkdir(exist_ok=True)
-        config = os.environ.get("MOSHI_STT_CONFIG", str(ROOT / "hsengine/moshi/stt-1b.toml"))
-        log_path = STATE / "logs" / "moshi-server.log"
+        state = _state_dir()
+        state.mkdir(parents=True, exist_ok=True)
+        (state / "static").mkdir(exist_ok=True)
+        (state / "logs").mkdir(exist_ok=True)
+        config = stt_config_path()
+        if not config.is_file():
+            raise RuntimeError(f"moshi STT config not a file: {config}")
+        log_path = state / "logs" / "moshi-server.log"
         env = _moshi_env(gpu)
         log.info("starting moshi-server binary=%s gpu=%s ld=%s", binary, gpu, env.get("LD_LIBRARY_PATH", "")[:180])
         log_f = open(log_path, "ab", buffering=0)
         _worker = subprocess.Popen(
             [binary, "worker", "--config", config, "--port", str(MOSHI_PORT)],
-            cwd=str(STATE),
+            cwd=str(state),
             env=env,
             stdout=log_f,
             stderr=log_f,
         )
-        PID_FILE.write_text(str(_worker.pid))
+        (state / "moshi-stt.pid").write_text(str(_worker.pid))
         deadline = time.monotonic() + 300
         while time.monotonic() < deadline:
             if _worker.poll() is not None:
@@ -139,7 +180,7 @@ def deactivate() -> dict:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        PID_FILE.unlink(missing_ok=True)
+        (_state_dir() / "moshi-stt.pid").unlink(missing_ok=True)
         release_gpu_lease()
         return {"ok": True, "moshi": False}
 
