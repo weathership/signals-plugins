@@ -6,17 +6,20 @@
 #
 #   ./scripts/install.sh
 #   ./scripts/install.sh --quiet
+#   ./scripts/install.sh --engine   # also pip install -e this checkout (hsengine sidecar)
 #   HERMES_PROFILE=coder ./scripts/install.sh
 set -euo pipefail
 
 QUIET=0
 UNINSTALL=0
+INSTALL_ENGINE=0
 for arg in "$@"; do
   case "$arg" in
     --quiet|-q) QUIET=1 ;;
+    --engine) INSTALL_ENGINE=1 ;;
     --uninstall) UNINSTALL=1 ;;
     -h|--help)
-      sed -n '2,12p' "$0"
+      sed -n '2,16p' "$0"
       exit 0
       ;;
     *)
@@ -96,6 +99,20 @@ for name in "${PLUGINS[@]}"; do
 done
 
 say ""
+if [[ "$INSTALL_ENGINE" -eq 1 ]]; then
+  # Sidecar engine (AgentRTC, lattice gRPC). Not a Hermes plugin kind —
+  # it is a Python package so `python -m hsengine` / `hermes-engine` work.
+  if command -v uv >/dev/null 2>&1; then
+    say "installing signals-hsengine (editable) into the active venv"
+    uv pip install -e "$REPO_ROOT"
+  elif command -v pip >/dev/null 2>&1; then
+    say "installing signals-hsengine (editable) with pip"
+    pip install -e "$REPO_ROOT"
+  else
+    die "no uv/pip on PATH; cannot install signals-hsengine"
+  fi
+fi
+
 say "Installed Signals plugins at $PLUGIN_ROOT"
 say "Activate in config.yaml:"
 say ""

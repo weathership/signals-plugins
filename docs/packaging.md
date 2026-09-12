@@ -16,11 +16,17 @@ hermes plugins install weathership/signals-plugins/plugins/signals-oip
 
 These plugins live in this repository so they can integrate a Hermes
 profile with a Signals federated workspace. Signals memory is provided
-here rather than by Hermes's bundled `plugins/memory/`. The **signals**
-extra (`hsengine`) comes from
-[zndx/oss-hermes-agent](https://github.com/zndx/oss-hermes-agent) on the
-[`rch/devenv`](https://github.com/zndx/oss-hermes-agent/tree/rch/devenv)
-branch, which has the Signals engine integration.
+here rather than by Hermes's bundled `plugins/memory/`.
+
+The lattice engine (`hsengine`) is packaged here as **`signals-hsengine`**
+(`pip install -e .` from this checkout, or `uv pip install -e`). It is
+not a Hermes plugin kind: it is a sidecar process (`hermes-engine` /
+`python -m hsengine`) that Listen's `plugin_api` talks to over gRPC.
+`scripts/install.sh` installs both the plugin symlinks and that extra.
+
+Hermes itself should stay stock plus generic seams (session runtime
+overlay entry point `hermes_agent.session_runtime`, dashboard
+`tab.position`). AgentRTC-specific code does not belong in hermes-agent.
 
 Going forward, that workspace requires
 [impala_fdw](https://github.com/weathership/impala_fdw) on Signals

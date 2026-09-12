@@ -1,0 +1,65 @@
+// hermes native engine surface.
+//
+// The shared federation face is zndx.engine.v1.Engine, vendored at
+// components/signals-protocol — serve() registers BOTH (plus OIP) on one port
+// (:50651 per the engine lattice).
+//
+// Federation capability name is "agent" (not "hermes") so peers depend on an
+// ability, not an implementation. Status.project is "hermes".
+//
+// Change ritual: edit → scripts/compile_engine_protos.sh → implement the
+// servicer → commit hsengine/engine/generated/.
+syntax = "proto3";
+
+package hermes.engine;
+
+service HermesEngine {
+  // Liveness/capability report; mirrors the metabase/synth EngineStatus shape.
+  rpc EngineStatus(EngineStatusRequest) returns (EngineStatusReply);
+  // Resolve the live agent/dashboard instance for local tooling.
+  // Non-secret discovery only — passwords and API keys never appear here.
+  rpc GetAgentInstance(GetAgentInstanceRequest) returns (GetAgentInstanceReply);
+  // Engine-local WebRTC (not zndx.engine.v1). Browser SDP offer in, answer out.
+  // Video is the current forward-sim clip (fixture: Grok Imagine of a Gaius card).
+  rpc WebRtcOffer(WebRtcOfferRequest) returns (WebRtcOfferReply);
+  // Tear down one WebRtcOffer session (browser Disconnect).
+  rpc WebRtcHangup(WebRtcHangupRequest) returns (WebRtcHangupReply);
+}
+
+message EngineStatusRequest {}
+
+message EngineStatusReply {
+  string project = 1;               // always "hermes"
+  string version = 2;
+  repeated string capabilities = 3; // includes "agent" when the lattice face is up
+}
+
+message GetAgentInstanceRequest {}
+
+message GetAgentInstanceReply {
+  bool healthy = 1;
+  string dashboard_url = 2;  // e.g. http://127.0.0.1:9119
+  string gateway_url = 3;    // e.g. http://127.0.0.1:8642
+  string detail = 4;         // human-legible probe note
+}
+
+message WebRtcOfferRequest {
+  string sdp = 1;
+  string type = 2;  // "offer"
+  string agenda_id = 3;  // Gaius Agenda note path; empty = generic call
+}
+
+message WebRtcOfferReply {
+  string sdp = 1;
+  string type = 2;  // "answer"
+  string session_id = 3;
+  string source = 4;  // path or uri of the video currently attached
+}
+
+message WebRtcHangupRequest {
+  string session_id = 1;
+}
+
+message WebRtcHangupReply {
+  bool dropped = 1;
+}

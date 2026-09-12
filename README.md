@@ -10,15 +10,19 @@ clone as other third-party plugins).
 | `plugins/signals-oip` | model-provider (`create_client`) | `model.provider: signals` |
 | `plugins/signals-memory` | `MemoryProvider` | `memory.provider: signals-memory` |
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
-| `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer of hsengine forward-sim |
+| `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer / AgentRTC Listen tab |
+| `hsengine/` (pip extra `signals-hsengine`) | sidecar process | Lattice engine + AgentRTC (`python -m hsengine`) |
+
+Listen is a Hermes **plugin**. The voice/media plane is a **sidecar**
+(`signals-hsengine`), not a `plugin.yaml` kind — WebRTC, moshi, and YK
+claims cannot live in the dashboard process. `./scripts/install.sh`
+symlinks the plugins **and** `pip install -e` this checkout.
 
 `signals-oip` converts OpenAI-shaped `tools` and `messages` to OIP
 `llm_tools_v1` when the peer advertises that extension; otherwise it uses
-`Engine/Complete` (`tools_json`). It requires the **signals** extra
-(`hsengine`) from the
-[zndx/oss-hermes-agent](https://github.com/zndx/oss-hermes-agent) fork.
-The [`rch/devenv`](https://github.com/zndx/oss-hermes-agent/tree/rch/devenv)
-branch carries the Signals engine integration and the generated stubs.
+`Engine/Complete` (`tools_json`). The engine itself is this repo's
+`signals-hsengine` package. Hermes core stays stock plus a few generic
+seams (session runtime overlay, plugin tab `position:`).
 
 ## Install
 

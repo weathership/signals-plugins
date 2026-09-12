@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signals-hsengine"
+version = "0.1.0"
+description = "Signals lattice engine sidecar for Hermes (AgentRTC, Engine/Complete, zndx.agent.v1)"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "MIT" }
+dependencies = [
+  "grpcio>=1.81.1,<2",
+  "grpcio-tools>=1.81.1,<2",
+  "grpcio-reflection>=1.81.1,<2",
+  "protobuf>=6.33.5,<7",
+  "pyhocon>=0.3.61,<0.4",
+  "aiortc>=1.9.0,<2",
+  "msgpack>=1.0.8,<2",
+]
+
+[project.scripts]
+hermes-engine = "hsengine.engine:main"
+
+[project.entry-points."hermes_agent.session_runtime"]
+interactive = "hsengine.overlay:overlay_runtime"
+
+[tool.setuptools.packages.find]
+include = ["hsengine*"]
+
+[tool.setuptools.package-data]
+hsengine = [
+  "bots/*/SOUL.md",
+  "media/**",
+  "moshi/*.toml",
+]
