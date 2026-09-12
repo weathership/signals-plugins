@@ -111,6 +111,15 @@ def test_spoken_system_mentions_kb_and_web_search():
     assert "elapsed" not in text
 
 
+def test_hermes_tool_keeps_files_in_hermes_home():
+    hermes = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "hermes")
+    desc = hermes["function"]["description"].lower()
+    assert "hermes_home" in desc
+    assert "operator home" in desc
+    assert "kb_search" in desc
+    assert "gaius" in desc
+
+
 def test_conversation_tool_does_not_ask_to_announce_the_clock():
     conv = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "conversation")
     desc = conv["function"]["description"].lower()

@@ -24,6 +24,10 @@ def test_templates_exist():
     assert "Bishop" in template_soul(BISHOP)
     assert "delegate_task" in template_soul(BISHOP)
     assert "MONOLOGUE" in template_soul(BISHOP)
+    bishop = template_soul(BISHOP)
+    assert "HERMES_HOME" in bishop
+    assert "~/wiki" in bishop
+    assert "Gaius" in bishop
 
 
 def test_parse_bishop_reply_labels_and_json():

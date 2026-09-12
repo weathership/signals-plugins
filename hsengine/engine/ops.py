@@ -866,9 +866,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "Hermes proper: the full agent (skills, terminal, files, "
                 "browser, memory, delegate_task / subagents). Shares this "
                 "AgentRTC session — the live transcript and memories are "
-                "already the conversation. Use when the voice tools are "
-                "not enough. Subagents also run on Cerebras while this "
-                "session is in force. Speak the result."
+                "already the conversation. Files it creates belong under "
+                "HERMES_HOME (named profile or common Hermes storage), never "
+                "the operator home. Lattice notes: kb_search (Gaius). Use "
+                "when the voice tools are not enough. Subagents also run on "
+                "Cerebras while this session is in force. Speak the result."
             ),
             "parameters": {
                 "type": "object",
