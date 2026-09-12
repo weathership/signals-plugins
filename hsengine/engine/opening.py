@@ -274,7 +274,8 @@ def bishop_handoff(
     lines.append(
         "Invent MONOLOGUE Ripley speaks, honoring this sequence. "
         "Mark a sequence pause as [pause] in the MONOLOGUE. "
-        "Do not name the gestures. Do not mention Bishop."
+        "Do not name the gestures. Do not mention Bishop. "
+        "No rumination frames (sitting with, turning over, returning to a thread)."
     )
     return "\n".join(lines)
 
@@ -293,6 +294,8 @@ def compose_opening(
     if returning is None:
         returning = bool(_returning(exclude=session_id))
     facts = facts_from_pack(pack, returning=returning)
+    if _has_fresh_zettel():
+        facts = frozenset(set(facts) | {"has_zettel", "has_fresh"})
     seq = sample_sequence(cat, facts, lane="open", rng=rng)
     from hsengine.engine.context_pack import pipeline_block
 
@@ -301,6 +304,18 @@ def compose_opening(
     remember_sequence(seq, session_id=session_id)
     log.info("opening sequence=%s facts=%s tz=%s tod=%s", seq, sorted(facts), listener.timezone, listener.tod)
     return OpeningPlan(sequence=seq, facts=facts, listener=listener, handoff=handoff)
+
+
+def _has_fresh_zettel() -> bool:
+    try:
+        import time as time_mod
+
+        from hermes_constants import get_hermes_home
+        from hsengine.engine.recall import _fresh_hits
+
+        return bool(_fresh_hits(hermes_home=get_hermes_home(), now=time_mod.time()))
+    except Exception:
+        return False
 
 
 def _returning(*, exclude: str = "") -> bool:

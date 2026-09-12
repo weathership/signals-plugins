@@ -16,7 +16,7 @@ gesture {
   lane: "open"
   when: "returning"
   weight: 1.45
-  instruction: "They were on AgentRTC recently. Welcome back without recapping the last call."
+  instruction: "They were on AgentRTC recently. Start as if the conversation never fully stopped. Do not say welcome back, good to be back, or since we last talked."
 }
 gesture {
   id: "headline"
@@ -25,7 +25,14 @@ gesture {
   when: "has_thoughts"
   when: "has_fresh"
   weight: 1.7
-  instruction: "Lead with the most notable live thread in the workspace glance. Skip the rundown."
+  instruction: "Lead with the most notable live thread in the workspace glance. Name the thing in the world. Do not wrap it as something you have been sitting with or a thread you are returning to. Skip the rundown."
+}
+gesture {
+  id: "headline"
+  lane: "open"
+  when: "has_zettel"
+  weight: 1.85
+  instruction: "A zettel was filed in the last few minutes. You may glance at it — the thing itself, not that you have been sitting with it. Skip the rundown."
 }
 gesture {
   id: "rundown"

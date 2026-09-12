@@ -286,11 +286,13 @@ def bishop_prompt(
             "Prefer MONOLOGUE Ripley can speak now in first person. STEER is optional "
             "color for that line. Do not use a formula "
             "(no casual-hello-plus-two-ideas-then-ask). Do not mention Bishop, "
-            "pipelines, or how the notes arrived. If recall shows a zettel filed "
-            "in the last few minutes, it may color the opening — a glance, not a "
-            "rundown. Older notes stay quiet. If the workspace glance is stale "
-            "or empty, have her say the workspace has gone quiet — do not invent "
-            "today's news."
+            "pipelines, or how the notes arrived. Banned rumination frames: "
+            "'I've been sitting with', 'turning something over', 'thread I'm "
+            "returning to', 'keeps surfacing', 'good to be back'. If a thought or "
+            "just-filed zettel earns a place, name the thing in the world — not "
+            "your having been sitting with it. A glance, not a rundown. Older "
+            "notes stay quiet. If the workspace glance is stale or empty, have "
+            "her say the workspace has gone quiet — do not invent today's news."
         )
     elif move == "thought":
         lines.append("Call conversation, then recent_thoughts.")
@@ -341,7 +343,33 @@ def bishop_run(
             session_id=session_id,
             recall_query=(utterance.strip() if utterance.strip() else ""),
         )
-    return parse_bishop_reply(getattr(result, "text", "") or "")
+    outcome = parse_bishop_reply(getattr(result, "text", "") or "")
+    if move != "open":
+        return outcome
+    from hsengine.engine.opening_tropes import opening_tropes, tropes_retry_line
+
+    hits = opening_tropes(outcome.monologue)
+    if not hits:
+        return outcome
+    retry_prompt = prompt + "\n\n" + tropes_retry_line(hits)
+    with bishop_delegation_cap(2):
+        retry = interactive.complete_cerebras(
+            prompt=retry_prompt,
+            system_prompt=system,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            reasoning_effort="none",
+            tools=False,
+            speak=False,
+            session_id=session_id,
+            recall_query="",
+        )
+    retried = parse_bishop_reply(getattr(retry, "text", "") or "")
+    if retried.monologue and not opening_tropes(retried.monologue):
+        return retried
+    if retried.monologue:
+        return retried
+    return outcome
 
 
 def ripley_opening_prompts(outcome: BishopOutcome) -> tuple[str, str]:
@@ -350,10 +378,13 @@ def ripley_opening_prompts(outcome: BishopOutcome) -> tuple[str, str]:
 
     system = apply_steer_system(ripley_spoken_system(), outcome.steer)
     if outcome.monologue:
+        from hsengine.engine.opening_tropes import tropes_execute_rail
+
         user = (
             "The call just connected. Speak this as the first thing they hear, "
             "in your voice — not a briefing, not a formula. "
-            "If the text contains [pause], that beat is handled for you; "
+            + tropes_execute_rail()
+            + " If the text contains [pause], that beat is handled for you; "
             "do not say the word pause:\n"
             + outcome.monologue
         )
