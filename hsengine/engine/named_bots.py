@@ -318,6 +318,7 @@ def bishop_run(
     move: str = "deepen",
     glance: str = "",
     handoff: str = "",
+    utterance: str = "",
 ) -> BishopOutcome:
     """Silent Cerebras turn as Bishop. Never speaks."""
     from hsengine.engine import interactive
@@ -336,6 +337,7 @@ def bishop_run(
             tools=True,
             speak=False,
             session_id=session_id,
+            recall_query=utterance,
         )
     return parse_bishop_reply(getattr(result, "text", "") or "")
 

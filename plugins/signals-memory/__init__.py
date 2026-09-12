@@ -1,4 +1,8 @@
-"""Signals memory provider — local JSONL under get_hermes_home(), not Atlas.
+"""Signals memory provider — profile-scoped hybrid recall.
+
+Lexical (SessionDB FTS + wiki/MEMORY.md + JSONL turns) outranks semantic
+lattice SEARCH (Gaius). AgentRTC and CLI share this MemoryProvider so
+interactive sessions use the same subsystem.
 
 Does not land under plugins/memory/ (that set is closed). Discovered from
 $HERMES_HOME/plugins/signals-memory via the stock MemoryProvider loader.
@@ -10,19 +14,24 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agent.memory_provider import MemoryProvider, RecallStatus
+from agent.memory_provider import MemoryProvider, RecallStatus, is_trivial_prompt
 from hermes_constants import get_hermes_home
 
 log = logging.getLogger("hsengine.plugins.signals_memory")
 
 _RECALL_SCHEMA = {
     "name": "signals_recall",
-    "description": "Search this profile's Signals-local turn memory.",
+    "description": (
+        "Hybrid recall over Hermes talks, the local wiki, and Gaius lattice "
+        "SEARCH. Tiers: recent sessions (newest first), wiki/MEMORY.md, then "
+        "lattice. Use to invent the next move; do not read hits aloud as a "
+        "briefing. Pass keywords, not the whole question."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Substring to match in stored turns."},
-            "limit": {"type": "integer", "description": "Max hits (default 8)."},
+            "query": {"type": "string", "description": "Keywords to recall."},
+            "limit": {"type": "integer", "description": "Max JSONL hits (default 8)."},
         },
         "required": ["query"],
     },
@@ -40,17 +49,31 @@ class SignalsMemoryProvider(MemoryProvider):
     def initialize(self, session_id: str, **kwargs) -> None:
         self._session_id = session_id or ""
         home = Path(kwargs.get("hermes_home") or get_hermes_home())
+        self._home = home
         self._path = home / "signals-memory" / "turns.jsonl"
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._last_hits = 0
+        self._platform = str(kwargs.get("platform") or "")
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
-        hits = self._search(query, limit=6)
-        self._last_hits = len(hits)
-        if not hits:
+        if is_trivial_prompt(query):
+            self._last_hits = 0
             return ""
-        lines = [f"- {h.get('role', 'turn')}: {h.get('text', '')[:240]}" for h in hits]
-        return "Signals memory (local):\n" + "\n".join(lines)
+        sid = session_id or getattr(self, "_session_id", "")
+        home = getattr(self, "_home", None) or get_hermes_home()
+        jsonl = self._search(query, limit=4)
+        try:
+            block = _prefetch_block(
+                query, session_id=sid, hermes_home=Path(home), jsonl_hits=jsonl
+            )
+        except Exception:
+            log.debug("signals-memory hybrid prefetch failed", exc_info=True)
+            block = ""
+            if jsonl:
+                lines = [f"- {h.get('role', 'turn')}: {h.get('text', '')[:240]}" for h in jsonl]
+                block = "Signals memory (local):\n" + "\n".join(lines)
+        self._last_hits = (1 if block else 0) + len(jsonl)
+        return block
 
     def recall_status(self) -> Optional[RecallStatus]:
         if self._last_hits <= 0:
@@ -60,6 +83,7 @@ class SignalsMemoryProvider(MemoryProvider):
     def sync_turn(
         self, user_content: str, assistant_content: str, *,
         session_id: str = "", messages: Optional[List[Dict[str, Any]]] = None,
+        turn_author: Optional[Dict[str, Any]] = None,
     ) -> None:
         sid = session_id or getattr(self, "_session_id", "")
         self._append({"session_id": sid, "role": "user", "text": (user_content or "")[:4000]})
@@ -73,7 +97,29 @@ class SignalsMemoryProvider(MemoryProvider):
             return json.dumps({"success": False, "error": f"unknown tool {tool_name}"})
         query = str(args.get("query") or "")
         limit = int(args.get("limit") or 8)
-        return json.dumps({"success": True, "hits": self._search(query, limit=limit)})
+        jsonl = self._search(query, limit=limit)
+        home = getattr(self, "_home", None) or get_hermes_home()
+        sid = str(kwargs.get("session_id") or getattr(self, "_session_id", "") or "")
+        try:
+            block = _prefetch_block(
+                query,
+                session_id=sid,
+                hermes_home=Path(home),
+                jsonl_hits=jsonl,
+            )
+        except Exception as e:
+            block = ""
+            log.debug("signals_recall hybrid failed: %s", e, exc_info=True)
+        return json.dumps(
+            {
+                "success": True,
+                "hits": jsonl,
+                "block": block,
+                "invent": True,
+                "note": "Invent from tiers; do not read as a briefing. Talks/wiki outrank Gaius.",
+            },
+            ensure_ascii=False,
+        )
 
     def on_pre_compress(self, messages: List[Dict[str, Any]]) -> str:
         texts = []
@@ -96,7 +142,15 @@ class SignalsMemoryProvider(MemoryProvider):
         path = getattr(self, "_path", None)
         if path is None or not path.is_file() or not (query or "").strip():
             return []
-        needle = query.strip().lower()
+        try:
+            from hsengine.engine.recall import focus_query
+
+            needle = (focus_query(query) or query).strip().lower()
+        except Exception:
+            needle = query.strip().lower()
+        if not needle:
+            return []
+        tokens = [t for t in needle.split() if t]
         hits: list[dict[str, str]] = []
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
@@ -108,8 +162,39 @@ class SignalsMemoryProvider(MemoryProvider):
             except json.JSONDecodeError:
                 continue
             text = str(row.get("text") or "")
-            if needle in text.lower():
-                hits.append(row)
+            blob = text.lower()
+            if tokens and not all(t in blob for t in tokens):
+                continue
+            if not tokens and needle not in blob:
+                continue
+            hits.append(row)
             if len(hits) >= max(1, limit):
                 break
         return hits
+
+
+def _prefetch_block(
+    query: str,
+    *,
+    session_id: str,
+    hermes_home: Path,
+    jsonl_hits: list[dict[str, Any]],
+) -> str:
+    """Import hybrid from this plugin directory (Hermes loads us by path, not package)."""
+    import importlib.util
+
+    hybrid_path = Path(__file__).resolve().parent / "hybrid.py"
+    spec = importlib.util.spec_from_file_location("signals_memory_hybrid", hybrid_path)
+    if spec is None or spec.loader is None:
+        return ""
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return str(
+        mod.prefetch_block(
+            query,
+            session_id=session_id,
+            hermes_home=hermes_home,
+            jsonl_hits=jsonl_hits,
+        )
+        or ""
+    )

@@ -96,13 +96,26 @@ def test_wiki_and_memory_citations_match_query(tmp_path):
     assert all("unrelated" not in p.lower() for p in paths)
     text = recall.format_recall(pack)
     assert "Nautilus" in text
-    assert "Gaius" in text
+    assert "invent" in text.lower()
     assert "wiki/entities/nautilus.md" in text
 
 
 def test_format_recall_empty_when_no_hits():
     assert recall.format_recall({"conversations": [], "citations": []}) == ""
     assert recall.format_recall(None) == ""
+
+
+def test_format_recall_puts_lattice_last():
+    text = recall.format_recall(
+        {
+            "conversations": [{"session_id": "s", "source": "agent-rtc", "snippet": "filed nautilus", "age_hours": 2}],
+            "citations": [{"path": "wiki/entities/nautilus.md", "title": "Nautilus", "snippet": "FSM"}],
+            "lattice": [{"title": "arxiv", "snippet": "federated learning"}],
+        }
+    )
+    assert text.index("Conversations:") < text.index("Citations:")
+    assert text.index("Citations:") < text.index("Lattice")
+    assert "invent" in text.lower()
 
 
 def test_session_search_skips_current_question_to_reach_prior(tmp_path, monkeypatch):

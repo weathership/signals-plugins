@@ -178,6 +178,7 @@ class TurnTaker:
                     move="next",
                     glance=pipeline_block(pack),
                     handoff=plan.handoff,
+                    utterance=text,
                 )
                 spoken = await ripley_speak_outcome(
                     outcome, session_id=self._session_id, speech=self._speech

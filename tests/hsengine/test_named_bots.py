@@ -138,7 +138,8 @@ def test_bishop_run_is_silent(monkeypatch):
         return type("R", (), {"text": "STEER: float the gap\nMONOLOGUE: NONE", "model": "x"})()
 
     monkeypatch.setattr("hsengine.engine.interactive.complete_cerebras", _complete)
-    out = bishop_run(session_id="s1", move="deepen")
+    out = bishop_run(session_id="s1", move="deepen", utterance="Nautilus notes")
     assert seen.get("speak") is False
+    assert seen.get("recall_query") == "Nautilus notes"
     assert out.steer == "float the gap"
     assert out.monologue == ""

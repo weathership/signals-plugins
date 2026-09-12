@@ -71,6 +71,9 @@ context:
 Restart Hermes. `hermes plugins list` should list the four plugins;
 `hermes doctor` should report provider `signals`.
 
+AgentRTC recall goes through **`signals-memory`** (hybrid lexical + Gaius
+SEARCH, recent talks first). See [docs/memory.md](docs/memory.md).
+
 ## Impala FDW
 
 Going forward, a Signals federated workspace must expose its data plane

@@ -291,16 +291,22 @@ def recall_pack(
 
 
 def format_recall(pack: dict[str, Any] | None, *, budget: int = _BUDGET) -> str:
-    """Spoken-context block. Empty if the pack has no hits."""
+    """Spoken-context block. Empty if the pack has no hits.
+
+    Agent-mediated: invent from the tiers; do not read the block as a briefing.
+    Lexical talks/wiki outrank lattice/Gaius semantics.
+    """
     if not pack:
         return ""
     conv = list(pack.get("conversations") or [])
     cites = list(pack.get("citations") or [])
-    if not conv and not cites:
+    turns = list(pack.get("turns") or [])
+    lattice = list(pack.get("lattice") or [])
+    if not conv and not cites and not turns and not lattice:
         return ""
     lines = [
-        "Hermes recall (recent first). Our notes and prior talks — not Gaius. "
-        "Do not read this block aloud unless they ask."
+        "Memory (hybrid, recent first). Invent from this; do not read it as a briefing. "
+        "Our talks and wiki outrank the lattice (Gaius)."
     ]
     if conv:
         lines.append("Conversations:")
@@ -318,6 +324,18 @@ def format_recall(pack: dict[str, Any] | None, *, budget: int = _BUDGET) -> str:
             path = str(h.get("path") or "")
             snippet = str(h.get("snippet") or "")
             lines.append(f"- {path} ({title}): {snippet}")
+    if turns:
+        lines.append("Recent turns:")
+        for h in turns:
+            role = str(h.get("role") or "turn")
+            snippet = str(h.get("text") or h.get("snippet") or "")
+            lines.append(f"- {role}: {snippet}")
+    if lattice:
+        lines.append("Lattice (Gaius, lower priority):")
+        for h in lattice:
+            title = str(h.get("title") or "")
+            snippet = str(h.get("snippet") or "")
+            lines.append(f"- {title}: {snippet}".rstrip(": "))
     text = "\n".join(lines)
     if len(text) <= budget:
         return text

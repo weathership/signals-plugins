@@ -64,6 +64,15 @@ def configure_memory(mgr: Any | None) -> None:
         _mem_sid = ""
 
 
+def reset_memory() -> None:
+    """Tests: allow the next ``_memory_manager`` call to load providers again."""
+    global _mem_mgr, _mem_tried, _mem_sid
+    with _mem_mu:
+        _mem_mgr = None
+        _mem_tried = False
+        _mem_sid = ""
+
+
 def _store() -> Any | None:
     global _db
     with _mu:
@@ -291,7 +300,7 @@ def transcript_messages(webrtc_id: str) -> list[dict[str, str]]:
 
 
 def _memory_manager(session_id: str) -> Any | None:
-    """Process-wide MemoryManager for AgentRTC; None when no provider is configured."""
+    """Process-wide MemoryManager: configured provider, else signals-memory when installed."""
     global _mem_mgr, _mem_tried, _mem_sid
     with _mem_mu:
         if not _mem_tried:
@@ -303,19 +312,22 @@ def _memory_manager(session_id: str) -> Any | None:
                 from plugins.memory import load_memory_provider
 
                 name = str(cfg_get(load_config(), "memory", "provider") or "").strip()
-                if name:
-                    provider = load_memory_provider(name)
-                    if provider is not None and provider.is_available():
-                        mgr = MemoryManager()
-                        mgr.add_provider(provider)
-                        mgr.initialize_all(
-                            session_id=session_id,
-                            platform="agent-rtc",
-                            hermes_home=str(get_hermes_home()),
-                            agent_context="primary",
-                        )
-                        _mem_mgr = mgr
-                        _mem_sid = session_id
+                provider = load_memory_provider(name) if name else None
+                if not name:
+                    fallback = load_memory_provider("signals-memory")
+                    if fallback is not None and fallback.is_available():
+                        provider = fallback
+                if provider is not None and provider.is_available():
+                    mgr = MemoryManager()
+                    mgr.add_provider(provider)
+                    mgr.initialize_all(
+                        session_id=session_id,
+                        platform="agent-rtc",
+                        hermes_home=str(get_hermes_home()),
+                        agent_context="primary",
+                    )
+                    _mem_mgr = mgr
+                    _mem_sid = session_id
             except Exception:
                 log.warning("agent-rtc memory manager unavailable", exc_info=True)
                 _mem_mgr = None
@@ -354,31 +366,33 @@ def remember_turn(webrtc_id: str, *, user: str, assistant: str) -> None:
 
 
 def recalled_memory(webrtc_id: str, query: str) -> str:
-    """Prefetch for the upcoming spoken turn: recent sessions + local citations, then providers."""
+    """Prefetch through the memory subsystem (signals-memory hybrid when installed)."""
     q = (query or "").strip()
     if not q:
         return ""
-    parts: list[str] = []
+    try:
+        from agent.memory_provider import is_trivial_prompt
+
+        if is_trivial_prompt(q):
+            return ""
+    except Exception:
+        pass
+    sid = hermes_session_id(webrtc_id) if webrtc_id else ""
+    try:
+        mgr = _memory_manager(sid or "agent-rtc")
+        if mgr is not None:
+            extra = (mgr.prefetch_all(q, session_id=sid) or "").strip()
+            if extra:
+                return extra
+    except Exception:
+        log.warning("agent-rtc memory prefetch failed", exc_info=True)
     try:
         from hsengine.engine.recall import format_recall, recall_pack
 
-        pack = recall_pack(query=q, webrtc_id=webrtc_id)
-        block = format_recall(pack)
-        if block:
-            parts.append(block)
+        return format_recall(recall_pack(query=q, webrtc_id=webrtc_id))
     except Exception:
         log.warning("agent-rtc temporal recall failed", exc_info=True)
-    if webrtc_id:
-        sid = hermes_session_id(webrtc_id)
-        try:
-            mgr = _memory_manager(sid)
-            if mgr is not None:
-                extra = (mgr.prefetch_all(q, session_id=sid) or "").strip()
-                if extra:
-                    parts.append(extra)
-        except Exception:
-            log.warning("agent-rtc memory prefetch failed", exc_info=True)
-    return "\n\n".join(parts)
+        return ""
 
 
 def close_session(webrtc_id: str, reason: str = "hangup") -> None:
