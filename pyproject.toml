@@ -33,4 +33,6 @@ hsengine = [
   "bots/*/SOUL.md",
   "media/**",
   "moshi/*.toml",
+  "engine/*.textproto",
+  "engine/proto/*.proto",
 ]

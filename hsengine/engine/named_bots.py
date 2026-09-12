@@ -255,6 +255,7 @@ def bishop_prompt(
     move: str = "deepen",
     glance: str = "",
     last_steer: str = "",
+    handoff: str = "",
 ) -> tuple[str, str, int]:
     """system, user prompt, max_tokens for a silent Bishop turn."""
     system = load_soul(BISHOP)
@@ -265,6 +266,9 @@ def bishop_prompt(
     glance_txt = " ".join((glance or "").split())
     if glance_txt:
         lines.append("Cognition glance:\n" + glance_txt)
+    handoff_txt = (handoff or "").strip()
+    if handoff_txt:
+        lines.append("Handoff (opening sequence):\n" + handoff_txt)
     if move == "open":
         lines.append(
             "This is Connect — invent the first thing they will hear, not a pause. "
@@ -304,13 +308,14 @@ def bishop_run(
     last_steer: str = "",
     move: str = "deepen",
     glance: str = "",
+    handoff: str = "",
 ) -> BishopOutcome:
     """Silent Cerebras turn as Bishop. Never speaks."""
     from hsengine.engine import interactive
 
     del idle_s  # reserved: phase still chosen by the silence director
     system, prompt, max_tokens = bishop_prompt(
-        move=move, glance=glance, last_steer=last_steer
+        move=move, glance=glance, last_steer=last_steer, handoff=handoff
     )
     with bishop_delegation_cap(2):
         result = interactive.complete_cerebras(
@@ -334,7 +339,9 @@ def ripley_opening_prompts(outcome: BishopOutcome) -> tuple[str, str]:
     if outcome.monologue:
         user = (
             "The call just connected. Speak this as the first thing they hear, "
-            "in your voice — not a briefing, not a formula:\n"
+            "in your voice — not a briefing, not a formula. "
+            "If the text contains [pause], that beat is handled for you; "
+            "do not say the word pause:\n"
             + outcome.monologue
         )
     elif outcome.steer:

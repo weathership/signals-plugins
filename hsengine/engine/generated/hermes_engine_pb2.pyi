@@ -37,14 +37,16 @@ class GetAgentInstanceReply(_message.Message):
     def __init__(self, healthy: _Optional[bool] = ..., dashboard_url: _Optional[str] = ..., gateway_url: _Optional[str] = ..., detail: _Optional[str] = ...) -> None: ...
 
 class WebRtcOfferRequest(_message.Message):
-    __slots__ = ("sdp", "type", "agenda_id")
+    __slots__ = ("sdp", "type", "agenda_id", "timezone")
     SDP_FIELD_NUMBER: _ClassVar[int]
     TYPE_FIELD_NUMBER: _ClassVar[int]
     AGENDA_ID_FIELD_NUMBER: _ClassVar[int]
+    TIMEZONE_FIELD_NUMBER: _ClassVar[int]
     sdp: str
     type: str
     agenda_id: str
-    def __init__(self, sdp: _Optional[str] = ..., type: _Optional[str] = ..., agenda_id: _Optional[str] = ...) -> None: ...
+    timezone: str
+    def __init__(self, sdp: _Optional[str] = ..., type: _Optional[str] = ..., agenda_id: _Optional[str] = ..., timezone: _Optional[str] = ...) -> None: ...
 
 class WebRtcOfferReply(_message.Message):
     __slots__ = ("sdp", "type", "session_id", "source")

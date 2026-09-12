@@ -40,6 +40,12 @@ python -m grpc_tools.protoc \
   --python_out="$OUT" --pyi_out="$OUT" --grpc_python_out="$OUT" \
   "$NATIVE/hermes_engine.proto"
 
+echo "Compiling hsengine.opening.Catalog"
+python -m grpc_tools.protoc \
+  -I "$NATIVE" \
+  --python_out="$OUT" --pyi_out="$OUT" \
+  "$NATIVE/opening.proto"
+
 echo "Compiling zndx.engine.v1.Engine"
 python -m grpc_tools.protoc \
   -I "$ZNDX" \

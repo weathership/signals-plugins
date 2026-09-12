@@ -1,0 +1,57 @@
+# proto-file: hsengine/engine/proto/opening.proto
+# proto-message: hsengine.opening.Catalog
+#
+# Iterable AgentRTC opening catalog. Bishop receives a sampled sequence as
+# handoff, not a script. Add/retune gestures here; keep Python a sampler.
+
+gesture {
+  id: "greet_tod"
+  when: "always"
+  weight: 1.15
+  instruction: "Time-of-day greeting from the listener's local clock (good morning / afternoon / evening / night). One beat, not weather."
+}
+gesture {
+  id: "welcome_back"
+  when: "returning"
+  weight: 1.45
+  instruction: "They were on AgentRTC recently. Welcome back without recapping the last call."
+}
+gesture {
+  id: "headline"
+  when: "has_thoughts"
+  when: "has_fresh"
+  weight: 1.7
+  instruction: "Lead with the most notable live thread in the workspace glance. Skip the rundown."
+}
+gesture {
+  id: "rundown"
+  when: "stale"
+  weight: 0.85
+  instruction: "A short operational rundown is warranted — workspace stale. Keep it brief, then hand the floor."
+}
+gesture {
+  id: "rundown"
+  when: "empty"
+  weight: 0.9
+  instruction: "Workspace is empty. Say it has gone quiet. Do not invent today's news."
+}
+gesture {
+  id: "offer_floor"
+  when: "always"
+  weight: 1.0
+  instruction: "Hand them the floor. One question, not a menu."
+}
+gesture {
+  id: "pause"
+  when: "always"
+  weight: 0
+  instruction: "A spoken beat of quiet. Mark it as [pause] in the MONOLOGUE. Do not fill it with more talk."
+}
+
+sequence {
+  min_gestures: 1
+  max_gestures: 3
+  pause_after { after: 1 p: 0.42 }
+  pause_after { after: 2 p: 0.22 }
+  pause_after { after: 3 p: 0.10 }
+}

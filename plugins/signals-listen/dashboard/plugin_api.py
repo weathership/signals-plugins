@@ -41,6 +41,7 @@ class OfferBody(BaseModel):
     sdp: str = Field(min_length=1)
     type: str = "offer"
     agenda: str = ""
+    timezone: str = ""
 
 
 class HangupBody(BaseModel):
@@ -78,7 +79,9 @@ async def engine_status() -> dict:
     }
 
 
-async def webrtc_offer(sdp: str, typ: str = "offer", agenda: str = "") -> dict:
+async def webrtc_offer(
+    sdp: str, typ: str = "offer", agenda: str = "", timezone: str = ""
+) -> dict:
     pb, pb_grpc = _stubs()
     target = _engine_target()
     async with grpc.aio.insecure_channel(target) as ch:
@@ -86,7 +89,9 @@ async def webrtc_offer(sdp: str, typ: str = "offer", agenda: str = "") -> dict:
         kwargs = {"sdp": sdp, "type": typ or "offer"}
         if agenda:
             kwargs["agenda_id"] = agenda
-        log.info("listen offer agenda=%s", agenda or "-")
+        if timezone:
+            kwargs["timezone"] = timezone
+        log.info("listen offer agenda=%s tz=%s", agenda or "-", timezone or "-")
         reply = await stub.WebRtcOffer(
             pb.WebRtcOfferRequest(**kwargs),
             timeout=300,
@@ -127,7 +132,7 @@ async def status():
 @router.post("/offer")
 async def offer(body: OfferBody):
     try:
-        return await webrtc_offer(body.sdp, body.type, body.agenda)
+        return await webrtc_offer(body.sdp, body.type, body.agenda, body.timezone)
     except grpc.RpcError as e:
         log.warning("listen offer rpc: %s", e)
         raise _http_for_rpc(e) from e

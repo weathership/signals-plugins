@@ -156,6 +156,7 @@ class HermesEngineServicer(pb_grpc.HermesEngineServicer):
                 request.sdp,
                 request.type or "offer",
                 agenda_id=getattr(request, "agenda_id", "") or "",
+                timezone=getattr(request, "timezone", "") or "",
             )
         except FileNotFoundError as e:
             context.set_code(grpc.StatusCode.FAILED_PRECONDITION)

@@ -47,6 +47,7 @@ message WebRtcOfferRequest {
   string sdp = 1;
   string type = 2;  // "offer"
   string agenda_id = 3;  // Gaius Agenda note path; empty = generic call
+  string timezone = 4;   // IANA, browser-resolved (e.g. America/Los_Angeles)
 }
 
 message WebRtcOfferReply {

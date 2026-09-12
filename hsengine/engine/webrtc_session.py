@@ -132,8 +132,11 @@ class WebRtcHub:
         self._agenda: dict[str, str] = {}
         self._started: dict[str, float] = {}
         self._material: dict[str, dict] = {}
+        self._tz: dict[str, str] = {}
 
-    async def offer(self, sdp: str, typ: str = "offer", agenda_id: str = "") -> dict[str, str]:
+    async def offer(
+        self, sdp: str, typ: str = "offer", agenda_id: str = "", timezone: str = ""
+    ) -> dict[str, str]:
         try:
             from aiortc import (
                 RTCConfiguration,
@@ -170,7 +173,15 @@ class WebRtcHub:
         aid = (agenda_id or "").strip()
         if aid:
             self._agenda[session_id] = aid
-        log.info("webrtc offer session=%s agenda_id=%s", session_id, aid or "-")
+        tz = (timezone or "").strip()
+        if tz:
+            self._tz[session_id] = tz
+        log.info(
+            "webrtc offer session=%s agenda_id=%s tz=%s",
+            session_id,
+            aid or "-",
+            tz or "-",
+        )
         try:
             board = CaptionBoard()
             loop = asyncio.get_running_loop()
@@ -254,6 +265,7 @@ class WebRtcHub:
                     pipeline_block,
                 )
                 from hsengine.engine.named_bots import (
+                    BishopOutcome,
                     bishop_run,
                     ensure_bots,
                     ripley_opening_prompts,
@@ -273,40 +285,69 @@ class WebRtcHub:
                         "yes" if session.get("public") else "no",
                     )
                 pack = await asyncio.to_thread(conversational_context, agenda_id=aid)
-                glance = pipeline_block(pack)
+                from hsengine.engine.opening import compose_opening, split_spoken_beats
+
+                plan = await asyncio.to_thread(
+                    compose_opening,
+                    pack=pack,
+                    timezone=self._tz.get(session_id, ""),
+                    session_id=session_id,
+                )
                 log.info(
-                    "webrtc opening pack=%s agent-mediated bishop→ripley",
+                    "webrtc opening pack=%s seq=%s tz=%s",
                     ",".join(sorted(pack)) or "empty",
+                    "→".join(plan.sequence),
+                    plan.listener.timezone,
                 )
                 await asyncio.to_thread(ensure_bots)
                 outcome = await asyncio.to_thread(
                     bishop_run,
                     session_id=session_id,
                     move="open",
-                    glance=glance,
+                    glance=pipeline_block(pack),
+                    handoff=plan.handoff,
                 )
-                speak_s, speak_u = ripley_opening_prompts(outcome)
                 log.info(
                     "webrtc opening bishop steer=%s monologue=%s",
                     "yes" if outcome.steer else "no",
                     "yes" if outcome.monologue else "no",
                 )
-                result = await asyncio.to_thread(
-                    interactive.complete_cerebras,
-                    prompt=speak_u,
-                    system_prompt=speak_s,
-                    max_tokens=280,
-                    temperature=0.55,
-                    reasoning_effort="none",
-                    tools=False,
-                    speak=True,
-                    session_id=session_id,
-                )
+                beats = split_spoken_beats(outcome.monologue) if outcome.monologue else [""]
+                spoken: list[str] = []
+                speech = self._speech.get(session_id)
+                for i, beat in enumerate(beats):
+                    if i:
+                        await asyncio.sleep(0.55)
+                        for _ in range(36):
+                            speaking = getattr(speech, "speaking", None)
+                            if not callable(speaking) or not speaking():
+                                break
+                            await asyncio.sleep(0.12)
+                        await asyncio.sleep(0.4)
+                    chunk = BishopOutcome(
+                        steer=outcome.steer if i == 0 else "",
+                        monologue=beat,
+                    )
+                    speak_s, speak_u = ripley_opening_prompts(chunk)
+                    result = await asyncio.to_thread(
+                        interactive.complete_cerebras,
+                        prompt=speak_u,
+                        system_prompt=speak_s,
+                        max_tokens=220 if i else 280,
+                        temperature=0.55,
+                        reasoning_effort="none",
+                        tools=False,
+                        speak=True,
+                        session_id=session_id,
+                    )
+                    if result.text:
+                        spoken.append(result.text)
                 from hsengine.engine import session_history
 
-                session_history.record_turn(
-                    session_id, assistant=result.text, model=result.model
-                )
+                if spoken:
+                    session_history.record_turn(
+                        session_id, assistant=" ".join(spoken), model="ripley"
+                    )
             except Exception:
                 log.exception("cerebras opening line failed")
 
@@ -366,6 +407,7 @@ class WebRtcHub:
             task.cancel()
         self._speech.pop(session_id, None)
         self._agenda.pop(session_id, None)
+        self._tz.pop(session_id, None)
         self._started.pop(session_id, None)
         self._material.pop(session_id, None)
         for track in self._tracks.pop(session_id, []):
