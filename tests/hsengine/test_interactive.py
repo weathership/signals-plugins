@@ -28,6 +28,7 @@ def _reset_interactive():
 
 def test_enter_requires_cerebras_key(monkeypatch):
     monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
+    monkeypatch.setattr(interactive, "_cfg", lambda path, default="": default)
     with pytest.raises(RuntimeError, match="CEREBRAS_API_KEY"):
         interactive.enter()
     assert interactive.is_active() is False

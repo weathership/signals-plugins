@@ -53,21 +53,18 @@ def _cfg(path: str, default: str) -> str:
 
 
 def _cerebras_key() -> str:
-    key = (os.environ.get("CEREBRAS_API_KEY") or "").strip()
-    if not key:
-        try:
-            from hermes_constants import get_hermes_home
+    """Cerebras key from HOCON (${?CEREBRAS_API_KEY}) then the process env.
 
-            env_path = get_hermes_home() / ".env"
-            for line in env_path.read_text().splitlines():
-                if line.startswith("CEREBRAS_API_KEY="):
-                    key = line.split("=", 1)[1].strip().strip("'").strip('"')
-                    break
-        except OSError:
-            key = ""
+    Secrets enter through secretspec dotenv (gitignored ``.env``), sourced by
+    ``hermes-engine.sh`` the same way the dashboard wrapper loads auth.
+    """
+    key = _cfg("hermes.engine.webrtc.interactive.cerebras_key", "").strip()
+    if not key:
+        key = (os.environ.get("CEREBRAS_API_KEY") or "").strip()
     if not key:
         raise RuntimeError(
-            "DENY: CEREBRAS_API_KEY required to enter agent-rtc interactive posture"
+            "DENY: CEREBRAS_API_KEY required to enter agent-rtc interactive posture "
+            "(secretspec set --provider dotenv CEREBRAS_API_KEY)"
         )
     return key
 
