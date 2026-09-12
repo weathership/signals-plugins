@@ -2,16 +2,32 @@
 
 House rule: env vars enter through ``${?VAR}`` capture in config/base.conf;
 application code reads ``load_config()``, never ``os.environ``.
+
+The package may be installed from signals-plugins while ``base.conf`` still
+lives in the Hermes checkout (devenv cwd). Resolution order: explicit
+``config_dir``, ``HSENGINE_CONFIG_DIR``, cwd ``config/``, then the package
+tree.
 """
 from __future__ import annotations
 
 import functools
+import os
 from pathlib import Path
 from typing import Any
 
 from pyhocon import ConfigFactory, ConfigTree
 
-_DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
+_PACKAGE_CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
+
+
+def _default_config_dir() -> Path:
+    env = (os.environ.get("HSENGINE_CONFIG_DIR") or "").strip()
+    if env:
+        return Path(env)
+    cwd = Path.cwd() / "config"
+    if (cwd / "base.conf").is_file():
+        return cwd
+    return _PACKAGE_CONFIG_DIR
 
 
 def load_config(config_dir: Path | None = None) -> ConfigTree:
@@ -20,7 +36,7 @@ def load_config(config_dir: Path | None = None) -> ConfigTree:
     The engine is a long-lived devenv process; voice (and other) edits must
     take effect without a restart.
     """
-    base = (config_dir or _DEFAULT_CONFIG_DIR) / "base.conf"
+    base = (config_dir or _default_config_dir()) / "base.conf"
     try:
         mtime = base.stat().st_mtime
     except OSError:
