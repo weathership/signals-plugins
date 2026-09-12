@@ -30,7 +30,17 @@ def test_templates_exist():
     assert "Gaius" in bishop
     assert "session_search" in bishop
     assert "recall" in bishop.lower()
-    assert "few minutes" in bishop.lower() or "just filed" in bishop.lower() or "glance" in bishop.lower()
+    assert "user-provided" in bishop.lower() or "their paste" in bishop.lower()
+
+
+def test_bishop_open_prompt_treats_zettel_as_user_material():
+    from hsengine.engine.named_bots import bishop_prompt
+
+    _, prompt, _ = bishop_prompt(move="open")
+    low = prompt.lower()
+    assert "user-provided" in low
+    assert "interior monologue" in low or "federated" in low
+    assert "recent_thoughts" in low
 
 
 def test_parse_bishop_reply_labels_and_json():

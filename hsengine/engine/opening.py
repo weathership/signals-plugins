@@ -246,7 +246,7 @@ def sample_sequence(
 
 
 def _pin_headline(picked: list[str]) -> list[str]:
-    """A just-filed zettel is opening entropy — headline is not optional."""
+    """A user-provided zettel is opening entropy — headline is not optional."""
     rest = [gid for gid in picked if gid != "headline"]
     if rest and rest[0] == "greet_tod":
         return ["greet_tod", "headline", *rest[1:]]
@@ -288,7 +288,8 @@ def bishop_handoff(
         "Mark a sequence pause as [pause] in the MONOLOGUE. "
         "Do not name the gestures. Do not mention Bishop. "
         "No rumination frames (sitting with, turning over, returning to a thread). "
-        "If a just-filed zettel is in the glance, that is required entropy."
+        "If a USER-PROVIDED zettel is in the glance, that is required entropy "
+        "from them — distinct from interior monologue and federated-workspace thoughts."
     )
     return "\n".join(lines)
 
@@ -316,8 +317,10 @@ def compose_opening(
     glance = pipeline_block(pack)
     if zettel:
         glance = (
-            "Just-filed zettel — this is the opening's entropy, use it "
-            "(one hook, not a rundown):\n"
+            "USER-PROVIDED zettel (they pasted this moments ago — not lattice "
+            "thoughts, not agent monologue, not Gaius, not recent_thoughts). "
+            "This is the opening's entropy — use it as their material, one hook, "
+            "not a rundown:\n"
             + zettel
             + (("\n\n" + glance) if glance.strip() else "")
         )

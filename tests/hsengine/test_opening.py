@@ -141,6 +141,8 @@ def test_compose_opening_handoff_uses_zettel_entropy(monkeypatch, tmp_path):
     assert "has_zettel" in plan.facts
     assert "headline" in plan.sequence
     assert "opening's entropy" in plan.handoff
+    assert "USER-PROVIDED" in plan.handoff
+    assert "not lattice" in plan.handoff.lower() or "not interior" in plan.handoff.lower()
     assert "Atiq" in plan.handoff
     assert "required entropy" in plan.handoff
 

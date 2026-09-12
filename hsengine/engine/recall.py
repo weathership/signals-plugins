@@ -386,7 +386,8 @@ def format_recall(pack: dict[str, Any] | None, *, budget: int = _BUDGET) -> str:
     ]
     if fresh:
         lines.append(
-            "Just filed (last few minutes). May color the opening; do not rundown:"
+            "User-provided zettel (last few minutes — their paste, not lattice "
+            "thoughts or agent monologue). Required opening entropy; do not rundown:"
         )
         for h in fresh:
             age_m = float(h.get("age_minutes") or 0)

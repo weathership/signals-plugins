@@ -128,9 +128,10 @@ def test_fresh_zettel_within_minutes_not_hours(tmp_path):
     assert "wiki/scratch/2026-09-12/195104_epistemic.md" in paths
     assert all("080000_old" not in p for p in paths)
     text = recall.format_recall(pack)
-    assert "Just filed" in text
+    assert "User-provided" in text or "user-provided" in text.lower()
     assert "epistemic" in text.lower()
     assert "rundown" in text.lower()
+    assert "lattice" in text.lower() or "monologue" in text.lower()
 
 
 def test_fresh_zettel_glance_is_opening_entropy(tmp_path):
