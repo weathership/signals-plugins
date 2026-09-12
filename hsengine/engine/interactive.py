@@ -74,7 +74,7 @@ def _control_url() -> str:
 
 
 _TOOL_ROUNDS = 4
-_RECALL_CLIP = 800
+_RECALL_CLIP = 1600
 
 
 def _spoken_context(

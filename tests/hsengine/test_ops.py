@@ -107,6 +107,8 @@ def test_spoken_system_mentions_kb_and_web_search():
     assert "conversation" in text
     assert "session_search" in text
     assert "shares this same session" in text or "share this same session" in text
+    assert "gaius" in text
+    assert "local wiki" in text
     assert "this minute" not in text
     assert "elapsed" not in text
 
@@ -118,6 +120,15 @@ def test_hermes_tool_keeps_files_in_hermes_home():
     assert "operator home" in desc
     assert "kb_search" in desc
     assert "gaius" in desc
+    assert "session_search" in desc
+
+
+def test_kb_search_is_gaius_not_hermes_notes():
+    kb = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "kb_search")
+    desc = kb["function"]["description"].lower()
+    assert "gaius" in desc
+    assert "session_search" in desc
+    assert "our notes" not in desc
 
 
 def test_conversation_tool_does_not_ask_to_announce_the_clock():

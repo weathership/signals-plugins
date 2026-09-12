@@ -28,6 +28,8 @@ def test_templates_exist():
     assert "HERMES_HOME" in bishop
     assert "~/wiki" in bishop
     assert "Gaius" in bishop
+    assert "session_search" in bishop
+    assert "recall" in bishop.lower()
 
 
 def test_parse_bishop_reply_labels_and_json():

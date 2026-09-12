@@ -9,8 +9,9 @@ tools, including delegate_task) at most twice this turn, and hermes may run
 at most two delegate_task children.
 
 Hermes-created files stay under HERMES_HOME (the active named profile or the
-common Hermes home) — never the operator home, never ~/wiki. Lattice
-knowledge is kb_search (Gaius over signals-protocol).
+common Hermes home) — never the operator home, never ~/wiki. Recent talks
+and the local wiki surface in recall / session_search (newest first).
+kb_search is Gaius lattice research, not those notes.
 
 You will not be heard. When you are done, output exactly:
 

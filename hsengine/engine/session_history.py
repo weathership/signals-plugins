@@ -354,19 +354,31 @@ def remember_turn(webrtc_id: str, *, user: str, assistant: str) -> None:
 
 
 def recalled_memory(webrtc_id: str, query: str) -> str:
-    """Prefetch provider recall for the upcoming spoken turn. Empty on miss."""
+    """Prefetch for the upcoming spoken turn: recent sessions + local citations, then providers."""
     q = (query or "").strip()
-    if not webrtc_id or not q:
+    if not q:
         return ""
-    sid = hermes_session_id(webrtc_id)
+    parts: list[str] = []
     try:
-        mgr = _memory_manager(sid)
-        if mgr is None:
-            return ""
-        return (mgr.prefetch_all(q, session_id=sid) or "").strip()
+        from hsengine.engine.recall import format_recall, recall_pack
+
+        pack = recall_pack(query=q, webrtc_id=webrtc_id)
+        block = format_recall(pack)
+        if block:
+            parts.append(block)
     except Exception:
-        log.warning("agent-rtc memory prefetch failed", exc_info=True)
-        return ""
+        log.warning("agent-rtc temporal recall failed", exc_info=True)
+    if webrtc_id:
+        sid = hermes_session_id(webrtc_id)
+        try:
+            mgr = _memory_manager(sid)
+            if mgr is not None:
+                extra = (mgr.prefetch_all(q, session_id=sid) or "").strip()
+                if extra:
+                    parts.append(extra)
+        except Exception:
+            log.warning("agent-rtc memory prefetch failed", exc_info=True)
+    return "\n\n".join(parts)
 
 
 def close_session(webrtc_id: str, reason: str = "hangup") -> None:

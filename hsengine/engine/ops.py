@@ -600,6 +600,12 @@ def session_search(
     q = (query or "").strip()
     if q and not sid and around_message_id is None and live_w:
         hits = session_history.search_this_call(live_w, q, limit=max(limit, 8))
+        last_user = ""
+        for t in reversed(session_history.recent_turns(live_w, limit=4)):
+            if str(t.get("role") or "") == "user":
+                last_user = str(t.get("text") or "").strip()
+                break
+        hits = [h for h in hits if str(h.get("text") or "").strip() != last_user]
         if hits:
             return {
                 "ok": True,
@@ -613,6 +619,8 @@ def session_search(
         "limit": limit,
         "window": window,
     }
+    if live:
+        kwargs["current_session_id"] = live
     if around_message_id is not None:
         kwargs["around_message_id"] = around_message_id
         kwargs["session_id"] = sid or live
@@ -620,6 +628,13 @@ def session_search(
         kwargs["session_id"] = sid
     elif not q and live:
         kwargs["session_id"] = live
+    elif q:
+        from hsengine.engine.recall import focus_query
+
+        focused = focus_query(q)
+        if focused:
+            kwargs["query"] = focused
+        kwargs["sort"] = "newest"
     raw = _search(**kwargs)
     try:
         data = json.loads(raw)
@@ -759,12 +774,13 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
             "name": "session_search",
             "description": (
                 "Recall earlier turns of this call and other Hermes "
-                "sessions. Use when something was said before the live "
-                "window, when they ask what we talked about, or when "
+                "sessions, newest first. Use for what we talked about, "
+                "our notes from a prior AgentRTC or CLI session, or when "
                 "older_count on conversation is greater than zero. Pass "
-                "query to search; omit query to read this call; pass "
-                "session_id from a prior result to read that session. "
-                "Do not invent earlier turns."
+                "keywords (not the whole question). Omit query to read "
+                "this call; pass session_id from a prior result to read "
+                "that session. Do not invent earlier turns. Not Gaius — "
+                "that is kb_search."
             ),
             "parameters": {
                 "type": "object",
@@ -822,10 +838,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "kb_search",
             "description": (
-                "Search the Gaius knowledge base (notes, thoughts, research) "
-                "over the lattice. Use when they ask what we already know, "
-                "to follow a wiki link from a presentation deck, or to look "
-                "up something in our notes — even casually. Then resume the "
+                "Search the Gaius lattice KB (cards, thoughts, research on "
+                "the federation). Not Hermes session transcripts and not "
+                "the local wiki under HERMES_HOME — those are in the recall "
+                "block and session_search. Use for lattice/Gaius knowledge "
+                "or a wiki link from a presentation deck. Then resume the "
                 "presentation from a slide heading if you were presenting."
             ),
             "parameters": {
@@ -868,7 +885,8 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "AgentRTC session — the live transcript and memories are "
                 "already the conversation. Files it creates belong under "
                 "HERMES_HOME (named profile or common Hermes storage), never "
-                "the operator home. Lattice notes: kb_search (Gaius). Use "
+                "the operator home. Our session notes and local wiki are "
+                "recall/session_search; lattice KB is kb_search (Gaius). Use "
                 "when the voice tools are not enough. Subagents also run on "
                 "Cerebras while this session is in force. Speak the result."
             ),
