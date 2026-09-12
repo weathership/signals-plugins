@@ -22,7 +22,75 @@ symlinks the plugins **and** `pip install -e` this checkout.
 `llm_tools_v1` when the peer advertises that extension; otherwise it uses
 `Engine/Complete` (`tools_json`). The engine itself is this repo's
 `signals-hsengine` package. Hermes core stays stock plus a few generic
-seams (session runtime overlay, plugin tab `position:`).
+seams (session runtime overlay `hermes_agent.session_runtime`, dashboard
+`tab.position:`). AgentRTC-specific code does not belong in hermes-agent.
+See [docs/packaging.md](docs/packaging.md).
+
+## AgentRTC: named agents and delegation
+
+An AgentRTC Connect is one Hermes session (`source=agent-rtc`) plus two
+**named bots** — Hermes profiles under `$HERMES_HOME/profiles/<name>/`
+with Bot-Mode `ui_meta['hermes-bots']`, created on first interactive
+enter if missing:
+
+| Bot | Role |
+|-----|------|
+| **Ripley** | Spoken voice. First person. Tools on user turns; execute pass has no tools. |
+| **Bishop** | Silent invent pass. Tools, including `hermes` / `delegate_task`. Never heard. |
+
+**Agent-mediated:** Bishop invents; Ripley speaks. Named agents and
+sub-agents **are** that pattern, not a sideline. Connect openings,
+“what’s next,” and quiet-line contemplation all use invent-then-execute.
+
+While the `interactive_session` Activity is in force, both bots (and
+`hermes()` children) use Cerebras via the session-runtime overlay — not
+an env var, not a process-wide model swap.
+
+Delegation cap on a Bishop turn: `hermes` at most twice, and Hermes may
+run at most **two** `delegate_task` children. Subagents share the
+AgentRTC session (transcript + memory). Files they create stay under
+`HERMES_HOME` (this profile or the common Hermes home), never the
+operator home.
+
+Personas: `hsengine/bots/{ripley,bishop}/SOUL.md`.
+
+## Memory (signals-memory)
+
+AgentRTC uses Hermes' **MemoryProvider** subsystem — not a second store.
+CLI/dashboard chat and AgentRTC share `$HERMES_HOME/state.db`,
+`${HERMES_HOME}/wiki`, `memories/MEMORY.md`, and
+`signals-memory/turns.jsonl`. A note filed in Hermes chat is on the next
+Connect; recall lines are tagged `[cli]` vs `[agent-rtc]` so the invent
+pass can tell text chat from a voice call. At similar recency, AgentRTC
+sessions are boosted; cron is demoted.
+
+Activate:
+
+```yaml
+plugins:
+  enabled: [signals-memory]
+memory:
+  provider: signals-memory   # CLI / hermes() subagents
+```
+
+If `memory.provider` is empty, the AgentRTC sidecar still loads
+`signals-memory` when the plugin is installed. A configured Honcho (or
+other) provider is not overridden.
+
+`prefetch` (and `signals_recall`) return **one pack**. Bishop invents
+from it; Ripley does not read it as a briefing.
+
+| Tier | What | How |
+|------|------|-----|
+| Conversations | Recent Hermes / AgentRTC sessions | FTS5 + recency |
+| Citations | `${HERMES_HOME}/wiki`, `memories/MEMORY.md` | Lexical; entity/concept pages first |
+| Turns | Profile JSONL | Keyword, newest last |
+| Lattice | Gaius `ServerQuery SEARCH` | Semantic-ish, **lowest** priority |
+
+Lexical talks and wiki always outrank Gaius. A Gaius outage fails open.
+`session_search` / `kb_search` remain tools for deepen, not the first hop.
+
+Details: [docs/memory.md](docs/memory.md).
 
 ## Install
 
@@ -47,6 +115,7 @@ Developer checkout (symlink this tree; not the published path):
 ./scripts/install.sh
 # HERMES_PROFILE=coder ./scripts/install.sh
 # ./scripts/install.sh --uninstall
+# ./scripts/install.sh --engine   # pip install -e this checkout (hsengine)
 ```
 
 ## Activate
@@ -71,9 +140,6 @@ context:
 Restart Hermes. `hermes plugins list` should list the four plugins;
 `hermes doctor` should report provider `signals`.
 
-AgentRTC recall goes through **`signals-memory`** (hybrid lexical + Gaius
-SEARCH, recent talks first). See [docs/memory.md](docs/memory.md).
-
 ## Impala FDW
 
 Going forward, a Signals federated workspace must expose its data plane
@@ -90,12 +156,18 @@ in that repository; this checkout does not ship the extension.
 
 ```
 plugins/
-  signals-oip/       plugin.yaml + __init__.py + client.py
-  signals-memory/    plugin.yaml + __init__.py
-  signals-compact/   plugin.yaml + __init__.py
-  signals-listen/    plugin.yaml + dashboard/ (WebRTC tab)
+  signals-oip/          plugin.yaml + client (OIP / Engine Complete)
+  signals-memory/       MemoryProvider + hybrid.py (tiered recall)
+  signals-compact/      ContextEngine
+  signals-listen/       dashboard Listen tab + plugin_api
+hsengine/               sidecar: AgentRTC, named bots, overlay, ops
+  bots/{ripley,bishop}/ SOUL.md
+docs/
+  packaging.md
+  memory.md
 scripts/install.sh
 tests/
+  hsengine/             sidecar tests (named bots, recall, overlay, …)
 ```
 
 Do not point Hermes at `plugins/` in this repository. Published installs
@@ -105,5 +177,6 @@ clone into `$HERMES_HOME/plugins/` via `hermes plugins install`.
 
 ```bash
 python3 -m unittest discover -s tests -q
+python3 -m pytest tests/hsengine tests/test_signals_memory.py -q
 bash -n scripts/install.sh
 ```
