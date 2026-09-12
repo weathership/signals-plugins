@@ -30,6 +30,7 @@ def test_templates_exist():
     assert "Gaius" in bishop
     assert "session_search" in bishop
     assert "recall" in bishop.lower()
+    assert "few minutes" in bishop.lower() or "just filed" in bishop.lower() or "glance" in bishop.lower()
 
 
 def test_parse_bishop_reply_labels_and_json():

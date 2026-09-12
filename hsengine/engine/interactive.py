@@ -83,7 +83,7 @@ def _spoken_context(
     system_prompt: str,
     session_id: str,
     history: list[dict] | None,
-    recall_query: str = "",
+    recall_query: str | None = None,
 ) -> tuple[str, list[dict]]:
     """System text plus prior user/assistant turns for a spoken Cerebras call.
 
@@ -112,7 +112,7 @@ def _spoken_context(
             "Call session_search to recall them. Do not invent earlier turns."
         )
     if session_id:
-        q = (recall_query or prompt).strip()
+        q = prompt.strip() if recall_query is None else recall_query.strip()
         recalled = session_history.recalled_memory(session_id, q)
         if recalled:
             parts.append(
@@ -171,7 +171,7 @@ def complete_cerebras(
     speak: bool = True,
     session_id: str = "",
     history: list[dict] | None = None,
-    recall_query: str = "",
+    recall_query: str | None = None,
 ) -> CompleteResult:
     key = _cerebras_key()
     model = _cfg("hermes.engine.webrtc.interactive.cerebras_model", "qwen-3.8-27b")

@@ -286,7 +286,9 @@ def bishop_prompt(
             "Prefer MONOLOGUE Ripley can speak now in first person. STEER is optional "
             "color for that line. Do not use a formula "
             "(no casual-hello-plus-two-ideas-then-ask). Do not mention Bishop, "
-            "pipelines, or how the notes arrived. If the workspace glance is stale "
+            "pipelines, or how the notes arrived. If recall shows a zettel filed "
+            "in the last few minutes, it may color the opening — a glance, not a "
+            "rundown. Older notes stay quiet. If the workspace glance is stale "
             "or empty, have her say the workspace has gone quiet — do not invent "
             "today's news."
         )
@@ -337,7 +339,7 @@ def bishop_run(
             tools=True,
             speak=False,
             session_id=session_id,
-            recall_query=utterance,
+            recall_query=(utterance.strip() if utterance.strip() else ""),
         )
     return parse_bishop_reply(getattr(result, "text", "") or "")
 

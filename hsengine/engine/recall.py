@@ -18,6 +18,9 @@ log = logging.getLogger("hsengine.engine.recall")
 _TAU_HOURS = 18.0
 _SESSION_LIMIT = 3
 _CITATION_LIMIT = 3
+_FRESH_MINUTES = 12
+_FRESH_LIMIT = 2
+_FRESH_DIRS = ("scratch", "inbox")
 _SNIPPET = 280
 _BUDGET = 1600
 _MAX_WIKI_BYTES = 120_000
@@ -113,6 +116,49 @@ def _file_ts(path: Path, text: str) -> float:
 def _matches(text: str, tokens: Iterable[str]) -> int:
     blob = (text or "").lower()
     return sum(blob.count(t) for t in tokens)
+
+
+def _fresh_hits(
+    *,
+    hermes_home: Path,
+    now: float,
+    max_age_minutes: float = _FRESH_MINUTES,
+    limit: int = _FRESH_LIMIT,
+) -> list[dict[str, Any]]:
+    """Zettels created in the last few minutes. Empty when nothing is that new."""
+    wiki = hermes_home / "wiki"
+    if not wiki.is_dir() or max_age_minutes <= 0:
+        return []
+    max_age_s = float(max_age_minutes) * 60.0
+    hits: list[dict[str, Any]] = []
+    for folder in _FRESH_DIRS:
+        root = wiki / folder
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.md"):
+            try:
+                if not path.is_file() or path.stat().st_size > _MAX_WIKI_BYTES:
+                    continue
+                mtime = path.stat().st_mtime
+                age_s = now - mtime
+                if age_s < 0 or age_s > max_age_s:
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            rel = path.relative_to(hermes_home).as_posix()
+            hits.append(
+                {
+                    "kind": "fresh",
+                    "path": rel,
+                    "title": _frontmatter_title(text, path.stem),
+                    "snippet": _body_snippet(text),
+                    "age_minutes": age_s / 60.0,
+                    "mtime": mtime,
+                }
+            )
+    hits.sort(key=lambda h: -float(h.get("mtime") or 0))
+    return hits[: max(1, limit)]
 
 
 def _wiki_files(root: Path) -> list[Path]:
@@ -267,11 +313,13 @@ def recall_pack(
         "tokens": tokens,
         "conversations": [],
         "citations": [],
+        "fresh": [],
     }
-    if not tokens:
-        return pack
     clock = float(now if now is not None else time_mod.time())
     home = Path(hermes_home) if hermes_home is not None else get_hermes_home()
+    pack["fresh"] = _fresh_hits(hermes_home=home, now=clock)
+    if not tokens:
+        return pack
     store = db if db is not None else session_history._store()
     exclude = session_history.hermes_session_id(webrtc_id) if webrtc_id else ""
     pack["conversations"] = _session_hits(
@@ -302,12 +350,24 @@ def format_recall(pack: dict[str, Any] | None, *, budget: int = _BUDGET) -> str:
     cites = list(pack.get("citations") or [])
     turns = list(pack.get("turns") or [])
     lattice = list(pack.get("lattice") or [])
-    if not conv and not cites and not turns and not lattice:
+    fresh = list(pack.get("fresh") or [])
+    if not conv and not cites and not turns and not lattice and not fresh:
         return ""
     lines = [
         "Memory (hybrid, recent first). Invent from this; do not read it as a briefing. "
         "Our talks and wiki outrank the lattice (Gaius)."
     ]
+    if fresh:
+        lines.append(
+            "Just filed (last few minutes). May color the opening; do not rundown:"
+        )
+        for h in fresh:
+            age_m = float(h.get("age_minutes") or 0)
+            when = "just now" if age_m < 1 else f"{age_m:.0f}m ago"
+            path = str(h.get("path") or "")
+            title = str(h.get("title") or "")
+            snippet = str(h.get("snippet") or "")
+            lines.append(f"- {when} {path} ({title}): {snippet}")
     if conv:
         lines.append("Conversations:")
         for h in conv:

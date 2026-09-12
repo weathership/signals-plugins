@@ -366,17 +366,27 @@ def remember_turn(webrtc_id: str, *, user: str, assistant: str) -> None:
 
 
 def recalled_memory(webrtc_id: str, query: str) -> str:
-    """Prefetch through the memory subsystem (signals-memory hybrid when installed)."""
+    """Prefetch through the memory subsystem (signals-memory hybrid when installed).
+
+    Empty or trivial *query* still returns zettels filed in the last few minutes
+    so the Connect invent pass can see them.
+    """
     q = (query or "").strip()
-    if not q:
-        return ""
+    trivial = not q
     try:
         from agent.memory_provider import is_trivial_prompt
 
-        if is_trivial_prompt(q):
-            return ""
+        trivial = trivial or is_trivial_prompt(q)
     except Exception:
         pass
+    if trivial:
+        try:
+            from hsengine.engine.recall import format_recall, recall_pack
+
+            return format_recall(recall_pack(query="", webrtc_id=webrtc_id))
+        except Exception:
+            log.warning("agent-rtc fresh-zettel recall failed", exc_info=True)
+            return ""
     sid = hermes_session_id(webrtc_id) if webrtc_id else ""
     try:
         mgr = _memory_manager(sid or "agent-rtc")

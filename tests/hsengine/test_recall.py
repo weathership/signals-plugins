@@ -1,6 +1,7 @@
 """AgentRTC recall ranks recent conversations and local citations first."""
 from __future__ import annotations
 
+import os
 import time
 
 from hermes_state import SessionDB
@@ -103,6 +104,46 @@ def test_wiki_and_memory_citations_match_query(tmp_path):
 def test_format_recall_empty_when_no_hits():
     assert recall.format_recall({"conversations": [], "citations": []}) == ""
     assert recall.format_recall(None) == ""
+
+
+def test_fresh_zettel_within_minutes_not_hours(tmp_path):
+    home = tmp_path / ".hermes"
+    scratch = home / "wiki" / "scratch" / "2026-09-12"
+    scratch.mkdir(parents=True)
+    fresh = scratch / "195104_epistemic.md"
+    stale = scratch / "080000_old.md"
+    fresh.write_text("# Epistemic acquaintance\nJust filed.\n", encoding="utf-8")
+    stale.write_text("# Old note\nYesterday.\n", encoding="utf-8")
+    now = time.time()
+    os.utime(fresh, (now - 180, now - 180))
+    os.utime(stale, (now - 3 * 3600, now - 3 * 3600))
+    pack = recall.recall_pack(
+        query="",
+        webrtc_id="",
+        hermes_home=home,
+        db=type("NoDB", (), {"search_messages": staticmethod(lambda **k: [])})(),
+        now=now,
+    )
+    paths = [c["path"] for c in pack["fresh"]]
+    assert "wiki/scratch/2026-09-12/195104_epistemic.md" in paths
+    assert all("080000_old" not in p for p in paths)
+    text = recall.format_recall(pack)
+    assert "Just filed" in text
+    assert "epistemic" in text.lower()
+    assert "rundown" in text.lower()
+
+
+def test_fresh_zettel_absent_when_older_than_window(tmp_path):
+    home = tmp_path / ".hermes"
+    scratch = home / "wiki" / "scratch"
+    scratch.mkdir(parents=True)
+    note = scratch / "note.md"
+    note.write_text("# Something\n", encoding="utf-8")
+    now = time.time()
+    os.utime(note, (now - 40 * 60, now - 40 * 60))
+    pack = recall.recall_pack(query="", hermes_home=home, now=now, db=None)
+    assert pack["fresh"] == []
+    assert recall.format_recall(pack) == ""
 
 
 def test_format_recall_puts_lattice_last():
