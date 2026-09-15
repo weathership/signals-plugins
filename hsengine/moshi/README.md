@@ -42,4 +42,6 @@ devenv ships a wrap of the same name: isolated NVIDIA `.so` copies
 (atelier) + `lib.makeLibraryPath` (openssl, opus, libstdc++). Never put
 host `/lib` on that process's `LD_LIBRARY_PATH` — Ubuntu 2.35 libc wins
 and dies on `GLIBC_2.39`. Inverse of Gaius `tinybox-ninja.sh` (host ELF
-must not see Nix glibc).
+must not see Nix glibc). After nix GC the interpreter path 127s
+(`cannot execute: required file not found`); rebuild with
+`scripts/rebuild-moshi-server.sh` in the Hermes devenv.

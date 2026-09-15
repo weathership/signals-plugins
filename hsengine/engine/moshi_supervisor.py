@@ -123,6 +123,46 @@ def _moshi_binary() -> str:
     raise RuntimeError("moshi-server not on PATH (need devenv wrap or ~/.cargo/bin)")
 
 
+def _elf_interpreter(path: Path) -> str | None:
+    """PT_INTERP of a dynamic ELF, or None when unreadable."""
+    try:
+        out = subprocess.check_output(
+            ["patchelf", "--print-interpreter", str(path)],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        return out.strip() or None
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    try:
+        out = subprocess.check_output(
+            ["readelf", "-l", str(path)],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    for line in out.splitlines():
+        if "Requesting program interpreter:" in line:
+            return line.split(":", 1)[1].strip().strip("[]")
+    return None
+
+
+def assert_interpreter_live(binary: Path | None = None) -> None:
+    """Nix-linked cargo ELF 127s after GC with 'required file not found'."""
+    path = Path(binary) if binary is not None else _CARGO
+    if not path.is_file():
+        raise RuntimeError(
+            f"cargo moshi-server missing at {path} (scripts/rebuild-moshi-server.sh)"
+        )
+    interp = _elf_interpreter(path)
+    if interp and not Path(interp).exists():
+        raise RuntimeError(
+            f"moshi-server interpreter gone: {interp} (nix GC). "
+            "Rebuild: scripts/rebuild-moshi-server.sh"
+        )
+
+
 def activate() -> dict:
     global _worker
     with _mu:
@@ -132,6 +172,7 @@ def activate() -> dict:
             _worker = None
             release_gpu_lease()
         binary = _moshi_binary()
+        assert_interpreter_live()
         gpu = lease_one_gpu(os.getpid())
         state = _state_dir()
         state.mkdir(parents=True, exist_ok=True)
@@ -143,7 +184,8 @@ def activate() -> dict:
         log_path = state / "logs" / "moshi-server.log"
         env = _moshi_env(gpu)
         log.info("starting moshi-server binary=%s gpu=%s ld=%s", binary, gpu, env.get("LD_LIBRARY_PATH", "")[:180])
-        log_f = open(log_path, "ab", buffering=0)
+        # Truncate so a 503 tail is this start, not last week's successful run.
+        log_f = open(log_path, "wb", buffering=0)
         _worker = subprocess.Popen(
             [binary, "worker", "--config", config, "--port", str(MOSHI_PORT)],
             cwd=str(state),

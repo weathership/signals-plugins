@@ -79,6 +79,18 @@ def test_lease_one_gpu_takes_the_agent_rtc_slot(tmp_path, monkeypatch):
     assert yk.our_gpu_ids() == [5]
 
 
+def test_assert_interpreter_live_denies_missing_pt_interp(tmp_path, monkeypatch):
+    from hsengine.engine import moshi_supervisor as ms
+
+    fake = tmp_path / "moshi-server"
+    fake.write_bytes(b"\x7fELF")
+    monkeypatch.setattr(
+        ms, "_elf_interpreter", lambda _p: "/nix/store/gone/ld-linux-x86-64.so.2"
+    )
+    with pytest.raises(RuntimeError, match="rebuild-moshi-server"):
+        ms.assert_interpreter_live(fake)
+
+
 def test_moshi_ld_path_includes_cuda():
     from hsengine.engine.moshi_supervisor import _ld_library_path
 
