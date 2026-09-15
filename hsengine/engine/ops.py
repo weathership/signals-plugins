@@ -384,13 +384,30 @@ def search(*, query: str, stream: str = "all", limit: int = 6) -> dict[str, Any]
 
 
 def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]:
-    """Live FMP via ServerQuery FMP (Gaius holds the key). stream=search|news|quote."""
+    """Live FMP via ServerQuery FMP (Gaius holds the key).
+
+    stream: search|quote|news|filings|statement|metrics|calendar|employees|eight_k|insider
+    """
     from hsengine.engine import federation
     from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
 
     q = " ".join((query or "").split())
     kind = (stream or "search").strip().lower() or "search"
-    if kind not in ("search", "news", "quote"):
+    _streams = (
+        "search",
+        "quote",
+        "news",
+        "filings",
+        "statement",
+        "metrics",
+        "calendar",
+        "employees",
+        "eight_k",
+        "8k",
+        "insider",
+        "profile",
+    )
+    if kind not in _streams:
         kind = "search"
     try:
         n = max(1, min(int(limit or 6), 8))
@@ -908,22 +925,25 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "fmp",
             "description": (
-                "Look up markets on Financial Modeling Prep via the lattice "
-                "(Gaius holds the API key). stream=search finds tickers by "
-                "name, news is headlines (optional symbol), quote is a company "
-                "profile. Use this instead of web_search for tickers, 10-Ks, "
-                "and listed companies. Then speak from hits or spoken."
+                "Look up markets on Financial Modeling Prep via Gaius "
+                "(the engine holds the API key). Streams: search, quote, "
+                "news, filings, statement, metrics, calendar, employees, "
+                "eight_k, insider. Use this instead of web_search for "
+                "tickers, filings, and listed companies. Speak from hits."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Company name or ticker. Optional for news.",
+                        "description": "Company name or ticker. Optional for news/calendar/8k/insider.",
                     },
                     "stream": {
                         "type": "string",
-                        "description": "search | news | quote (default search).",
+                        "description": (
+                            "search|quote|news|filings|statement|metrics|"
+                            "calendar|employees|eight_k|insider"
+                        ),
                     },
                 },
                 "additionalProperties": False,
