@@ -230,8 +230,20 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not found"})
 
 
+def require_runtime_deps() -> None:
+    """Fail at start, not on Connect: lease_one_gpu → federation imports grpc."""
+    try:
+        import grpc  # noqa: F401
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "No module named 'grpc' (package grpcio). "
+            "uv add --optional signals; do not uv pip install into the devenv venv"
+        ) from e
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    require_runtime_deps()
     cargo_bin = Path.home() / ".cargo" / "bin"
     os.environ["PATH"] = f"{cargo_bin}:{os.environ.get('PATH', '')}"
     server = ThreadingHTTPServer(("127.0.0.1", CONTROL_PORT), _Handler)

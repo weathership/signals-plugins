@@ -34,6 +34,23 @@ def test_pick_agent_rtc_gpu_denies_when_all_pinned():
         yk.pick_agent_rtc_gpu({0, 1, 2, 3, 4, 5}, 6)
 
 
+def test_moshi_supervisor_require_runtime_deps_names_uv_add(monkeypatch):
+    import builtins
+
+    from hsengine.engine.moshi_supervisor import require_runtime_deps
+
+    real = builtins.__import__
+
+    def boom(name, *args, **kwargs):
+        if name == "grpc":
+            raise ModuleNotFoundError("No module named 'grpc'")
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", boom)
+    with pytest.raises(RuntimeError, match="uv add --optional signals"):
+        require_runtime_deps()
+
+
 def test_yk_sentinel_has_no_kubernetes_client():
     for name in (
         "apply_manifest",
