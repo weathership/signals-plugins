@@ -22,5 +22,6 @@ Do not say the figure is on the feed until `viz_show` returned `"ok": true`.
 
 ## First pass
 
-Plain HoloViews (matplotlib backend) when installed; matplotlib chord
-fallback otherwise. No Dask, no Datashader.
+HoloViews is required on the engine (`signals-hsengine` / `hermes-agent[signals]`).
+PNG export uses matplotlib; `hv.Chord` may fall back to a matplotlib chord
+when the Agg backend cannot draw Bokeh's GraphRenderer. No Dask, no Datashader.

@@ -1,7 +1,8 @@
-"""Render a program still: HoloViews when importable, matplotlib otherwise.
+"""Render a program still with HoloViews (required) onto PNG.
 
-Plain HoloViews only — no Dask/Datashader. Chord is the ontology-shaped
-default (Aegir aperture when `source=aegir`).
+HoloViews is a Signals-hsengine dependency, not an extra. Matplotlib is
+the PNG backend / chord fallback when ``hv.Chord`` cannot draw on Agg
+(Aegir chords are a Bokeh GraphRenderer). No Dask/Datashader in this pass.
 """
 from __future__ import annotations
 
@@ -43,9 +44,17 @@ def render_scene(
             name = "chord"
     label = (title or "").strip() or _default_title(name, origin)
     try:
+        import holoviews as _hv  # noqa: F401
+    except ImportError as e:
+        raise RuntimeError(
+            "holoviews is required for AgentRTC program stills "
+            "(signals-hsengine / hermes-agent[signals])"
+        ) from e
+    try:
         image = _render_holoviews(name, nodes, edges, highlight, label)
         backend = "holoviews"
     except Exception:
+        # hv.Chord is a Bokeh GraphRenderer; matplotlib Agg cannot always draw it.
         image = _render_matplotlib(name, nodes, edges, highlight, label)
         backend = "matplotlib"
     meta = {

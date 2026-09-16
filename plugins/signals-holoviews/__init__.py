@@ -2,7 +2,7 @@
 
 Renders on the engine (same process as WebRTC). Bishop/Ripley call viz_show
 to fade the looping clip out and a chord/scatter/curve in. Nested Hermes
-gets the same tools. No Datashader in this pass.
+gets the same tools. HoloViews is required on the engine. Datashader is not this pass.
 """
 from __future__ import annotations
 

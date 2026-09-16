@@ -1,4 +1,4 @@
-"""HoloViews plugin renderer: matplotlib path, no Datashader."""
+"""HoloViews plugin renderer. Holoviews is required; matplotlib may draw chords."""
 from __future__ import annotations
 
 import json
@@ -20,7 +20,7 @@ def _load():
     return mod
 
 
-def test_demo_chord_renders_without_holoviews():
+def test_demo_chord_renders():
     pytest.importorskip("PIL")
     mod = _load()
     image, meta = mod.render_scene(kind="chord", title="Ontology chord")

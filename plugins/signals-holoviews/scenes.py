@@ -1,7 +1,7 @@
 """Scene data for AgentRTC program stills.
 
-First pass is plain HoloViews (when installed) or matplotlib. No Datashader.
-Aegir aperture chords load if the federated workspace package is importable.
+HoloViews is required. Aegir aperture chords load if the federated
+workspace package is importable; otherwise a SKOS-shaped demo chord.
 """
 from __future__ import annotations
 
