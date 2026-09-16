@@ -49,26 +49,19 @@ def test_composite_blends_program_over_base():
     assert px[0] > 20
 
 
-def test_viz_show_demo_chord_via_ops():
-    pytest.importorskip("PIL")
+def test_viz_show_without_chromium_is_an_error():
     from hsengine.engine import ops
 
     raw = ops.dispatch("viz_show", {"kind": "chord", "title": "Ontology chord", "fade_s": 0.05})
     data = json.loads(raw)
-    assert data["ok"] is True
-    assert data["live"] is True
-    assert data["kind"] == "chord"
+    assert data["ok"] is False
+    assert "chromium" in (data.get("error") or "").lower()
     names = [t["function"]["name"] for t in ops.CEREBRAS_TOOLS]
     assert "viz_show" in names
-    assert "viz_select" in names
-    assert "viz_clear" in names
 
 
-def test_viz_clear_fades_out():
-    pytest.importorskip("PIL")
+def test_viz_clear_is_ok_when_idle():
     from hsengine.engine import ops
 
-    json.loads(ops.dispatch("viz_show", {"kind": "chord", "fade_s": 0.05}))
     data = json.loads(ops.dispatch("viz_clear", {"fade_s": 0.05}))
     assert data["ok"] is True
-    assert data["alpha"] < 0.5 or data["live"] in (True, False)

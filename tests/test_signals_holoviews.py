@@ -38,6 +38,25 @@ def test_aperture_falls_back_to_demo_without_aegir():
     assert meta["source"] in ("aegir", "demo")
 
 
+def test_modify_doc_attaches_a_bokeh_figure():
+    from bokeh.document import Document
+
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    apps.put_scene(
+        "anon",
+        kind="chord",
+        title="OFS lattice",
+        data='{"nodes":["SLB","HAL","BKR","NOV"],"edges":[[0,1,3],[0,2,2]]}',
+    )
+    doc = Document()
+    apps.modify_doc(doc)
+    kinds = [type(r).__name__ for r in doc.roots]
+    assert any(k in ("Row", "Column", "figure", "GridBox") for k in kinds)
+    blob = str(doc.roots)
+    assert "figure" in blob.lower() or any(getattr(r, "children", None) for r in doc.roots)
+
+
 def test_parse_custom_nodes():
     import importlib.util
 

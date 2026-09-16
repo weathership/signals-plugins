@@ -24,6 +24,25 @@ def test_chromium_cmd_is_headless_new_on_loopback():
     assert "xvfb" not in joined.lower()
     assert "pipewire" not in joined.lower()
     assert "--no-sandbox" in cmd
+    assert "--ozone-platform=headless" in cmd
+    assert "--ozone-override-screen-size=1280,720" in cmd
+    assert "--disable-component-extensions-with-background-pages" in cmd
+
+
+def test_pick_cdp_page_skips_extension_background():
+    pages = [
+        {
+            "type": "background_page",
+            "url": "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaome/background.html",
+            "webSocketDebuggerUrl": "ws://127.0.0.1:56119/devtools/page/ext",
+        },
+        {
+            "type": "page",
+            "url": "http://127.0.0.1:51131/hv?session=abc",
+            "webSocketDebuggerUrl": "ws://127.0.0.1:56119/devtools/page/hv",
+        },
+    ]
+    assert webrtc_cdp.pick_cdp_page(pages).endswith("/page/hv")
 
 
 def test_bokeh_origins_are_loopback_only():

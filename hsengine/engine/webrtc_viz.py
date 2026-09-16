@@ -83,7 +83,7 @@ def try_live(
             )
         )
     except Exception as e:
-        log.warning("live viz failed (%s); still fallback", e)
+        log.exception("holoviews live viz failed")
         return {"ok": False, "error": str(e)[:240]}
 
 
@@ -123,22 +123,21 @@ async def _show_live(
         await cam.navigate(url)
         if not cam._screencast:
             await cam.start_screencast()
-    placeholder = cam.latest_image
-    if placeholder is None:
-        # First paint: black 1280x720 so fade starts before the first JPEG.
-        from PIL import Image
-
-        placeholder = Image.new("RGB", (1280, 720), (11, 11, 18))
+            await cam._wait_first_frame()
+    frame = cam.latest_image
+    if frame is None:
+        raise RuntimeError("HoloViews compositor produced no frame")
     webrtc_program.PROGRAM.set(
-        placeholder,
+        frame,
         title=str(scene.get("title") or ""),
         kind=str(scene.get("kind") or kind),
         fade_s=fade_s,
         meta={
             **scene,
-            "backend": "cdp-screencast",
+            "backend": "holoviews-cdp",
             "url": url,
             "capture": "Page.startScreencast",
+            "frames": cam.frames,
         },
     )
     return {"ok": True, **webrtc_program.PROGRAM.status()}

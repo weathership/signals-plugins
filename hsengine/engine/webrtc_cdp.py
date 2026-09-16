@@ -83,8 +83,29 @@ def chromium_cmd(
         "--disable-popup-blocking",
         "--disable-dev-shm-usage",
         "--no-sandbox",
+        "--disable-default-apps",
+        "--disable-component-extensions-with-background-pages",
+        "--ozone-platform=headless",
+        f"--ozone-override-screen-size={VIEW_W},{VIEW_H}",
         url,
     ]
+
+
+def pick_cdp_page(pages: list) -> str:
+    """WebSocket URL of the HoloViews page — never a background extension."""
+    rows = [p for p in (pages or []) if isinstance(p, dict)]
+    for page in rows:
+        url = str(page.get("url") or "")
+        kind = str(page.get("type") or "")
+        ws = page.get("webSocketDebuggerUrl")
+        if kind == "page" and "/hv" in url and ws:
+            return str(ws)
+    for page in rows:
+        if str(page.get("type") or "") == "page" and page.get("webSocketDebuggerUrl"):
+            if str(page.get("url") or "").startswith("chrome-extension:"):
+                continue
+            return str(page["webSocketDebuggerUrl"])
+    raise TimeoutError("no CDP page target for the HoloViews document")
 
 
 def jpeg_to_image(data: bytes) -> Any:
@@ -140,8 +161,9 @@ class CdpCamera:
         self._reader = asyncio.create_task(self._read_loop())
         await self.send("Page.enable")
         await self.send("Runtime.enable")
-        await self._wait_bokeh()
+        await self._wait_plot()
         await self.start_screencast()
+        await self._wait_first_frame()
 
     async def _wait_ws_url(self, timeout: float = 12.0) -> str:
         import urllib.request
@@ -152,10 +174,12 @@ class CdpCamera:
             try:
                 with urllib.request.urlopen(list_url, timeout=0.4) as resp:
                     pages = json.loads(resp.read().decode())
-                for page in pages:
-                    ws = page.get("webSocketDebuggerUrl")
-                    if ws:
-                        return str(ws)
+                try:
+                    picked = pick_cdp_page(pages)
+                except TimeoutError:
+                    picked = ""
+                if picked:
+                    return picked
             except Exception:
                 await asyncio.sleep(0.1)
         raise TimeoutError(f"CDP not listening on 127.0.0.1:{self.debug_port}")
@@ -216,9 +240,13 @@ class CdpCamera:
         if self._on_image is not None:
             self._on_image(image)
 
-    async def _wait_bokeh(self, timeout: float = 8.0) -> None:
+    async def _wait_plot(self, timeout: float = 20.0) -> None:
+        """Wait until HoloViews has painted a canvas, not merely loaded BokehJS."""
         deadline = time.monotonic() + timeout
-        expr = "!!(window.Bokeh && Bokeh.documents && Bokeh.documents.length)"
+        expr = (
+            "(document.querySelectorAll('canvas').length > 0) || "
+            "(document.querySelectorAll('.bk-Canvas, canvas.bk-canvas').length > 0)"
+        )
         while time.monotonic() < deadline:
             try:
                 result = await self.send(
@@ -226,10 +254,35 @@ class CdpCamera:
                     {"expression": expr, "returnByValue": True},
                 )
                 if (result.get("result") or {}).get("value"):
+                    log.info("holoviews canvas present session=%s", self.session_id)
                     return
             except Exception:
                 pass
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.2)
+        raise TimeoutError("HoloViews canvas never painted in Chromium")
+
+    async def _wait_first_frame(self, timeout: float = 8.0) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.latest_image is not None and self.frames > 0:
+                return
+            await asyncio.sleep(0.1)
+        # Same compositor, still HoloViews — seed one surface capture so we
+        # never fade in a black placeholder.
+        shot = await self.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY, "fromSurface": True})
+        blob = shot.get("data") or ""
+        if not blob:
+            raise TimeoutError("CDP screencast produced no frames")
+        jpeg = base64.b64decode(blob)
+        image = jpeg_to_image(jpeg)
+        self.latest_image = image
+        self.frames += 1
+        if self._on_image is not None:
+            self._on_image(image)
+
+    async def navigate(self, url: str) -> None:
+        await self.send("Page.navigate", {"url": url})
+        await self._wait_plot()
 
     async def start_screencast(self) -> None:
         await self.send(
@@ -252,10 +305,6 @@ class CdpCamera:
             await self.send("Page.stopScreencast")
         except Exception:
             log.debug("stopScreencast", exc_info=True)
-
-    async def navigate(self, url: str) -> None:
-        await self.send("Page.navigate", {"url": url})
-        await self._wait_bokeh()
 
     async def pointer(
         self,

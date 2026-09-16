@@ -5,7 +5,6 @@ Chromium tab; the viewer never speaks Bokeh protocol.
 """
 from __future__ import annotations
 
-import html
 import json
 import logging
 from typing import Any
@@ -201,9 +200,15 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
 
 
 def modify_doc(doc: Any) -> None:
-    """Bokeh FunctionHandler entry: one HoloViews plot as a live document."""
-    from bokeh.layouts import column
-    from bokeh.models import Div
+    """Bokeh FunctionHandler: attach a real HoloViews plot to the server document.
+
+    ``hv.render`` + ``column`` left an empty ``bk-Column`` (no canvas) in
+    headless Chromium. Panel ``HoloViews.server_doc`` is the supported
+    Bokeh-server attach path. WebGL is off — GraphRenderer/WebGL paints
+    black under ``--headless=new``.
+    """
+    import holoviews as hv
+    import panel as pn
 
     args = {}
     ctx = getattr(doc, "session_context", None)
@@ -212,18 +217,23 @@ def modify_doc(doc: Any) -> None:
         args = getattr(req, "arguments", None) or {}
     sid = _arg(args, "session")
     scene = SCENES.get(sid) or put_scene(sid or "anon", kind="chord")
-    title = html.escape(str(scene.get("title") or "AgentRTC viz"))
-    banner = Div(
-        text=(
-            f'<div style="color:#e8ecf4;font:16px/1.4 sans-serif;padding:8px 12px;'
-            f'background:#0b0b12">{title} · live</div>'
-        ),
+    title = str(scene.get("title") or "AgentRTC viz")
+    hv.extension("bokeh", logo=False)
+    hv.renderer("bokeh").webgl = False
+    pn.extension()
+    obj = _hv_obj(scene)
+    pane = pn.pane.HoloViews(
+        obj,
+        backend="bokeh",
         width=1280,
+        height=720,
+        linked_axes=False,
     )
-    try:
-        plot = __import__("holoviews").render(_hv_obj(scene), backend="bokeh")
-        doc.add_root(column(banner, plot, sizing_mode="stretch_width"))
-    except Exception:
-        log.exception("holoviews document failed; banner only")
-        doc.add_root(banner)
-    doc.title = str(scene.get("title") or "AgentRTC viz")
+    pane.server_doc(doc)
+    doc.title = title
+    log.info(
+        "holoviews document session=%s kind=%s roots=%s",
+        sid or "-",
+        scene.get("kind"),
+        [type(r).__name__ for r in doc.roots],
+    )

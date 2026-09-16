@@ -255,30 +255,10 @@ def show(
     )
     if live.get("ok"):
         return live
-    fn = _ensure_renderer()
-    if fn is None:
-        return {
-            "ok": False,
-            "error": live.get("error") or "signals-holoviews plugin renderer not found",
-        }
-    image, meta = fn(
-        kind=kind or "chord",
-        title=title,
-        highlight=highlight,
-        source=source,
-        data=data,
-    )
-    if image is None:
-        return {"ok": False, "error": meta.get("error") or "render returned no image", **meta}
-    meta = {**meta, "backend": meta.get("backend") or "still-fallback"}
-    PROGRAM.set(
-        image,
-        title=title or str(meta.get("title") or ""),
-        kind=kind or str(meta.get("kind") or ""),
-        fade_s=fade_s,
-        meta=meta,
-    )
-    return {"ok": True, "fallback": live.get("error") or "still", **PROGRAM.status()}
+    return {
+        "ok": False,
+        "error": live.get("error") or "HoloViews Chromium compositor failed",
+    }
 
 
 def select(*, node: str = "", fade_s: float = 0.35) -> dict:
