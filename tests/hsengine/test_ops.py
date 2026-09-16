@@ -118,9 +118,15 @@ def test_hermes_tool_keeps_files_in_hermes_home():
     desc = hermes["function"]["description"].lower()
     assert "hermes_home" in desc
     assert "operator home" in desc
-    assert "kb_search" in desc
-    assert "gaius" in desc
-    assert "session_search" in desc
+    assert "wiki/" in desc or "$wiki_path" in desc
+    assert "write_file" in desc
+
+
+def test_spoken_system_wiki_write_must_call_hermes():
+    text = SPOKEN_SYSTEM.lower()
+    assert "wiki/" in text or "$wiki_path" in text
+    assert "call hermes this turn" in text
+    assert "verified" in text
 
 
 def test_kb_search_is_gaius_not_hermes_notes():

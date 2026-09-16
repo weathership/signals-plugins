@@ -902,10 +902,13 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "AgentRTC session — the live transcript and memories are "
                 "already the conversation. Files it creates belong under "
                 "HERMES_HOME (named profile or common Hermes storage), never "
-                "the operator home. Our session notes and local wiki are "
-                "recall/session_search; lattice KB is kb_search (Gaius). Use "
-                "when the voice tools are not enough. Subagents also run on "
-                "Cerebras while this session is in force. Speak the result."
+                "the operator home. wiki/... and $WIKI_PATH/... are the Hermes "
+                "wiki vault. For a wiki write, tell Hermes to write_file (and "
+                "patch index.md / log.md); do not claim the page is on disk "
+                "from a plan. Our session notes are recall/session_search; "
+                "lattice KB is kb_search (Gaius). Use when the voice tools "
+                "are not enough. Subagents also run on Cerebras while this "
+                "session is in force. Speak the result."
             ),
             "parameters": {
                 "type": "object",
