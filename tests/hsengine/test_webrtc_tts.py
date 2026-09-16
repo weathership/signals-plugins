@@ -20,6 +20,32 @@ def test_tts_url_is_the_moshi_streaming_path():
     assert "/" in voice and voice.endswith(".wav")
 
 
+def test_speak_into_skips_when_epoch_already_moved(monkeypatch):
+    pcm = np.ones(4800, dtype=np.float32) * 0.4
+
+    async def _chunks(text: str):
+        yield pcm
+
+    monkeypatch.setattr("hsengine.engine.webrtc_tts.synthesize_chunks", _chunks)
+    board = SpeechBoard()
+    board.interrupt()
+    speak_into(board, "hello from cerebras", source="cerebras", epoch=0)
+    assert board.speaking() is False
+
+
+def test_speak_into_aborts_remaining_chunks_after_interrupt(monkeypatch):
+    board = SpeechBoard()
+
+    async def _chunks(text: str):
+        yield np.ones(2400, dtype=np.float32) * 0.4
+        board.interrupt()
+        yield np.ones(2400, dtype=np.float32) * 0.9
+
+    monkeypatch.setattr("hsengine.engine.webrtc_tts.synthesize_chunks", _chunks)
+    speak_into(board, "hello from cerebras", source="cerebras")
+    assert board.speaking() is False
+
+
 def test_speak_into_preempts_clip_on_the_board(monkeypatch):
     pcm = np.ones(4800, dtype=np.float32) * 0.4
 

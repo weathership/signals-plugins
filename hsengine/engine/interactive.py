@@ -177,6 +177,7 @@ def complete_cerebras(
     model = _cfg("hermes.engine.webrtc.interactive.cerebras_model", "qwen-3.8-27b")
     base = _cfg("hermes.engine.webrtc.interactive.cerebras_url", "https://api.cerebras.ai/v1").rstrip("/")
     effort = reasoning_effort or _cfg("hermes.engine.webrtc.interactive.reasoning_effort", "low")
+    epoch = _speech_epoch(session_id) if speak else None
     sys_text, prior = _spoken_context(
         prompt=prompt,
         system_prompt=system_prompt,
@@ -243,6 +244,7 @@ def complete_cerebras(
         threading.Thread(
             target=_speak_cerebras,
             args=(spoken,),
+            kwargs={"epoch": epoch},
             daemon=True,
             name="cerebras-tts",
         ).start()
@@ -261,12 +263,26 @@ def spoken_text(text: str) -> str:
     return " ".join(t.split())
 
 
-def _speak_cerebras(text: str) -> None:
+def _speech_epoch(session_id: str) -> int | None:
+    if not session_id:
+        return None
+    try:
+        from hsengine.engine.webrtc_session import HUB
+
+        board = HUB.speech(session_id)
+    except Exception:
+        return None
+    if board is None:
+        return None
+    return int(getattr(board, "epoch", 0) or 0)
+
+
+def _speak_cerebras(text: str, epoch: int | None = None) -> None:
     try:
         from hsengine.engine.webrtc_tts import speak_on_session_boards
 
         log.info("speaking %r", text[:200])
-        speak_on_session_boards(text, source="cerebras")
+        speak_on_session_boards(text, source="cerebras", epoch=epoch)
     except Exception:
         log.exception("Kyutai TTS failed for Cerebras text")
 

@@ -184,6 +184,38 @@ class HermesEngineServicer(pb_grpc.HermesEngineServicer):
         dropped = await webrtc_session.HUB.hangup(request.session_id)
         return pb.WebRtcHangupReply(dropped=dropped)
 
+    async def WebRtcUserText(self, request, context):
+        from hsengine.engine import webrtc_session
+
+        try:
+            reply = await webrtc_session.HUB.user_text(
+                request.session_id, request.text or ""
+            )
+        except KeyError:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("no such WebRTC session")
+            return pb.WebRtcUserTextReply()
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return pb.WebRtcUserTextReply()
+        return pb.WebRtcUserTextReply(accepted=bool(reply.get("accepted")))
+
+    async def WebRtcInterrupt(self, request, context):
+        from hsengine.engine import webrtc_session
+
+        try:
+            reply = webrtc_session.HUB.interrupt(request.session_id)
+        except KeyError:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("no such WebRTC session")
+            return pb.WebRtcInterruptReply()
+        return pb.WebRtcInterruptReply(
+            ok=bool(reply.get("ok")),
+            speaking=bool(reply.get("speaking")),
+            dropped_samples=int(reply.get("dropped_samples") or 0),
+        )
+
 
 class ZndxEngineServicer(zpb_grpc.EngineServicer):
     """Shared federation face: Status, ServerQuery, federated Complete, Yield, lineage."""

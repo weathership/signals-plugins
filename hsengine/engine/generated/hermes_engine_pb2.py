@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13hermes_engine.proto\x12\rhermes.engine\"\x15\n\x13\x45ngineStatusRequest\"K\n\x11\x45ngineStatusReply\x12\x0f\n\x07project\x18\x01 \x01(\t\x12\x0f\n\x07version\x18\x02 \x01(\t\x12\x14\n\x0c\x63\x61pabilities\x18\x03 \x03(\t\"\x19\n\x17GetAgentInstanceRequest\"d\n\x15GetAgentInstanceReply\x12\x0f\n\x07healthy\x18\x01 \x01(\x08\x12\x15\n\rdashboard_url\x18\x02 \x01(\t\x12\x13\n\x0bgateway_url\x18\x03 \x01(\t\x12\x0e\n\x06\x64\x65tail\x18\x04 \x01(\t\"T\n\x12WebRtcOfferRequest\x12\x0b\n\x03sdp\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\x12\x11\n\tagenda_id\x18\x03 \x01(\t\x12\x10\n\x08timezone\x18\x04 \x01(\t\"Q\n\x10WebRtcOfferReply\x12\x0b\n\x03sdp\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x0e\n\x06source\x18\x04 \x01(\t\")\n\x13WebRtcHangupRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"$\n\x11WebRtcHangupReply\x12\x0f\n\x07\x64ropped\x18\x01 \x01(\x08\x32\xef\x02\n\x0cHermesEngine\x12T\n\x0c\x45ngineStatus\x12\".hermes.engine.EngineStatusRequest\x1a .hermes.engine.EngineStatusReply\x12`\n\x10GetAgentInstance\x12&.hermes.engine.GetAgentInstanceRequest\x1a$.hermes.engine.GetAgentInstanceReply\x12Q\n\x0bWebRtcOffer\x12!.hermes.engine.WebRtcOfferRequest\x1a\x1f.hermes.engine.WebRtcOfferReply\x12T\n\x0cWebRtcHangup\x12\".hermes.engine.WebRtcHangupRequest\x1a .hermes.engine.WebRtcHangupReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13hermes_engine.proto\x12\rhermes.engine\"\x15\n\x13\x45ngineStatusRequest\"K\n\x11\x45ngineStatusReply\x12\x0f\n\x07project\x18\x01 \x01(\t\x12\x0f\n\x07version\x18\x02 \x01(\t\x12\x14\n\x0c\x63\x61pabilities\x18\x03 \x03(\t\"\x19\n\x17GetAgentInstanceRequest\"d\n\x15GetAgentInstanceReply\x12\x0f\n\x07healthy\x18\x01 \x01(\x08\x12\x15\n\rdashboard_url\x18\x02 \x01(\t\x12\x13\n\x0bgateway_url\x18\x03 \x01(\t\x12\x0e\n\x06\x64\x65tail\x18\x04 \x01(\t\"T\n\x12WebRtcOfferRequest\x12\x0b\n\x03sdp\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\x12\x11\n\tagenda_id\x18\x03 \x01(\t\x12\x10\n\x08timezone\x18\x04 \x01(\t\"Q\n\x10WebRtcOfferReply\x12\x0b\n\x03sdp\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x0e\n\x06source\x18\x04 \x01(\t\")\n\x13WebRtcHangupRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"$\n\x11WebRtcHangupReply\x12\x0f\n\x07\x64ropped\x18\x01 \x01(\x08\"9\n\x15WebRtcUserTextRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0c\n\x04text\x18\x02 \x01(\t\"\'\n\x13WebRtcUserTextReply\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\",\n\x16WebRtcInterruptRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"M\n\x14WebRtcInterruptReply\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x10\n\x08speaking\x18\x02 \x01(\x08\x12\x17\n\x0f\x64ropped_samples\x18\x03 \x01(\x05\x32\xaa\x04\n\x0cHermesEngine\x12T\n\x0c\x45ngineStatus\x12\".hermes.engine.EngineStatusRequest\x1a .hermes.engine.EngineStatusReply\x12`\n\x10GetAgentInstance\x12&.hermes.engine.GetAgentInstanceRequest\x1a$.hermes.engine.GetAgentInstanceReply\x12Q\n\x0bWebRtcOffer\x12!.hermes.engine.WebRtcOfferRequest\x1a\x1f.hermes.engine.WebRtcOfferReply\x12T\n\x0cWebRtcHangup\x12\".hermes.engine.WebRtcHangupRequest\x1a .hermes.engine.WebRtcHangupReply\x12Z\n\x0eWebRtcUserText\x12$.hermes.engine.WebRtcUserTextRequest\x1a\".hermes.engine.WebRtcUserTextReply\x12]\n\x0fWebRtcInterrupt\x12%.hermes.engine.WebRtcInterruptRequest\x1a#.hermes.engine.WebRtcInterruptReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -47,6 +47,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_WEBRTCHANGUPREQUEST']._serialized_end=477
   _globals['_WEBRTCHANGUPREPLY']._serialized_start=479
   _globals['_WEBRTCHANGUPREPLY']._serialized_end=515
-  _globals['_HERMESENGINE']._serialized_start=518
-  _globals['_HERMESENGINE']._serialized_end=885
+  _globals['_WEBRTCUSERTEXTREQUEST']._serialized_start=517
+  _globals['_WEBRTCUSERTEXTREQUEST']._serialized_end=574
+  _globals['_WEBRTCUSERTEXTREPLY']._serialized_start=576
+  _globals['_WEBRTCUSERTEXTREPLY']._serialized_end=615
+  _globals['_WEBRTCINTERRUPTREQUEST']._serialized_start=617
+  _globals['_WEBRTCINTERRUPTREQUEST']._serialized_end=661
+  _globals['_WEBRTCINTERRUPTREPLY']._serialized_start=663
+  _globals['_WEBRTCINTERRUPTREPLY']._serialized_end=740
+  _globals['_HERMESENGINE']._serialized_start=743
+  _globals['_HERMESENGINE']._serialized_end=1297
 # @@protoc_insertion_point(module_scope)

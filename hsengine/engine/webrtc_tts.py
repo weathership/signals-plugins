@@ -122,35 +122,73 @@ def _push_chunks(boards: list[Any], pcm: Any, source: str) -> int:
     return n
 
 
-def speak_into(board: Any, text: str, *, source: str = "cerebras") -> None:
-    """Stream TTS onto *board* as chunks arrive (preempts clip audio)."""
+def _live_boards(boards: list[Any], expected: dict[int, int]) -> list[Any]:
+    live: list[Any] = []
+    for board in boards:
+        want = expected.get(id(board))
+        if want is None or getattr(board, "epoch", want) == want:
+            live.append(board)
+    return live
 
-    async def _run() -> int:
+
+def _epoch_snapshot(boards: list[Any], epoch: int | None) -> dict[int, int]:
+    out: dict[int, int] = {}
+    for board in boards:
+        out[id(board)] = int(epoch) if epoch is not None else int(getattr(board, "epoch", 0) or 0)
+    return out
+
+
+def _stream_onto(
+    boards: list[Any], text: str, *, source: str, epoch: int | None
+) -> tuple[int, bool]:
+    """Push TTS chunks onto *boards*. Returns (samples, interrupted)."""
+    interrupted = False
+    expected = _epoch_snapshot(boards, epoch)
+    if not _live_boards(boards, expected):
+        return 0, True
+
+    async def _run() -> tuple[int, bool]:
         total = 0
         async for pcm in synthesize_chunks(text):
-            total += _push_chunks([board], pcm, source)
-        return total
+            live = _live_boards(boards, expected)
+            if not live:
+                return total, True
+            total += _push_chunks(live, pcm, source)
+        return total, False
 
-    n = asyncio.run(_run())
+    return asyncio.run(_run())
+
+
+def speak_into(
+    board: Any, text: str, *, source: str = "cerebras", epoch: int | None = None
+) -> None:
+    """Stream TTS onto *board* as chunks arrive (preempts clip audio).
+
+    *epoch* is the SpeechBoard generation at turn start. If the listener
+    hits Stop (or barge-in) the epoch advances and remaining chunks are
+    dropped so queued speech cannot restart after the buffer is cleared.
+    """
+    n, interrupted = _stream_onto([board], text, source=source, epoch=epoch)
+    if interrupted:
+        log.info("tts interrupted after %s samples (%s chars)", n, len(text or ""))
+        return
     if n == 0:
         raise RuntimeError("Kyutai TTS returned no audio")
     log.info("queued %s samples from %s (%s chars)", n, source, len(text or ""))
 
 
-def speak_on_session_boards(text: str, *, source: str = "cerebras") -> None:
+def speak_on_session_boards(
+    text: str, *, source: str = "cerebras", epoch: int | None = None
+) -> None:
     from hsengine.engine.webrtc_session import HUB
 
     boards = [b for b in getattr(HUB, "_speech", {}).values() if b is not None]
     if not boards:
         return
-
-    async def _run() -> int:
-        total = 0
-        async for pcm in synthesize_chunks(text):
-            total += _push_chunks(boards, pcm, source)
-        return total
-
-    n = asyncio.run(_run())
+    n, interrupted = _stream_onto(boards, text, source=source, epoch=epoch)
+    if interrupted:
+        log.info("tts interrupted after %s samples on %s board(s)", n, len(boards))
+        return
     if n == 0:
         raise RuntimeError("Kyutai TTS returned no audio")
     log.info("spoke %s onto %s board(s) (%s samples)", source, len(boards), n)

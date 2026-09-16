@@ -71,3 +71,33 @@ class WebRtcHangupReply(_message.Message):
     DROPPED_FIELD_NUMBER: _ClassVar[int]
     dropped: bool
     def __init__(self, dropped: _Optional[bool] = ...) -> None: ...
+
+class WebRtcUserTextRequest(_message.Message):
+    __slots__ = ("session_id", "text")
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    text: str
+    def __init__(self, session_id: _Optional[str] = ..., text: _Optional[str] = ...) -> None: ...
+
+class WebRtcUserTextReply(_message.Message):
+    __slots__ = ("accepted",)
+    ACCEPTED_FIELD_NUMBER: _ClassVar[int]
+    accepted: bool
+    def __init__(self, accepted: _Optional[bool] = ...) -> None: ...
+
+class WebRtcInterruptRequest(_message.Message):
+    __slots__ = ("session_id",)
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    def __init__(self, session_id: _Optional[str] = ...) -> None: ...
+
+class WebRtcInterruptReply(_message.Message):
+    __slots__ = ("ok", "speaking", "dropped_samples")
+    OK_FIELD_NUMBER: _ClassVar[int]
+    SPEAKING_FIELD_NUMBER: _ClassVar[int]
+    DROPPED_SAMPLES_FIELD_NUMBER: _ClassVar[int]
+    ok: bool
+    speaking: bool
+    dropped_samples: int
+    def __init__(self, ok: _Optional[bool] = ..., speaking: _Optional[bool] = ..., dropped_samples: _Optional[int] = ...) -> None: ...

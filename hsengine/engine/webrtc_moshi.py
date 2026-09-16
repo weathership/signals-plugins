@@ -91,6 +91,92 @@ def utterance_ready(words: list[str], *, min_chars: int = _TURN_MIN_CHARS) -> st
     return text
 
 
+async def run_user_utterance(
+    text: str,
+    *,
+    session_id: str = "",
+    speech: Any | None = None,
+    pending_steer: str = "",
+) -> str:
+    """One user turn (voice or typed). Same path as STT flush. Returns assistant text."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    log.info("user utterance %r", text)
+    try:
+        return await _run_user_utterance(
+            text, session_id=session_id, speech=speech, pending_steer=pending_steer
+        )
+    except Exception:
+        log.exception("cerebras turn failed")
+        return ""
+
+
+async def _run_user_utterance(
+    text: str,
+    *,
+    session_id: str = "",
+    speech: Any | None = None,
+    pending_steer: str = "",
+) -> str:
+    from hsengine.engine import interactive, session_history
+    from hsengine.engine.named_bots import ripley_spoken_system
+    from hsengine.engine.webrtc_silence import apply_steer_system
+
+    session_history.record_turn(session_id, user=text)
+    from hsengine.engine.opening import compose_next, wants_mediation
+
+    if wants_mediation(text):
+        from hsengine.engine.context_pack import conversational_context, pipeline_block
+        from hsengine.engine.named_bots import bishop_run, ripley_speak_outcome
+        from hsengine.engine.webrtc_session import HUB
+
+        pack = await asyncio.to_thread(conversational_context)
+        plan = await asyncio.to_thread(
+            compose_next,
+            pack=pack,
+            utterance=text,
+            timezone=getattr(HUB, "_tz", {}).get(session_id, ""),
+            session_id=session_id,
+        )
+        outcome = await asyncio.to_thread(
+            bishop_run,
+            session_id=session_id,
+            move="next",
+            glance=pipeline_block(pack),
+            handoff=plan.handoff,
+            utterance=text,
+        )
+        spoken = await ripley_speak_outcome(
+            outcome, session_id=session_id, speech=speech
+        )
+        if spoken:
+            session_history.record_turn(
+                session_id, assistant=spoken, model="ripley"
+            )
+            session_history.remember_turn(
+                session_id, user=text, assistant=spoken
+            )
+        return spoken or ""
+    result = await asyncio.to_thread(
+        interactive.complete_cerebras,
+        prompt=text,
+        system_prompt=apply_steer_system(ripley_spoken_system(), pending_steer),
+        max_tokens=280,
+        temperature=0.5,
+        reasoning_effort="none",
+        tools=True,
+        session_id=session_id,
+    )
+    session_history.record_turn(
+        session_id, assistant=result.text, model=result.model
+    )
+    session_history.remember_turn(
+        session_id, user=text, assistant=result.text
+    )
+    return result.text or ""
+
+
 class TurnTaker:
     """Flush a user utterance after a quiet gap, then Cerebras → TTS."""
 
@@ -127,10 +213,25 @@ class TurnTaker:
     def release(self) -> None:
         self._busy = False
 
+    def cancel_pending(self) -> None:
+        """Drop a quiet-gap flush in flight. Does not cancel an LLM turn."""
+        self._gen += 1
+        self._words.clear()
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+
+    def _barge_in(self) -> None:
+        speech = self._speech
+        interrupt = getattr(speech, "interrupt", None) if speech is not None else None
+        if callable(interrupt):
+            interrupt()
+
     def on_word(self, word: str) -> None:
         import time
 
         self.last_user_at = time.monotonic()
+        self._barge_in()
         self._words.append(word)
         self._gen += 1
         gen = self._gen
@@ -151,66 +252,14 @@ class TurnTaker:
             return
         self._busy = True
         try:
-            log.info("user utterance %r", text)
-            from hsengine.engine import interactive, session_history
-            from hsengine.engine.named_bots import ripley_spoken_system
-            from hsengine.engine.webrtc_silence import apply_steer_system
-
-            session_history.record_turn(self._session_id, user=text)
-            from hsengine.engine.opening import compose_next, wants_mediation
-
-            if wants_mediation(text):
-                from hsengine.engine.context_pack import conversational_context, pipeline_block
-                from hsengine.engine.named_bots import bishop_run, ripley_speak_outcome
-                from hsengine.engine.webrtc_session import HUB
-
-                pack = await asyncio.to_thread(conversational_context)
-                plan = await asyncio.to_thread(
-                    compose_next,
-                    pack=pack,
-                    utterance=text,
-                    timezone=getattr(HUB, "_tz", {}).get(self._session_id, ""),
-                    session_id=self._session_id,
-                )
-                outcome = await asyncio.to_thread(
-                    bishop_run,
-                    session_id=self._session_id,
-                    move="next",
-                    glance=pipeline_block(pack),
-                    handoff=plan.handoff,
-                    utterance=text,
-                )
-                spoken = await ripley_speak_outcome(
-                    outcome, session_id=self._session_id, speech=self._speech
-                )
-                if spoken:
-                    session_history.record_turn(
-                        self._session_id, assistant=spoken, model="ripley"
-                    )
-                    session_history.remember_turn(
-                        self._session_id, user=text, assistant=spoken
-                    )
-                return
             steer = self.pending_steer
             self.pending_steer = ""
-            result = await asyncio.to_thread(
-                interactive.complete_cerebras,
-                prompt=text,
-                system_prompt=apply_steer_system(ripley_spoken_system(), steer),
-                max_tokens=280,
-                temperature=0.5,
-                reasoning_effort="none",
-                tools=True,
+            await run_user_utterance(
+                text,
                 session_id=self._session_id,
+                speech=self._speech,
+                pending_steer=steer,
             )
-            session_history.record_turn(
-                self._session_id, assistant=result.text, model=result.model
-            )
-            session_history.remember_turn(
-                self._session_id, user=text, assistant=result.text
-            )
-        except Exception:
-            log.exception("cerebras turn failed")
         finally:
             self._busy = False
 
@@ -247,7 +296,12 @@ def frame_to_mono24k(frame: Any) -> Any:
 
 
 async def follow_audio(
-    track: Any, board: Any, *, session_id: str = "", speech: Any | None = None
+    track: Any,
+    board: Any,
+    *,
+    session_id: str = "",
+    speech: Any | None = None,
+    hub: Any | None = None,
 ) -> None:
     """Drain inbound WebRTC audio into moshi-server ASR."""
     import msgpack
@@ -256,6 +310,10 @@ async def follow_audio(
 
     captioner = MoshiCaptioner(board)
     turns = TurnTaker(asyncio.get_running_loop(), session_id=session_id, speech=speech)
+    if hub is not None and session_id:
+        bind = getattr(hub, "bind_turns", None)
+        if callable(bind):
+            bind(session_id, turns)
     from hsengine.engine.webrtc_silence import SilenceDirector
 
     director = SilenceDirector(

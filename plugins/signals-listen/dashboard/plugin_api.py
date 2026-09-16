@@ -48,6 +48,15 @@ class HangupBody(BaseModel):
     session_id: str = Field(min_length=1)
 
 
+class SayBody(BaseModel):
+    session_id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class StopBody(BaseModel):
+    session_id: str = Field(min_length=1)
+
+
 def _http_for_rpc(err: grpc.RpcError) -> HTTPException:
     code = err.code()
     detail = err.details() or str(err)
@@ -56,6 +65,8 @@ def _http_for_rpc(err: grpc.RpcError) -> HTTPException:
         grpc.StatusCode.UNIMPLEMENTED: 501,
         grpc.StatusCode.UNAVAILABLE: 503,
         grpc.StatusCode.DEADLINE_EXCEEDED: 504,
+        grpc.StatusCode.NOT_FOUND: 404,
+        grpc.StatusCode.INVALID_ARGUMENT: 400,
     }
     return HTTPException(status_code=mapping.get(code, 502), detail=detail)
 
@@ -116,6 +127,35 @@ async def webrtc_hangup(session_id: str) -> dict:
     return {"dropped": bool(reply.dropped), "session_id": session_id}
 
 
+async def webrtc_say(session_id: str, text: str) -> dict:
+    pb, pb_grpc = _stubs()
+    target = _engine_target()
+    async with grpc.aio.insecure_channel(target) as ch:
+        stub = pb_grpc.HermesEngineStub(ch)
+        reply = await stub.WebRtcUserText(
+            pb.WebRtcUserTextRequest(session_id=session_id, text=text),
+            timeout=10,
+        )
+    return {"accepted": bool(reply.accepted), "session_id": session_id}
+
+
+async def webrtc_stop(session_id: str) -> dict:
+    pb, pb_grpc = _stubs()
+    target = _engine_target()
+    async with grpc.aio.insecure_channel(target) as ch:
+        stub = pb_grpc.HermesEngineStub(ch)
+        reply = await stub.WebRtcInterrupt(
+            pb.WebRtcInterruptRequest(session_id=session_id),
+            timeout=5,
+        )
+    return {
+        "ok": bool(reply.ok),
+        "speaking": bool(reply.speaking),
+        "dropped_samples": int(reply.dropped_samples or 0),
+        "session_id": session_id,
+    }
+
+
 @router.get("/status")
 async def status():
     try:
@@ -146,6 +186,28 @@ async def hangup(body: HangupBody):
         return await webrtc_hangup(body.session_id)
     except grpc.RpcError as e:
         log.warning("listen hangup rpc: %s", e)
+        raise _http_for_rpc(e) from e
+    except ImportError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+
+
+@router.post("/say")
+async def say(body: SayBody):
+    try:
+        return await webrtc_say(body.session_id, body.text)
+    except grpc.RpcError as e:
+        log.warning("listen say rpc: %s", e)
+        raise _http_for_rpc(e) from e
+    except ImportError as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+
+
+@router.post("/stop")
+async def stop(body: StopBody):
+    try:
+        return await webrtc_stop(body.session_id)
+    except grpc.RpcError as e:
+        log.warning("listen stop rpc: %s", e)
         raise _http_for_rpc(e) from e
     except ImportError as e:
         raise HTTPException(status_code=501, detail=str(e)) from e

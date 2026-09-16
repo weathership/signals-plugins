@@ -65,9 +65,14 @@ def frame_to_mono16k(frame: Any) -> Any:
 
 
 async def follow_audio(
-    track: Any, board: Any, *, session_id: str = "", speech: Any | None = None
+    track: Any,
+    board: Any,
+    *,
+    session_id: str = "",
+    speech: Any | None = None,
+    hub: Any | None = None,
 ) -> None:
     if not stt_available():
         log.error("agent-rtc STT unavailable (moshi-server not listening)")
         return
-    await follow_moshi(track, board, session_id=session_id, speech=speech)
+    await follow_moshi(track, board, session_id=session_id, speech=speech, hub=hub)

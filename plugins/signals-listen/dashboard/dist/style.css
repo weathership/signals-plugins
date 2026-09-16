@@ -33,3 +33,41 @@
   word-break: break-all;
   color: var(--muted-foreground, #9aa3b5);
 }
+
+.signals-listen .signals-listen-composer {
+  margin-top: 0.75rem;
+  max-width: 960px;
+}
+
+.signals-listen .signals-listen-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2f3d);
+  background: var(--background, #11131a);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+  min-height: 3.2rem;
+}
+
+.signals-listen .signals-listen-log {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 8rem;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.signals-listen .signals-listen-log-you {
+  color: var(--foreground, #e8ecf4);
+}
+
+.signals-listen .signals-listen-log-system {
+  color: var(--muted-foreground, #9aa3b5);
+  font-style: italic;
+}

@@ -168,6 +168,27 @@ class SpeechBoard:
         self.max_samples = int(self.sample_rate * max(1.0, float(max_seconds)))
         self._lock = threading.Lock()
         self._buf: deque[float] = deque()
+        self._epoch = 0
+
+    @property
+    def epoch(self) -> int:
+        with self._lock:
+            return self._epoch
+
+    def interrupt(self) -> int:
+        """Drop queued PCM and bump epoch so in-flight TTS stops pushing.
+
+        This is the physical stop: the mixer pulls silence on the next frame.
+        Returns the number of samples discarded.
+        """
+        with self._lock:
+            n = len(self._buf)
+            self._buf.clear()
+            self._epoch += 1
+            epoch = self._epoch
+        if n:
+            log.info("speech interrupted dropped=%s epoch=%s", n, epoch)
+        return n
 
     def push(self, pcm: Any, *, source: str = "", sample_rate: int | None = None) -> None:
         import numpy as np

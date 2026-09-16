@@ -108,6 +108,18 @@ def test_board_24k_speech_keeps_wall_clock_at_48k():
     assert got == 48000
 
 
+def test_board_interrupt_drops_queued_pcm_and_bumps_epoch():
+    board = SpeechBoard()
+    board.push(np.ones(4800, dtype=np.float32) * 0.3, sample_rate=48000)
+    assert board.speaking() is True
+    epoch = board.epoch
+    dropped = board.interrupt()
+    assert dropped == 4800
+    assert board.speaking() is False
+    assert board.epoch == epoch + 1
+    assert board.pull(16, 48000) is None
+
+
 def test_board_serializes_sources_and_preempts():
     board = SpeechBoard()
     a = np.ones(4, dtype=np.float32) * 0.4

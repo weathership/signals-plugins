@@ -82,6 +82,44 @@ def test_turn_taker_writes_user_then_assistant():
     assert remembered == [("abc123", {"user": "hello there", "assistant": "hello back"})]
 
 
+def test_turn_taker_on_word_interrupts_queued_speech():
+    import numpy as np
+    from hsengine.engine.webrtc_mix import SpeechBoard
+
+    board = SpeechBoard()
+    board.push(np.ones(1200, dtype=np.float32) * 0.4, sample_rate=48000)
+
+    async def _run():
+        taker = TurnTaker(asyncio.get_running_loop(), quiet_s=5, session_id="abc123", speech=board)
+        taker.on_word("hello")
+        return board.speaking()
+
+    assert asyncio.run(_run()) is False
+
+
+def test_run_user_utterance_accepts_short_typed_text():
+    complete_kw: list[dict] = []
+    result = MagicMock()
+    result.text = "yes"
+    result.model = "qwen-3.8-27b"
+
+    async def _run():
+        with patch("hsengine.engine.session_history.record_turn", lambda *a, **k: None):
+            with patch("hsengine.engine.session_history.remember_turn", lambda *a, **k: None):
+                with patch(
+                    "hsengine.engine.interactive.complete_cerebras",
+                    lambda **k: complete_kw.append(k) or result,
+                ):
+                    from hsengine.engine.webrtc_moshi import run_user_utterance
+
+                    return await run_user_utterance("yes", session_id="abc123")
+
+    spoken = asyncio.run(_run())
+    assert spoken == "yes"
+    assert complete_kw[0]["prompt"] == "yes"
+    assert complete_kw[0]["session_id"] == "abc123"
+
+
 def test_turn_taker_drains_pending_steer_into_the_spoken_system():
     complete_kw: list[dict] = []
     result = MagicMock()

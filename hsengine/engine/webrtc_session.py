@@ -129,6 +129,7 @@ class WebRtcHub:
         self._tracks: dict[str, list[object]] = {}
         self._tasks: dict[str, list[asyncio.Task]] = {}
         self._speech: dict[str, object] = {}
+        self._turns: dict[str, object] = {}
         self._agenda: dict[str, str] = {}
         self._started: dict[str, float] = {}
         self._material: dict[str, dict] = {}
@@ -225,7 +226,9 @@ class WebRtcHub:
                 getattr(track, "readyState", ""),
             )
             task = loop.create_task(
-                follow_audio(track, board, session_id=session_id, speech=speech)
+                follow_audio(
+                    track, board, session_id=session_id, speech=speech, hub=self
+                )
             )
             self._tasks.setdefault(session_id, []).append(task)
 
@@ -340,6 +343,64 @@ class WebRtcHub:
         """The session's agent-speech board (None after hangup)."""
         return self._speech.get(session_id)
 
+    def bind_turns(self, session_id: str, turns: object) -> None:
+        self._turns[session_id] = turns
+
+    def interrupt(self, session_id: str) -> dict:
+        """Silence queued TTS without hanging up. Physical Stop."""
+        if session_id not in self._pcs and session_id not in self._speech:
+            raise KeyError(session_id)
+        board = self._speech.get(session_id)
+        speaking = bool(getattr(board, "speaking", lambda: False)()) if board is not None else False
+        dropped = 0
+        interrupt = getattr(board, "interrupt", None) if board is not None else None
+        if callable(interrupt):
+            dropped = int(interrupt() or 0)
+        taker = self._turns.get(session_id)
+        cancel = getattr(taker, "cancel_pending", None)
+        if callable(cancel):
+            cancel()
+        log.info(
+            "webrtc interrupt session=%s speaking=%s dropped=%s",
+            session_id,
+            speaking,
+            dropped,
+        )
+        return {
+            "ok": True,
+            "speaking": speaking,
+            "dropped_samples": dropped,
+        }
+
+    async def user_text(self, session_id: str, text: str) -> dict:
+        """Typed Listen-tab line: barge-in, then the same turn path as STT."""
+        if session_id not in self._pcs and session_id not in self._speech:
+            raise KeyError(session_id)
+        cleaned = (text or "").strip()
+        if not cleaned:
+            raise ValueError("empty text")
+        self.interrupt(session_id)
+        taker = self._turns.get(session_id)
+        steer = ""
+        if taker is not None:
+            steer = str(getattr(taker, "pending_steer", "") or "")
+            if hasattr(taker, "pending_steer"):
+                taker.pending_steer = ""
+        from hsengine.engine.webrtc_moshi import run_user_utterance
+
+        speech = self._speech.get(session_id)
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            run_user_utterance(
+                cleaned,
+                session_id=session_id,
+                speech=speech,
+                pending_steer=steer,
+            )
+        )
+        log.info("webrtc user_text session=%s chars=%s", session_id, len(cleaned))
+        return {"accepted": True}
+
     def narrative_checkin(self, *, at_minute: float | None = None) -> dict:
         """Where the running story is, given elapsed time since Connect."""
         from hsengine.engine.agenda_deck import narrative_at
@@ -383,6 +444,7 @@ class WebRtcHub:
         for task in self._tasks.pop(session_id, []):
             task.cancel()
         self._speech.pop(session_id, None)
+        self._turns.pop(session_id, None)
         from hsengine.engine.webrtc_activity import unbind as unbind_activity
 
         unbind_activity()

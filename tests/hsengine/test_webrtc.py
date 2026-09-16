@@ -91,6 +91,109 @@ def test_webrtc_offer_missing_aiortc_is_unimplemented():
     assert reply.sdp == ""
 
 
+def test_webrtc_interrupt_unknown_session_is_not_found():
+    async def _run():
+        ctx = _Ctx()
+        with patch.object(ws.HUB, "interrupt", side_effect=KeyError("gone")):
+            reply = await HermesEngineServicer().WebRtcInterrupt(
+                SimpleNamespace(session_id="gone"), ctx
+            )
+        return ctx, reply
+
+    ctx, reply = asyncio.run(_run())
+    assert ctx.code == grpc.StatusCode.NOT_FOUND
+    assert reply.ok is False
+
+
+def test_webrtc_interrupt_success_reports_dropped_samples():
+    async def _run():
+        ctx = _Ctx()
+        with patch.object(
+            ws.HUB, "interrupt", return_value={"ok": True, "speaking": True, "dropped_samples": 4800}
+        ):
+            reply = await HermesEngineServicer().WebRtcInterrupt(
+                SimpleNamespace(session_id="abc123"), ctx
+            )
+        return ctx, reply
+
+    ctx, reply = asyncio.run(_run())
+    assert ctx.code is None
+    assert reply.ok is True
+    assert reply.speaking is True
+    assert reply.dropped_samples == 4800
+
+
+def test_webrtc_user_text_empty_is_invalid_argument():
+    async def _run():
+        ctx = _Ctx()
+        with patch.object(ws.HUB, "user_text", new=AsyncMock(side_effect=ValueError("empty text"))):
+            reply = await HermesEngineServicer().WebRtcUserText(
+                SimpleNamespace(session_id="abc123", text="  "), ctx
+            )
+        return ctx, reply
+
+    ctx, reply = asyncio.run(_run())
+    assert ctx.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert reply.accepted is False
+
+
+def test_webrtc_user_text_success_accepts():
+    async def _run():
+        ctx = _Ctx()
+        with patch.object(ws.HUB, "user_text", new=AsyncMock(return_value={"accepted": True})):
+            reply = await HermesEngineServicer().WebRtcUserText(
+                SimpleNamespace(session_id="abc123", text="hello"), ctx
+            )
+        return ctx, reply
+
+    ctx, reply = asyncio.run(_run())
+    assert ctx.code is None
+    assert reply.accepted is True
+
+
+def test_hub_interrupt_clears_speech_board():
+    import numpy as np
+    from hsengine.engine.webrtc_mix import SpeechBoard
+
+    board = SpeechBoard()
+    board.push(np.ones(800, dtype=np.float32) * 0.2, sample_rate=48000)
+    ws.HUB._pcs["sid-int"] = object()
+    ws.HUB._speech["sid-int"] = board
+    try:
+        reply = ws.HUB.interrupt("sid-int")
+        assert reply["ok"] is True
+        assert reply["speaking"] is True
+        assert reply["dropped_samples"] == 800
+        assert board.speaking() is False
+    finally:
+        ws.HUB._pcs.pop("sid-int", None)
+        ws.HUB._speech.pop("sid-int", None)
+
+
+def test_hub_user_text_interrupts_then_runs_utterance():
+    seen: list[str] = []
+
+    async def _fake(text, **kwargs):
+        seen.append(text)
+        return "ok"
+
+    async def _run():
+        ws.HUB._pcs["sid-text"] = object()
+        ws.HUB._speech["sid-text"] = object()
+        try:
+            with patch("hsengine.engine.webrtc_moshi.run_user_utterance", _fake):
+                reply = await ws.HUB.user_text("sid-text", "  typed line  ")
+                await asyncio.sleep(0.05)
+            return reply
+        finally:
+            ws.HUB._pcs.pop("sid-text", None)
+            ws.HUB._speech.pop("sid-text", None)
+
+    reply = asyncio.run(_run())
+    assert reply["accepted"] is True
+    assert seen == ["typed line"]
+
+
 def test_webrtc_offer_success_returns_answer():
     async def _run():
         ctx = _Ctx()

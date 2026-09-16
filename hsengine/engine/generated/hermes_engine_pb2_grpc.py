@@ -54,6 +54,16 @@ class HermesEngineStub:
                 request_serializer=hermes__engine__pb2.WebRtcHangupRequest.SerializeToString,
                 response_deserializer=hermes__engine__pb2.WebRtcHangupReply.FromString,
                 _registered_method=True)
+        self.WebRtcUserText = channel.unary_unary(
+                '/hermes.engine.HermesEngine/WebRtcUserText',
+                request_serializer=hermes__engine__pb2.WebRtcUserTextRequest.SerializeToString,
+                response_deserializer=hermes__engine__pb2.WebRtcUserTextReply.FromString,
+                _registered_method=True)
+        self.WebRtcInterrupt = channel.unary_unary(
+                '/hermes.engine.HermesEngine/WebRtcInterrupt',
+                request_serializer=hermes__engine__pb2.WebRtcInterruptRequest.SerializeToString,
+                response_deserializer=hermes__engine__pb2.WebRtcInterruptReply.FromString,
+                _registered_method=True)
 
 
 class HermesEngineServicer:
@@ -89,6 +99,20 @@ class HermesEngineServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def WebRtcUserText(self, request, context):
+        """Typed Listen-tab text. Interrupts speech, then the same turn path as STT.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WebRtcInterrupt(self, request, context):
+        """Drop queued TTS immediately. Does not hang up the call.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_HermesEngineServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -111,6 +135,16 @@ def add_HermesEngineServicer_to_server(servicer, server):
                     servicer.WebRtcHangup,
                     request_deserializer=hermes__engine__pb2.WebRtcHangupRequest.FromString,
                     response_serializer=hermes__engine__pb2.WebRtcHangupReply.SerializeToString,
+            ),
+            'WebRtcUserText': grpc.unary_unary_rpc_method_handler(
+                    servicer.WebRtcUserText,
+                    request_deserializer=hermes__engine__pb2.WebRtcUserTextRequest.FromString,
+                    response_serializer=hermes__engine__pb2.WebRtcUserTextReply.SerializeToString,
+            ),
+            'WebRtcInterrupt': grpc.unary_unary_rpc_method_handler(
+                    servicer.WebRtcInterrupt,
+                    request_deserializer=hermes__engine__pb2.WebRtcInterruptRequest.FromString,
+                    response_serializer=hermes__engine__pb2.WebRtcInterruptReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -221,6 +255,60 @@ class HermesEngine:
             '/hermes.engine.HermesEngine/WebRtcHangup',
             hermes__engine__pb2.WebRtcHangupRequest.SerializeToString,
             hermes__engine__pb2.WebRtcHangupReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WebRtcUserText(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hermes.engine.HermesEngine/WebRtcUserText',
+            hermes__engine__pb2.WebRtcUserTextRequest.SerializeToString,
+            hermes__engine__pb2.WebRtcUserTextReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WebRtcInterrupt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hermes.engine.HermesEngine/WebRtcInterrupt',
+            hermes__engine__pb2.WebRtcInterruptRequest.SerializeToString,
+            hermes__engine__pb2.WebRtcInterruptReply.FromString,
             options,
             channel_credentials,
             insecure,
