@@ -12,7 +12,7 @@ clone as other third-party plugins).
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
 | `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer / AgentRTC Listen tab |
 | `plugins/signals-zettel` | general (`/zettel`, `zettel_capture`) | Pasted text → scratch zettel in the wiki vault |
-| `plugins/signals-holoviews` | general (`viz_show` / `viz_select` / `viz_clear`) | Server-side HoloViews stills faded onto the AgentRTC video feed |
+| `plugins/signals-holoviews` | general (`viz_show` / `viz_select` / `viz_input` / `viz_clear`) | Live HoloViews/Bokeh via headless Chromium CDP screencast on the AgentRTC video track |
 | `hsengine/` (pip extra `signals-hsengine`) | sidecar process | Lattice engine + AgentRTC (`python -m hsengine`) |
 
 Listen is a Hermes **plugin**. The voice/media plane is a **sidecar**

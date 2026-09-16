@@ -1,27 +1,26 @@
 ---
 name: holoviews-viz
-description: "Fade HoloViews stills onto the AgentRTC video feed."
+description: "Live HoloViews/Bokeh on the AgentRTC video track via CDP screencast."
 version: 0.1.0
 ---
 
 # HoloViews on AgentRTC
 
-Render scientific figures **on the engine** and fade them over the looping
-clip. The audience sees video, not a dashboard tab. Bishop/Ripley drive
-the figure with tools — there is no Bokeh click path on the WebRTC peer.
+This is a **Signals plugin**. The engine serves a standalone Bokeh/HoloViews
+document, one **headless Chromium** (`--headless=new`) per Connect, CDP
+`Page.startScreencast` as the live WebRTC program track. Listen is the
+audience. Aegir is optional data (aperture chord), not a deploy requirement.
+
+Humans join a meeting already in progress among named agents. They ask
+questions; they do not drive the plot. Agents use `viz_input` (CDP mouse)
+and `viz_select`.
 
 ## Tools
 
-- `viz_show` — fade in. `kind=aperture` (Aegir SKOS chord) or `chord` /
-  `scatter` / `curve` / `heatmap`. `source=aegir` when the federated
-  workspace package is importable.
-- `viz_select` — re-render the current still with a node highlighted.
-- `viz_clear` — fade back to the looping clip.
+- `viz_show` — fade the live compositor in (`kind=chord|aperture|scatter|curve|heatmap`).
+- `viz_select` — retarget the document (highlight a node).
+- `viz_input` — agent pointer in CSS pixels of the 1280×720 viewport.
+- `viz_clear` — fade back to the looping clip (screencast stops).
 
 Do not say the figure is on the feed until `viz_show` returned `"ok": true`.
-
-## First pass
-
-HoloViews is required on the engine (`signals-hsengine` / `hermes-agent[signals]`).
-PNG export uses matplotlib; `hv.Chord` may fall back to a matplotlib chord
-when the Agg backend cannot draw Bokeh's GraphRenderer. No Dask, no Datashader.
+`getDisplayMedia` is a later spectator-share ingest, not how HoloViews is captured.

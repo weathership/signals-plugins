@@ -14,11 +14,11 @@ _SKILL = Path(__file__).resolve().parent / "skills" / "holoviews-viz" / "SKILL.m
 _SHOW = {
     "name": "viz_show",
     "description": (
-        "Fade a scientific visualization onto the AgentRTC video feed "
-        "(HoloViews/matplotlib, server-side). kind=chord|aperture|scatter|"
-        "curve|heatmap. source=aegir loads the SKOS aperture chord when "
-        "Aegir is importable. highlight names a node to emphasize. "
-        "Do not describe the figure as shown until this tool returns ok."
+        "Put a live HoloViews/Bokeh page on the AgentRTC video "
+        "(headless Chromium + CDP screencast). Humans spectate; agents "
+        "drive. kind=chord|aperture|scatter|curve|heatmap. Aegir is "
+        "optional data, not required. Do not describe the figure as "
+        "on-screen until this returns ok."
     ),
     "parameters": {
         "type": "object",
@@ -65,6 +65,25 @@ _SELECT = {
     },
 }
 
+_INPUT = {
+    "name": "viz_input",
+    "description": (
+        "Agent pointer on the live HoloViews page (CSS pixels, 1280x720). "
+        "Spectators cannot drive this."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "x": {"type": "number"},
+            "y": {"type": "number"},
+            "type": {"type": "string"},
+            "button": {"type": "string"},
+        },
+        "required": ["x", "y"],
+        "additionalProperties": False,
+    },
+}
+
 _CLEAR = {
     "name": "viz_clear",
     "description": "Fade the program still out and restore the looping AgentRTC clip.",
@@ -104,6 +123,24 @@ def _select(args: dict, **_kw) -> str:
     return json.dumps(webrtc_program.select(node=str(args.get("node") or "")))
 
 
+def _input(args: dict, **_kw) -> str:
+    from hsengine.engine import webrtc_viz
+
+    try:
+        x = float(args.get("x"))
+        y = float(args.get("y"))
+    except (TypeError, ValueError):
+        return json.dumps({"ok": False, "error": "x and y are required"})
+    return json.dumps(
+        webrtc_viz.pointer(
+            x=x,
+            y=y,
+            type=str(args.get("type") or "mousePressed"),
+            button=str(args.get("button") or "left"),
+        )
+    )
+
+
 def _clear(args: dict, **_kw) -> str:
     from hsengine.engine import webrtc_program
 
@@ -134,6 +171,14 @@ def register(ctx) -> None:
         schema=_SELECT,
         handler=_select,
         description=_SELECT["description"],
+        emoji="◎",
+    )
+    ctx.register_tool(
+        name="viz_input",
+        toolset="signals_holoviews",
+        schema=_INPUT,
+        handler=_input,
+        description=_INPUT["description"],
         emoji="◎",
     )
     ctx.register_tool(

@@ -134,6 +134,7 @@ class WebRtcHub:
         self._started: dict[str, float] = {}
         self._material: dict[str, dict] = {}
         self._tz: dict[str, str] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     async def offer(
         self, sdp: str, typ: str = "offer", agenda_id: str = "", timezone: str = ""
@@ -161,6 +162,10 @@ class WebRtcHub:
         session_id = uuid.uuid4().hex[:12]
         self._pcs[session_id] = pc
         self._started[session_id] = time.monotonic()
+        self._loop = asyncio.get_running_loop()
+        from hsengine.engine import webrtc_viz
+
+        webrtc_viz.bind_loop(self._loop)
 
         from hsengine.engine import interactive
         from hsengine.engine.webrtc_activity import ActivityBoard, bind as bind_activity
@@ -443,6 +448,9 @@ class WebRtcHub:
     async def _drop(self, session_id: str) -> None:
         for task in self._tasks.pop(session_id, []):
             task.cancel()
+        from hsengine.engine import webrtc_viz
+
+        await webrtc_viz.close_session(session_id)
         self._speech.pop(session_id, None)
         self._turns.pop(session_id, None)
         from hsengine.engine.webrtc_activity import unbind as unbind_activity

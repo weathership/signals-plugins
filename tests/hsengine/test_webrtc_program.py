@@ -9,7 +9,10 @@ from hsengine.engine import webrtc_program as wp
 
 
 @pytest.fixture(autouse=True)
-def _reset_board():
+def _reset_board(monkeypatch):
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_cdp.chromium_executable", lambda: None
+    )
     wp.PROGRAM.clear(fade_s=0.05)
     wp.PROGRAM._image = None
     wp.PROGRAM._alpha0 = 0.0

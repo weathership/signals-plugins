@@ -928,12 +928,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "viz_show",
             "description": (
-                "Fade a scientific visualization onto the AgentRTC video "
-                "(ontology chord, Aegir SKOS aperture, scatter, curve, "
-                "heatmap). Server-side still — the audience sees the feed, "
-                "not a dashboard. Call this instead of describing a figure. "
-                "kind=chord|aperture|scatter|curve|heatmap. source=aegir "
-                "for the live aperture when Aegir is on the engine."
+                "Put a live HoloViews/Bokeh page on the AgentRTC video "
+                "(headless Chromium compositor + CDP screencast). Humans "
+                "spectate; you drive. kind=chord|aperture|scatter|curve|"
+                "heatmap. source=aegir is optional data. Aegir is not "
+                "required. Call this instead of describing a figure."
             ),
             "parameters": {
                 "type": "object",
@@ -971,10 +970,32 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "viz_clear",
-            "description": "Fade the program still out and restore the looping clip.",
+            "description": "Fade the live HoloViews page out and restore the looping clip.",
             "parameters": {
                 "type": "object",
                 "properties": {"fade_s": {"type": "number"}},
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "viz_input",
+            "description": (
+                "Agent pointer on the live HoloViews page (CSS pixels of "
+                "the 1280x720 compositor). type=mouseMoved|mousePressed|"
+                "mouseReleased|mouseWheel. Spectators cannot drive this."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number"},
+                    "y": {"type": "number"},
+                    "type": {"type": "string"},
+                    "button": {"type": "string"},
+                },
+                "required": ["x", "y"],
                 "additionalProperties": False,
             },
         },
@@ -1121,6 +1142,25 @@ def _dispatch_viz_clear(args: dict[str, Any]) -> str:
     return json.dumps(webrtc_program.clear(fade_s=fade_s), default=str)
 
 
+def _dispatch_viz_input(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_viz
+
+    try:
+        x = float(args.get("x"))
+        y = float(args.get("y"))
+    except (TypeError, ValueError):
+        return json.dumps({"ok": False, "error": "x and y are required CSS pixels"})
+    return json.dumps(
+        webrtc_viz.pointer(
+            x=x,
+            y=y,
+            type=str(args.get("type") or "mousePressed"),
+            button=str(args.get("button") or "left"),
+        ),
+        default=str,
+    )
+
+
 def _dispatch_session_search(args: dict[str, Any]) -> str:
     around = args.get("around_message_id")
     around_id = None
@@ -1156,6 +1196,7 @@ _DISPATCH = {
     "viz_show": _dispatch_viz_show,
     "viz_select": _dispatch_viz_select,
     "viz_clear": _dispatch_viz_clear,
+    "viz_input": _dispatch_viz_input,
 }
 
 

@@ -100,6 +100,11 @@ class ProgramBoard:
                 self._alpha1 > 0.01 or self._alpha() > 0.01
             )
 
+    def replace_image(self, image: Any) -> None:
+        """Swap the live compositor frame without resetting fade."""
+        with self._lock:
+            self._image = image
+
     def composite(self, base: Any) -> Any:
         """Blend the program still onto a PIL RGB image. No-op when faded out."""
         with self._lock:
@@ -238,9 +243,24 @@ def show(
     data: str = "",
     fade_s: float = 0.7,
 ) -> dict:
+    from hsengine.engine import webrtc_viz
+
+    live = webrtc_viz.try_live(
+        kind=kind,
+        title=title,
+        highlight=highlight,
+        source=source,
+        data=data,
+        fade_s=fade_s,
+    )
+    if live.get("ok"):
+        return live
     fn = _ensure_renderer()
     if fn is None:
-        return {"ok": False, "error": "signals-holoviews plugin renderer not found"}
+        return {
+            "ok": False,
+            "error": live.get("error") or "signals-holoviews plugin renderer not found",
+        }
     image, meta = fn(
         kind=kind or "chord",
         title=title,
@@ -250,6 +270,7 @@ def show(
     )
     if image is None:
         return {"ok": False, "error": meta.get("error") or "render returned no image", **meta}
+    meta = {**meta, "backend": meta.get("backend") or "still-fallback"}
     PROGRAM.set(
         image,
         title=title or str(meta.get("title") or ""),
@@ -257,7 +278,7 @@ def show(
         fade_s=fade_s,
         meta=meta,
     )
-    return {"ok": True, **PROGRAM.status()}
+    return {"ok": True, "fallback": live.get("error") or "still", **PROGRAM.status()}
 
 
 def select(*, node: str = "", fade_s: float = 0.35) -> dict:
