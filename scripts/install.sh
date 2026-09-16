@@ -46,7 +46,7 @@ fi
 PLUGIN_ROOT="$TARGET_ROOT/plugins"
 SKILL_ROOT="$TARGET_ROOT/skills/note-taking"
 ZETTEL_SKILL_DEST="$SKILL_ROOT/zettel"
-PLUGINS=(signals-oip signals-memory signals-compact signals-listen signals-zettel)
+PLUGINS=(signals-oip signals-memory signals-compact signals-listen signals-zettel signals-holoviews)
 
 preflight_link() {
   local dest="$1" src="$2"
@@ -141,6 +141,7 @@ say "      - signals-memory"
 say "      - signals-compact"
 say "      - signals-listen"
 say "      - signals-zettel"
+say "      - signals-holoviews"
 say "  model:"
 say "    provider: signals"
 say "    model: thinking"

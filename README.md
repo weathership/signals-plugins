@@ -12,6 +12,7 @@ clone as other third-party plugins).
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
 | `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer / AgentRTC Listen tab |
 | `plugins/signals-zettel` | general (`/zettel`, `zettel_capture`) | Pasted text → scratch zettel in the wiki vault |
+| `plugins/signals-holoviews` | general (`viz_show` / `viz_select` / `viz_clear`) | Server-side HoloViews stills faded onto the AgentRTC video feed |
 | `hsengine/` (pip extra `signals-hsengine`) | sidecar process | Lattice engine + AgentRTC (`python -m hsengine`) |
 
 Listen is a Hermes **plugin**. The voice/media plane is a **sidecar**
@@ -150,6 +151,7 @@ plugins:
     - signals-compact
     - signals-listen
     - signals-zettel
+    - signals-holoviews
 model:
   provider: signals
   model: thinking
@@ -159,7 +161,7 @@ context:
   engine: signals
 ```
 
-Restart Hermes. `hermes plugins list` should list the four plugins;
+Restart Hermes. `hermes plugins list` should list the Signals plugins;
 `hermes doctor` should report provider `signals`.
 
 ## Impala FDW
@@ -183,6 +185,7 @@ plugins/
   signals-compact/      ContextEngine
   signals-listen/       dashboard Listen tab + plugin_api
   signals-zettel/       /zettel <pasted text> into wiki/scratch
+  signals-holoviews/    viz_show stills faded onto the AgentRTC video feed
 hsengine/               sidecar: AgentRTC, named bots, overlay, ops
   bots/{ripley,bishop}/ SOUL.md
 docs/

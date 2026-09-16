@@ -19,6 +19,12 @@ dependencies = [
   "msgpack>=1.0.8,<2",
 ]
 
+[project.optional-dependencies]
+viz = [
+  "holoviews>=1.19,<2",
+  "matplotlib>=3.8,<4",
+]
+
 [project.scripts]
 hermes-engine = "hsengine.engine:main"
 

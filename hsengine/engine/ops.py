@@ -926,6 +926,62 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "viz_show",
+            "description": (
+                "Fade a scientific visualization onto the AgentRTC video "
+                "(ontology chord, Aegir SKOS aperture, scatter, curve, "
+                "heatmap). Server-side still — the audience sees the feed, "
+                "not a dashboard. Call this instead of describing a figure. "
+                "kind=chord|aperture|scatter|curve|heatmap. source=aegir "
+                "for the live aperture when Aegir is on the engine."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string"},
+                    "title": {"type": "string"},
+                    "highlight": {"type": "string"},
+                    "source": {"type": "string"},
+                    "data": {"type": "string"},
+                    "fade_s": {"type": "number"},
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "viz_select",
+            "description": (
+                "Highlight a node on the current AgentRTC program still "
+                "(drill into an ontology arc or data feature)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "node": {"type": "string", "description": "Node or label to emphasize."},
+                },
+                "required": ["node"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "viz_clear",
+            "description": "Fade the program still out and restore the looping clip.",
+            "parameters": {
+                "type": "object",
+                "properties": {"fade_s": {"type": "number"}},
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "fmp",
             "description": (
                 "Look up markets on Financial Modeling Prep via Gaius "
@@ -1024,6 +1080,47 @@ def _dispatch_hermes(args: dict[str, Any]) -> str:
     return json.dumps(hermes(prompt=str(args.get("prompt") or "")), default=str)
 
 
+def _dispatch_viz_show(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_program
+
+    fade = args.get("fade_s")
+    try:
+        fade_s = float(fade) if fade not in (None, "") else 0.7
+    except (TypeError, ValueError):
+        fade_s = 0.7
+    return json.dumps(
+        webrtc_program.show(
+            kind=str(args.get("kind") or "chord"),
+            title=str(args.get("title") or ""),
+            highlight=str(args.get("highlight") or ""),
+            source=str(args.get("source") or ""),
+            data=str(args.get("data") or ""),
+            fade_s=fade_s,
+        ),
+        default=str,
+    )
+
+
+def _dispatch_viz_select(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_program
+
+    return json.dumps(
+        webrtc_program.select(node=str(args.get("node") or args.get("highlight") or "")),
+        default=str,
+    )
+
+
+def _dispatch_viz_clear(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_program
+
+    fade = args.get("fade_s")
+    try:
+        fade_s = float(fade) if fade not in (None, "") else 0.7
+    except (TypeError, ValueError):
+        fade_s = 0.7
+    return json.dumps(webrtc_program.clear(fade_s=fade_s), default=str)
+
+
 def _dispatch_session_search(args: dict[str, Any]) -> str:
     around = args.get("around_message_id")
     around_id = None
@@ -1056,6 +1153,9 @@ _DISPATCH = {
     "web_search": _dispatch_web,
     "fmp": _dispatch_fmp,
     "hermes": _dispatch_hermes,
+    "viz_show": _dispatch_viz_show,
+    "viz_select": _dispatch_viz_select,
+    "viz_clear": _dispatch_viz_clear,
 }
 
 

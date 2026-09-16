@@ -314,7 +314,11 @@ def bishop_prompt(
                 "Call conversation, then web_search or fmp once for one adjacent spark."
             )
     else:
-        lines.append("Call conversation. Deepen the last live thread. Do not web-search.")
+        lines.append(
+            "Call conversation. Deepen the last live thread. Do not web-search. "
+            "If a figure would help (ontology chord, Aegir aperture, a plot), "
+            "call viz_show."
+        )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")
     return system, "\n".join(lines), 240 if move in ("open", "next") else 200
 

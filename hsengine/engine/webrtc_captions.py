@@ -122,6 +122,12 @@ def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) 
             if self.readyState != "live":
                 raise MediaStreamError
             frame = await self._inner.recv()
+            try:
+                from hsengine.engine.webrtc_program import mix_frame
+
+                frame = mix_frame(frame)
+            except Exception:
+                pass
             act = activity.get() if activity is not None else ""
             return overlay_frame(frame, board.get(), act)
 

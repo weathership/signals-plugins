@@ -75,6 +75,7 @@ def test_dispatch_fmp(monkeypatch):
     names = [t["function"]["name"] for t in ops.CEREBRAS_TOOLS]
     assert "fmp" in names
     assert "hermes" in names
+    assert "viz_show" in names
 
 
 def test_dispatch_hermes_requires_interactive(monkeypatch):
@@ -127,6 +128,7 @@ def test_spoken_system_wiki_write_must_call_hermes():
     assert "wiki/" in text or "$wiki_path" in text
     assert "call hermes this turn" in text
     assert "verified" in text
+    assert "viz_show" in text
 
 
 def test_kb_search_is_gaius_not_hermes_notes():
