@@ -8,6 +8,7 @@ import yaml
 from hsengine.engine.named_bots import (
     BISHOP,
     RIPLEY,
+    VASQUEZ,
     BishopOutcome,
     bishop_delegation_cap,
     bishop_prompt,
@@ -22,6 +23,9 @@ from hsengine.engine.named_bots import (
 def test_templates_exist():
     assert "Ripley" in template_soul(RIPLEY)
     assert "Bishop" in template_soul(BISHOP)
+    assert "Vasquez" in template_soul(VASQUEZ)
+    assert "viz_show" in template_soul(VASQUEZ)
+    assert "reference frame" in template_soul(VASQUEZ).lower()
     assert "delegate_task" in template_soul(BISHOP)
     assert "MONOLOGUE" in template_soul(BISHOP)
     bishop = template_soul(BISHOP)
@@ -98,11 +102,13 @@ def test_ensure_bots_creates_managed_profiles(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
     out = ensure_bots()
-    assert RIPLEY in out and BISHOP in out
+    assert RIPLEY in out and BISHOP in out and VASQUEZ in out
     ripley = tmp_path / ".hermes" / "profiles" / "ripley"
     bishop = tmp_path / ".hermes" / "profiles" / "bishop"
+    vasquez = tmp_path / ".hermes" / "profiles" / "vasquez"
     assert (ripley / "SOUL.md").read_text(encoding="utf-8").startswith("You are Ripley")
     assert "Bishop" in (bishop / "SOUL.md").read_text(encoding="utf-8")
+    assert "Vasquez" in (vasquez / "SOUL.md").read_text(encoding="utf-8")
     rmeta = yaml.safe_load((ripley / "profile.yaml").read_text(encoding="utf-8"))
     bmeta = yaml.safe_load((bishop / "profile.yaml").read_text(encoding="utf-8"))
     assert rmeta["ui_meta"]["hermes-bots"]["title"] == "Ripley"
@@ -154,3 +160,34 @@ def test_bishop_run_is_silent(monkeypatch):
     assert seen.get("recall_query") == "Nautilus notes"
     assert out.steer == "float the gap"
     assert out.monologue == ""
+
+
+def test_vasquez_run_skips_without_a_frame(monkeypatch):
+    from hsengine.engine.named_bots import vasquez_run
+
+    monkeypatch.setattr("hsengine.engine.named_bots.reference_jpeg", lambda: None)
+    assert vasquez_run(session_id="s1", reason="user-turn") == ""
+
+
+def test_vasquez_run_sends_one_jpeg_and_only_viz_tools(monkeypatch):
+    from hsengine.engine.named_bots import _VASQUEZ_LAST, vasquez_run
+    import hsengine.engine.named_bots as nb
+
+    nb._VASQUEZ_LAST = 0.0
+    seen: dict = {}
+
+    def _complete(**k):
+        seen.update(k)
+        return type("R", (), {"text": "ACTION: NONE", "model": "x"})()
+
+    monkeypatch.setattr("hsengine.engine.named_bots.reference_jpeg", lambda: b"\xff\xd8fakejpeg")
+    monkeypatch.setattr("hsengine.engine.interactive.complete_cerebras", _complete)
+    out = vasquez_run(session_id="s1", reason="user-turn", narrative="show the chord", spoken="here is the lattice")
+    assert seen.get("speak") is False
+    assert seen.get("reasoning_effort") == "none"
+    assert seen.get("images") == [b"\xff\xd8fakejpeg"]
+    names = [t["function"]["name"] for t in (seen.get("tool_defs") or [])]
+    assert set(names) <= {"viz_show", "viz_select", "viz_input", "viz_clear"}
+    assert "hermes" not in names
+    assert "show the chord" in seen.get("prompt", "")
+    assert out == "ACTION: NONE"

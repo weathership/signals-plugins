@@ -333,6 +333,13 @@ class WebRtcHub:
                     session_history.record_turn(
                         session_id, assistant=spoken, model="ripley"
                     )
+                from hsengine.engine.named_bots import schedule_vasquez_glance
+
+                schedule_vasquez_glance(
+                    session_id=session_id,
+                    reason="opening",
+                    spoken=spoken or "",
+                )
             except Exception:
                 log.exception("cerebras opening line failed")
 

@@ -70,6 +70,31 @@ def test_complete_cerebras_posts_qwen38(monkeypatch):
     assert "tools" not in sent.kwargs["json"]
 
 
+def test_complete_cerebras_attaches_jpeg_on_user_message(monkeypatch):
+    monkeypatch.setenv("CEREBRAS_API_KEY", "test-key")
+    payload = {
+        "model": "qwen-3.8-27b",
+        "choices": [{"message": {"content": "chord on Material", "reasoning": ""}, "finish_reason": "stop"}],
+        "usage": {},
+    }
+    client = _client_with_payloads([payload])
+    jpeg = b"\xff\xd8\xfffake"
+    with patch("hsengine.engine.interactive.httpx.Client", return_value=client):
+        with patch("hsengine.engine.interactive._speak_cerebras"):
+            interactive.complete_cerebras(
+                prompt="what is highlighted?",
+                tools=False,
+                speak=False,
+                images=[jpeg],
+            )
+    content = client.post.call_args.kwargs["json"]["messages"][-1]["content"]
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert client.post.call_args.kwargs["json"]["reasoning_effort"] in ("none", "low", "high")
+
+
 def test_complete_cerebras_includes_prior_turns(monkeypatch):
     monkeypatch.setenv("CEREBRAS_API_KEY", "test-key")
     payload = {

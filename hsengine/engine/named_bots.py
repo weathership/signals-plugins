@@ -1,13 +1,13 @@
-"""Named Bots for AgentRTC: Ripley (spoken) and Bishop (silent).
+"""Named Bots for AgentRTC: Ripley (spoken), Bishop (invent), Vasquez (viz).
 
 Agent-mediated: an agent sits between workspace products and the human.
 Named agents and sub-agents are that pattern, not a sideline. Bishop
-invents (tools, up to two ``delegate_task`` children). Ripley speaks.
-Connect and later quiet both use that invent-then-execute pass.
+invents; Ripley speaks; Vasquez glances one compositor JPEG at end of
+sequence and drives HoloViews. Humans spectate.
 
 A Bot is a Hermes profile under ``~/.hermes/profiles/<name>/`` with Bot-Mode
 ``ui_meta['hermes-bots']``. Created on first interactive enter if missing.
-Both use Cerebras while the AgentRTC Activity is in force (session overlay).
+All three use Cerebras while the AgentRTC Activity is in force (session overlay).
 """
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +26,7 @@ log = logging.getLogger("hsengine.engine.named_bots")
 
 RIPLEY = "ripley"
 BISHOP = "bishop"
+VASQUEZ = "vasquez"
 
 _BOTS_ROOT = Path(__file__).resolve().parent.parent / "bots"
 
@@ -46,6 +49,17 @@ _BISHOP_META = {
             "title": "Bishop",
             "shape": "blobatar::boxy",
             "color": "#c8d4e0",
+        }
+    },
+}
+_VASQUEZ_META = {
+    "display_name": "Vasquez",
+    "description": "Silent AgentRTC viz — one compositor JPEG per sequence; drives HoloViews. Never heard.",
+    "ui_meta": {
+        "hermes-bots": {
+            "title": "Vasquez",
+            "shape": "blobatar::sharp",
+            "color": "#6b8f3c",
         }
     },
 }
@@ -173,6 +187,8 @@ def ensure_bots() -> dict[str, str]:
         out[RIPLEY] = str(_profile_dir(RIPLEY))
         _ensure_one(BISHOP, _BISHOP_META)
         out[BISHOP] = str(_profile_dir(BISHOP))
+        _ensure_one(VASQUEZ, _VASQUEZ_META)
+        out[VASQUEZ] = str(_profile_dir(VASQUEZ))
     except Exception:
         log.warning("ensure AgentRTC named bots failed", exc_info=True)
     return out
@@ -455,3 +471,135 @@ async def ripley_speak_outcome(
         if getattr(result, "text", ""):
             spoken.append(result.text)
     return " ".join(spoken).strip()
+
+
+_VASQUEZ_LOCK = threading.Lock()
+_VASQUEZ_LAST = 0.0
+_VASQUEZ_GAP_S = 2.0
+
+
+def viz_tool_defs() -> list[dict[str, Any]]:
+    from hsengine.engine.ops import CEREBRAS_TOOLS
+
+    names = {"viz_show", "viz_select", "viz_input", "viz_clear"}
+    return [t for t in CEREBRAS_TOOLS if t.get("function", {}).get("name") in names]
+
+
+def reference_jpeg() -> bytes | None:
+    """End-of-sequence compositor frame (CDP latest, else program still)."""
+    import io
+
+    img = None
+    try:
+        from hsengine.engine.webrtc_viz import _cameras
+        from hsengine.engine.webrtc_viz import _session_id as live_sid
+
+        cam = _cameras.get(live_sid())
+        if cam is not None:
+            img = getattr(cam, "latest_image", None)
+    except Exception:
+        img = None
+    if img is None:
+        try:
+            from hsengine.engine.webrtc_program import PROGRAM
+
+            img = PROGRAM._image
+            if not PROGRAM.active():
+                return None
+        except Exception:
+            return None
+    if img is None:
+        return None
+    try:
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=65)
+        return buf.getvalue()
+    except Exception:
+        log.debug("vasquez jpeg encode failed", exc_info=True)
+        return None
+
+
+def vasquez_run(
+    *,
+    session_id: str,
+    reason: str = "",
+    narrative: str = "",
+    spoken: str = "",
+) -> str:
+    """One silent instruct glance at the live figure. Never speaks. Never loops."""
+    global _VASQUEZ_LAST
+    jpeg = reference_jpeg()
+    if not jpeg:
+        return ""
+    now = time.monotonic()
+    with _VASQUEZ_LOCK:
+        if now - _VASQUEZ_LAST < _VASQUEZ_GAP_S:
+            return ""
+        _VASQUEZ_LAST = now
+    try:
+        from hsengine.engine.webrtc_activity import pulse
+
+        pulse("vasquez")
+    except Exception:
+        pass
+    system = load_soul(VASQUEZ)
+    lines = [
+        f"Reason: {reason or 'end-of-sequence'}.",
+        "This is one reference frame of the live HoloViews page after the last beat.",
+        "If it already matches, ACTION: NONE.",
+    ]
+    nar = " ".join((narrative or "").split())
+    sp = " ".join((spoken or "").split())
+    if nar:
+        lines.append("Narrative / user: " + nar[:800])
+    if sp:
+        lines.append("Ripley just said: " + sp[:800])
+    from hsengine.engine import interactive
+
+    result = interactive.complete_cerebras(
+        prompt="\n".join(lines),
+        system_prompt=system,
+        max_tokens=160,
+        temperature=0.3,
+        reasoning_effort="none",
+        tools=True,
+        tool_defs=viz_tool_defs(),
+        speak=False,
+        session_id=session_id,
+        recall_query="",
+        images=[jpeg],
+    )
+    text = (getattr(result, "text", "") or "").strip()
+    if text:
+        log.info("vasquez glance session=%s reason=%s %r", session_id, reason, text[:160])
+    return text
+
+
+def schedule_vasquez_glance(
+    *,
+    session_id: str,
+    reason: str = "",
+    narrative: str = "",
+    spoken: str = "",
+) -> None:
+    """Fire-and-forget after a spoken/invent sequence. No poll loop."""
+    try:
+        from hsengine.engine.webrtc_program import PROGRAM
+
+        if not PROGRAM.active():
+            return
+    except Exception:
+        return
+
+    def _run() -> None:
+        try:
+            vasquez_run(
+                session_id=session_id,
+                reason=reason,
+                narrative=narrative,
+                spoken=spoken,
+            )
+        except Exception:
+            log.exception("vasquez glance failed")
+
+    threading.Thread(target=_run, daemon=True, name="vasquez-glance").start()

@@ -165,6 +165,14 @@ async def _run_user_utterance(
             session_history.remember_turn(
                 session_id, user=text, assistant=spoken
             )
+        from hsengine.engine.named_bots import schedule_vasquez_glance
+
+        schedule_vasquez_glance(
+            session_id=session_id,
+            reason="bishop-execute",
+            narrative=text,
+            spoken=spoken or "",
+        )
         return spoken or ""
     result = await asyncio.to_thread(
         interactive.complete_cerebras,
@@ -181,6 +189,14 @@ async def _run_user_utterance(
     )
     session_history.remember_turn(
         session_id, user=text, assistant=result.text
+    )
+    from hsengine.engine.named_bots import schedule_vasquez_glance
+
+    schedule_vasquez_glance(
+        session_id=session_id,
+        reason="user-turn",
+        narrative=text,
+        spoken=result.text or "",
     )
     return result.text or ""
 

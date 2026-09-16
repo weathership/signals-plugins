@@ -160,6 +160,26 @@ def _run_tool_calls(calls: list[dict]) -> list[dict]:
     return out
 
 
+def _user_content(prompt: str, images: list[bytes] | None) -> str | list[dict]:
+    """Cerebras qwen-3.8-27b: images only on user messages, JPEG/PNG data URIs."""
+    if not images:
+        return prompt
+    import base64
+
+    parts: list[dict] = [{"type": "text", "text": prompt}]
+    for blob in images[:10]:
+        if not blob:
+            continue
+        b64 = base64.b64encode(blob).decode("ascii")
+        parts.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+            }
+        )
+    return parts if len(parts) > 1 else prompt
+
+
 def complete_cerebras(
     *,
     prompt: str,
@@ -172,6 +192,8 @@ def complete_cerebras(
     session_id: str = "",
     history: list[dict] | None = None,
     recall_query: str | None = None,
+    images: list[bytes] | None = None,
+    tool_defs: list | None = None,
 ) -> CompleteResult:
     key = _cerebras_key()
     model = _cfg("hermes.engine.webrtc.interactive.cerebras_model", "qwen-3.8-27b")
@@ -189,7 +211,7 @@ def complete_cerebras(
     if sys_text:
         messages.append({"role": "system", "content": sys_text})
     messages.extend(prior)
-    messages.append({"role": "user", "content": prompt})
+    messages.append({"role": "user", "content": _user_content(prompt, images)})
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     prompt_tokens = 0
     completion_tokens = 0
@@ -209,7 +231,7 @@ def complete_cerebras(
             if tools:
                 from hsengine.engine.ops import CEREBRAS_TOOLS
 
-                body["tools"] = CEREBRAS_TOOLS
+                body["tools"] = tool_defs if tool_defs is not None else CEREBRAS_TOOLS
                 body["tool_choice"] = "auto"
             r = client.post(f"{base}/chat/completions", headers=headers, json=body)
             r.raise_for_status()

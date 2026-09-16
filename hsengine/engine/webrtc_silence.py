@@ -309,6 +309,14 @@ class SilenceDirector:
                         self._session_id, assistant=spoken, model="ripley"
                     )
                     log.info("bishop monologue spoken session=%s", self._session_id)
+            from hsengine.engine.named_bots import schedule_vasquez_glance
+
+            schedule_vasquez_glance(
+                session_id=self._session_id,
+                reason="quiet-invent",
+                narrative=outcome.steer or "",
+                spoken=outcome.monologue or "",
+            )
         except Exception:
             log.exception("bishop silent turn failed")
         finally:

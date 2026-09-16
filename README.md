@@ -30,7 +30,7 @@ See [docs/packaging.md](docs/packaging.md).
 
 ## AgentRTC: named agents and delegation
 
-An AgentRTC Connect is one Hermes session (`source=agent-rtc`) plus two
+An AgentRTC Connect is one Hermes session (`source=agent-rtc`) plus three
 **named bots** — Hermes profiles under `$HERMES_HOME/profiles/<name>/`
 with Bot-Mode `ui_meta['hermes-bots']`, created on first interactive
 enter if missing:
@@ -39,14 +39,18 @@ enter if missing:
 |-----|------|
 | **Ripley** | Spoken voice. First person. Tools on user turns; execute pass has no tools. |
 | **Bishop** | Silent invent pass. Tools, including `hermes` / `delegate_task`. Never heard. |
+| **Vasquez** | Silent viz. One compositor JPEG at end of sequence; `viz_*` only. Instruct (`reasoning_effort=none`). Never heard. |
 
-**Agent-mediated:** Bishop invents; Ripley speaks. Named agents and
-sub-agents **are** that pattern, not a sideline. Connect openings,
-“what’s next,” and quiet-line contemplation all use invent-then-execute.
+**Agent-mediated:** Bishop invents; Ripley speaks; Vasquez glances the
+live HoloViews frame and adjusts it. Humans spectate and may ask
+questions. Connect openings, “what’s next,” and quiet-line contemplation
+use invent-then-execute; Vasquez is not a poll loop.
 
-While the `interactive_session` Activity is in force, both bots (and
+While the `interactive_session` Activity is in force, all three bots (and
 `hermes()` children) use Cerebras via the session-runtime overlay — not
-an env var, not a process-wide model swap.
+an env var, not a process-wide model swap. Vasquez is instruct
+(`reasoning_effort=none`) with a compositor JPEG; she does not use
+lattice thinking.
 
 Delegation cap on a Bishop turn: `hermes` at most twice, and Hermes may
 run at most **two** `delegate_task` children. Subagents share the
@@ -54,7 +58,7 @@ AgentRTC session (transcript + memory). Files they create stay under
 `HERMES_HOME` (this profile or the common Hermes home), never the
 operator home.
 
-Personas: `hsengine/bots/{ripley,bishop}/SOUL.md`.
+Personas: `hsengine/bots/{ripley,bishop,vasquez}/SOUL.md`.
 
 ## Memory (signals-memory)
 
