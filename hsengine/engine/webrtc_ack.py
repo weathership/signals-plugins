@@ -137,6 +137,7 @@ _OPEN = (
     "I need a navigator",
     "You have been scanned",
     "We come in peace",
+    "Compliance",
 )
 
 _MIDDLE = (
@@ -340,6 +341,8 @@ _MIDDLE = (
     "I'll take you home after this",
     "Puckmaren can wait",
     "R.A.L.F. is not helping",
+    "compliance",
+    "compliance, Navigator",
 )
 
 _TAIL = (
@@ -432,6 +435,9 @@ _TAIL = (
     "you've been scanned",
     "we come in peace",
     "star maps after",
+    "compliance",
+    "compliance, Navigator",
+    "see you later, Navigator",
 )
 
 _TEMPLATES = (
@@ -649,6 +655,9 @@ _NOD = (
     "I'll take you home. After this cut.",
     "Trimaxion drone ship. Working.",
     "Eight years late. Hold on.",
+    "Compliance.",
+    "Compliance. Navigator.",
+    "See you later, Navigator.",
 )
 
 _HOOK_RE = re.compile(
@@ -699,6 +708,9 @@ def press_return_line(
                 f"{open_}. {clock}. Press return.",
                 f"{open_}. It's {clock}. Press return.",
                 f"{open_}. {clock}. Press return. {tail}.",
+                f"{clock}. Compliance. Press return.",
+                f"Compliance. {clock}. Press return.",
+                f"{open_}. {clock}. Compliance. Press return.",
                 f"When I was six I stared into the sun. {clock}. Press return.",
                 f"The brightness began to dissolve. {clock}. Press return.",
                 f"{open_}. {clock}. Two sixteen. Press return.",

@@ -45,6 +45,13 @@ def test_press_return_states_the_clock():
     assert line[0].isupper() or line[0].isdigit()
 
 
+def test_compliance_is_in_the_navigator_register():
+    from hsengine.engine import webrtc_ack as ack
+
+    blob = " ".join(ack._OPEN + ack._MIDDLE + ack._TAIL + ack._NOD)
+    assert "Compliance" in blob or "compliance" in blob.lower()
+
+
 def test_no_immediate_repeat():
     rng = random.Random(99)
     _recent.clear()
