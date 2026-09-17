@@ -82,6 +82,18 @@ def test_tickers_from_json():
     assert _tickers_from_scene({"data": '{"tickers":["SLB","HAL"]}'}) == ["SLB", "HAL"]
 
 
+def test_modify_doc_does_not_crash_bokeh_active_inspect():
+    """Bokeh 3.9 toolbar.active_inspect is 'auto'; HoloViews used to 500 the page."""
+    from bokeh.document import Document
+
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    apps.put_scene("anon", kind="chord", title="OFS")
+    doc = Document()
+    apps.modify_doc(doc)
+    assert doc.roots
+
+
 def test_modify_doc_attaches_a_bokeh_figure():
     from bokeh.document import Document
 

@@ -36,6 +36,19 @@ def _engine_loop() -> asyncio.AbstractEventLoop | None:
     return None
 
 
+def _blank_frame(image: Any) -> bool:
+    """Reject 500-page / empty-canvas captures so Listen does not go white."""
+    try:
+        import numpy as np
+
+        arr = np.asarray(image.convert("RGB"), dtype=np.float32)
+        step = max(1, arr.shape[0] // 24)
+        mean = float(arr[::step, ::step].mean())
+    except Exception:
+        return False
+    return mean >= 248.0 or mean <= 6.0
+
+
 def _session_id() -> str:
     try:
         from hsengine.engine.webrtc_session import HUB
@@ -135,6 +148,8 @@ async def _show_live(
     frame = cam.latest_image
     if frame is None:
         raise RuntimeError("HoloViews compositor produced no frame")
+    if _blank_frame(frame):
+        raise RuntimeError("HoloViews compositor frame is blank (white/black plate)")
     webrtc_program.PROGRAM.set(
         frame,
         title=str(scene.get("title") or ""),

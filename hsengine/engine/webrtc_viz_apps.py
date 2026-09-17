@@ -379,9 +379,30 @@ def _density(scene: dict[str, Any], title: str) -> Any:
         xlabel="",
         ylabel="",
         tools=["hover"],
-        default_tools=["hover", "save"],
-        active_tools=["hover"],
     )
+
+
+_ACTIVE_INSPECT_PATCHED = False
+
+
+def _patch_bokeh_active_inspect() -> None:
+    """Bokeh 3.9: toolbar.active_inspect is 'auto' (str); HoloViews does .append."""
+    global _ACTIVE_INSPECT_PATCHED
+    if _ACTIVE_INSPECT_PATCHED:
+        return
+    from holoviews.plotting.bokeh.element import ElementPlot
+
+    orig = ElementPlot._set_active_tools
+
+    def _safe(self, plot):  # type: ignore[no-untyped-def]
+        tb = getattr(plot, "toolbar", None)
+        ai = getattr(tb, "active_inspect", None)
+        if isinstance(ai, str):
+            plot.toolbar.active_inspect = []
+        return orig(self, plot)
+
+    ElementPlot._set_active_tools = _safe  # type: ignore[method-assign]
+    _ACTIVE_INSPECT_PATCHED = True
 
 
 def modify_doc(doc: Any) -> None:
@@ -403,6 +424,7 @@ def modify_doc(doc: Any) -> None:
     sid = _arg(args, "session")
     scene = SCENES.get(sid) or put_scene(sid or "anon", kind="chord")
     title = str(scene.get("title") or "AgentRTC viz")
+    _patch_bokeh_active_inspect()
     hv.extension("bokeh", logo=False)
     hv.renderer("bokeh").webgl = False
     css = (
