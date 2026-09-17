@@ -152,6 +152,49 @@ async def _show_live(
     return {"ok": True, **webrtc_program.PROGRAM.status()}
 
 
+def hover_xy(
+    *,
+    lane: str = "",
+    t: float = 0.55,
+    nodes: list[str] | None = None,
+) -> tuple[float, float]:
+    """CSS pixels on the 1280×720 compositor for a heatmap/timeline lane.
+
+    Layout matches the Panel HoloViews pane (plot in the inner 1280×720).
+    """
+    names = [str(n).strip() for n in (nodes or []) if str(n).strip()]
+    if not names:
+        names = ["SLB", "HAL", "BKR", "NOV"]
+    key = (lane or "").strip().upper()
+    idx = 0
+    for i, n in enumerate(names):
+        if n.upper() == key or key and key in n.upper():
+            idx = i
+            break
+    n = max(1, len(names))
+    left, right, top, bottom = 140.0, 1220.0, 90.0, 630.0
+    x = left + max(0.0, min(1.0, float(t))) * (right - left)
+    y = top + (idx + 0.5) / n * (bottom - top)
+    return x, y
+
+
+def hover(*, lane: str = "", t: float | None = None, at: str = "") -> dict:
+    """Move the compositor pointer so Bokeh hover popups follow the narrative."""
+    from hsengine.engine.webrtc_program import PROGRAM
+
+    meta = PROGRAM.status().get("meta") or {}
+    nodes = list(meta.get("nodes") or [])
+    frac = 0.55 if t is None else float(t)
+    if at and meta.get("kind") in ("density", "filings_density", "timeline", "filings"):
+        # Place mid-plot if we cannot map the date; t still wins when given.
+        pass
+    x, y = hover_xy(lane=lane, t=frac, nodes=nodes or None)
+    moved = pointer(x=x, y=y, type="mouseMoved")
+    if not moved.get("ok"):
+        return moved
+    return {"ok": True, "lane": lane, "x": x, "y": y, "t": frac}
+
+
 def pointer(*, x: float, y: float, type: str = "mousePressed", button: str = "left") -> dict:
     sid = _session_id()
     cam = _cameras.get(sid)

@@ -165,6 +165,37 @@ def _paint_title(image: Any, title: str) -> None:
         draw.text((pad, 6), text, font=font, fill=(232, 236, 244))
 
 
+PROGRAM_FPS = 15
+
+
+def alpha() -> float:
+    return PROGRAM._alpha()
+
+
+def compositor_image() -> Any | None:
+    """Latest HoloViews RGB, fitted to 1280×720, or None."""
+    with PROGRAM._lock:
+        img = PROGRAM._image
+        title = PROGRAM._title
+        a = PROGRAM._alpha()
+    if img is None or a <= 0.01:
+        return None
+    fitted = _fit(img, (1280, 720))
+    if title:
+        _paint_title(fitted, title)
+    return fitted
+
+
+def image_to_video_frame(image: Any, *, pts: int, time_base: Any) -> Any:
+    import numpy as np
+    import av
+
+    frame = av.VideoFrame.from_ndarray(np.asarray(image.convert("RGB")), format="rgb24")
+    frame.pts = pts
+    frame.time_base = time_base
+    return frame
+
+
 def mix_frame(frame: Any) -> Any:
     """Blend the program still onto an av.VideoFrame. Identity if idle."""
     if not PROGRAM.active():

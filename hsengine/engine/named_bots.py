@@ -481,7 +481,7 @@ _VASQUEZ_GAP_S = 2.0
 def viz_tool_defs() -> list[dict[str, Any]]:
     from hsengine.engine.ops import CEREBRAS_TOOLS
 
-    names = {"viz_show", "viz_select", "viz_input", "viz_clear"}
+    names = {"viz_show", "viz_select", "viz_input", "viz_clear", "viz_hover"}
     return [t for t in CEREBRAS_TOOLS if t.get("function", {}).get("name") in names]
 
 

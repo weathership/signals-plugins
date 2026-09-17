@@ -25,7 +25,8 @@ def test_templates_exist():
     assert "Bishop" in template_soul(BISHOP)
     assert "Vasquez" in template_soul(VASQUEZ)
     assert "viz_show" in template_soul(VASQUEZ)
-    assert "reference frame" in template_soul(VASQUEZ).lower()
+    assert "viz_hover" in template_soul(VASQUEZ)
+    assert "hover" in template_soul(VASQUEZ).lower()
     assert "delegate_task" in template_soul(BISHOP)
     assert "MONOLOGUE" in template_soul(BISHOP)
     bishop = template_soul(BISHOP)
@@ -187,7 +188,8 @@ def test_vasquez_run_sends_one_jpeg_and_only_viz_tools(monkeypatch):
     assert seen.get("reasoning_effort") == "none"
     assert seen.get("images") == [b"\xff\xd8fakejpeg"]
     names = [t["function"]["name"] for t in (seen.get("tool_defs") or [])]
-    assert set(names) <= {"viz_show", "viz_select", "viz_input", "viz_clear"}
+    assert set(names) <= {"viz_show", "viz_select", "viz_input", "viz_clear", "viz_hover"}
+    assert "viz_hover" in names
     assert "hermes" not in names
     assert "show the chord" in seen.get("prompt", "")
     assert out == "ACTION: NONE"

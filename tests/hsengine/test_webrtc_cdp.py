@@ -100,6 +100,16 @@ def test_jpeg_screencast_frame_becomes_rgb_image():
     assert img.getpixel((2, 2))[2] > 100
 
 
+def test_hover_xy_puts_later_lanes_lower():
+    from hsengine.engine.webrtc_viz import hover_xy
+
+    x0, y0 = hover_xy(lane="SLB", t=0.2, nodes=["SLB", "HAL", "BKR", "NOV"])
+    x1, y1 = hover_xy(lane="NOV", t=0.8, nodes=["SLB", "HAL", "BKR", "NOV"])
+    assert x1 > x0
+    assert y1 > y0
+    assert 0 < x0 < 1280 and 0 < y1 < 720
+
+
 def test_try_live_without_chromium_is_not_ok(monkeypatch):
     monkeypatch.setattr(webrtc_cdp, "chromium_executable", lambda: None)
     from hsengine.engine import webrtc_viz

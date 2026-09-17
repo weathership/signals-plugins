@@ -984,6 +984,28 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "viz_hover",
+            "description": (
+                "Hover the live HoloViews figure so Bokeh popup details "
+                "follow the narrative. lane=SLB (or node). t=0..1 along "
+                "the time axis (default mid). Use this on density/"
+                "timeline, not a still."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "lane": {"type": "string"},
+                    "node": {"type": "string"},
+                    "t": {"type": "number"},
+                    "at": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "viz_input",
             "description": (
                 "Agent pointer on the live HoloViews page (CSS pixels of "
@@ -1145,6 +1167,24 @@ def _dispatch_viz_clear(args: dict[str, Any]) -> str:
     return json.dumps(webrtc_program.clear(fade_s=fade_s), default=str)
 
 
+def _dispatch_viz_hover(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_viz
+
+    t = args.get("t")
+    try:
+        frac = float(t) if t not in (None, "") else None
+    except (TypeError, ValueError):
+        frac = None
+    return json.dumps(
+        webrtc_viz.hover(
+            lane=str(args.get("lane") or args.get("node") or ""),
+            t=frac,
+            at=str(args.get("at") or ""),
+        ),
+        default=str,
+    )
+
+
 def _dispatch_viz_input(args: dict[str, Any]) -> str:
     from hsengine.engine import webrtc_viz
 
@@ -1200,6 +1240,7 @@ _DISPATCH = {
     "viz_select": _dispatch_viz_select,
     "viz_clear": _dispatch_viz_clear,
     "viz_input": _dispatch_viz_input,
+    "viz_hover": _dispatch_viz_hover,
 }
 
 

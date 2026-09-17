@@ -65,6 +65,24 @@ _SELECT = {
     },
 }
 
+_HOVER = {
+    "name": "viz_hover",
+    "description": (
+        "Hover the live HoloViews figure so Bokeh popups follow the narrative. "
+        "lane=SLB. t=0..1 along time."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "lane": {"type": "string"},
+            "node": {"type": "string"},
+            "t": {"type": "number"},
+            "at": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
+}
+
 _INPUT = {
     "name": "viz_input",
     "description": (
@@ -123,6 +141,23 @@ def _select(args: dict, **_kw) -> str:
     return json.dumps(webrtc_program.select(node=str(args.get("node") or "")))
 
 
+def _hover(args: dict, **_kw) -> str:
+    from hsengine.engine import webrtc_viz
+
+    t = args.get("t")
+    try:
+        frac = float(t) if t not in (None, "") else None
+    except (TypeError, ValueError):
+        frac = None
+    return json.dumps(
+        webrtc_viz.hover(
+            lane=str(args.get("lane") or args.get("node") or ""),
+            t=frac,
+            at=str(args.get("at") or ""),
+        )
+    )
+
+
 def _input(args: dict, **_kw) -> str:
     from hsengine.engine import webrtc_viz
 
@@ -171,6 +206,14 @@ def register(ctx) -> None:
         schema=_SELECT,
         handler=_select,
         description=_SELECT["description"],
+        emoji="◎",
+    )
+    ctx.register_tool(
+        name="viz_hover",
+        toolset="signals_holoviews",
+        schema=_HOVER,
+        handler=_hover,
+        description=_HOVER["description"],
         emoji="◎",
     )
     ctx.register_tool(

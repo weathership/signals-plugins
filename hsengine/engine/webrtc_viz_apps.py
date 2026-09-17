@@ -379,6 +379,8 @@ def _density(scene: dict[str, Any], title: str) -> Any:
         xlabel="",
         ylabel="",
         tools=["hover"],
+        default_tools=["hover", "save"],
+        active_tools=["hover"],
     )
 
 
