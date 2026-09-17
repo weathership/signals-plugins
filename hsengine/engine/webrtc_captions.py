@@ -1,7 +1,6 @@
 """Burn STT text into outbound WebRTC video frames."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import textwrap
 import threading
@@ -118,41 +117,20 @@ def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) 
         def __init__(self) -> None:
             super().__init__()
             self._inner = inner
-            self._pts = 0
-            self._next_t = 0.0
 
         async def recv(self):
             if self.readyState != "live":
                 raise MediaStreamError
-            from fractions import Fraction
+            from hsengine.engine.webrtc_program import mix_frame
 
-            from hsengine.engine.webrtc_program import PROGRAM, alpha, compositor_image, image_to_video_frame, mix_frame
-
-            act = activity.get() if activity is not None else ""
-            live = PROGRAM.active() and alpha() >= 0.95
-            viz = compositor_image() if live else None
-            if viz is not None:
-                import time as _time
-
-                now = _time.monotonic()
-                if self._next_t <= 0:
-                    self._next_t = now
-                delay = self._next_t - now
-                if delay > 0.2:
-                    self._next_t = now
-                    delay = 0
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                self._next_t += 1.0 / 15.0
-                tb = Fraction(1, 15)
-                frame = image_to_video_frame(viz, pts=self._pts, time_base=tb)
-                self._pts += 1
-                return overlay_frame(frame, board.get(), act)
             frame = await self._inner.recv()
             try:
+                # Keep the clip's PTS/time_base. Replacing the RTP clock with
+                # a 15 fps rgb24 stream made Listen show a white plate.
                 frame = mix_frame(frame)
             except Exception:
                 pass
+            act = activity.get() if activity is not None else ""
             return overlay_frame(frame, board.get(), act)
 
         def stop(self) -> None:

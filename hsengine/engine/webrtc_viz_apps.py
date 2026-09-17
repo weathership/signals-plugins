@@ -405,6 +405,12 @@ def modify_doc(doc: Any) -> None:
     title = str(scene.get("title") or "AgentRTC viz")
     hv.extension("bokeh", logo=False)
     hv.renderer("bokeh").webgl = False
+    css = (
+        "html, body, .bk-root, .bk-Row, .bk-Column, .bk-GridBox "
+        "{ background: #0b0b12 !important; color: #e8ecf4 !important; }"
+    )
+    if css not in (pn.config.raw_css or []):
+        pn.config.raw_css.append(css)
     pn.extension()
     obj = _hv_obj(scene)
     pane = pn.pane.HoloViews(
