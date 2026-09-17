@@ -437,7 +437,7 @@ _TAIL = (
     "star maps after",
     "compliance",
     "compliance, Navigator",
-    "see you later, Navigator",
+
 )
 
 _TEMPLATES = (
