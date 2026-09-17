@@ -161,6 +161,15 @@ class CdpCamera:
         self._reader = asyncio.create_task(self._read_loop())
         await self.send("Page.enable")
         await self.send("Runtime.enable")
+        await self.send(
+            "Emulation.setDeviceMetricsOverride",
+            {
+                "width": VIEW_W,
+                "height": VIEW_H,
+                "deviceScaleFactor": 1,
+                "mobile": False,
+            },
+        )
         await self._wait_plot()
         await self.start_screencast()
         await self._wait_first_frame()
@@ -241,12 +250,23 @@ class CdpCamera:
             self._on_image(image)
 
     async def _wait_plot(self, timeout: float = 20.0) -> None:
-        """Wait until HoloViews has painted a canvas, not merely loaded BokehJS."""
+        """Wait until HoloViews has painted a canvas (Bokeh 3 uses shadow DOM)."""
         deadline = time.monotonic() + timeout
-        expr = (
-            "(document.querySelectorAll('canvas').length > 0) || "
-            "(document.querySelectorAll('.bk-Canvas, canvas.bk-canvas').length > 0)"
-        )
+        expr = """
+        (() => {
+          const walk = (root) => {
+            if (!root) return 0;
+            let n = root.querySelectorAll ? root.querySelectorAll('canvas').length : 0;
+            if (root.querySelectorAll) {
+              root.querySelectorAll('*').forEach((el) => {
+                if (el.shadowRoot) n += walk(el.shadowRoot);
+              });
+            }
+            return n;
+          };
+          return walk(document) > 0;
+        })()
+        """
         while time.monotonic() < deadline:
             try:
                 result = await self.send(

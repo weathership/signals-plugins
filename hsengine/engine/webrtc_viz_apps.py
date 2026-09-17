@@ -192,9 +192,11 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
             node_color="index",
             edge_color="source",
             cmap="Category20",
-            width=720,
-            height=720,
+            width=1100,
+            height=640,
             title=title,
+            bgcolor="#0b0b12",
+            label_text_color="#e8ecf4",
         )
     )
 
