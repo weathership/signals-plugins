@@ -47,7 +47,7 @@ def _session_id() -> str:
     return ""
 
 
-def _run(coro: Any, timeout: float = 25.0) -> Any:
+def _run(coro: Any, timeout: float = 90.0) -> Any:
     loop = _engine_loop()
     if loop is None:
         return asyncio.run(coro)

@@ -1,7 +1,10 @@
 """Headless Chromium + CDP screencast: flags, JPEG decode, no Xvfb."""
 from __future__ import annotations
 
+import asyncio
+import base64
 import io
+import json
 
 import pytest
 
@@ -51,6 +54,38 @@ def test_bokeh_origins_are_loopback_only():
     url = webrtc_bokeh.document_url(5006, "abc123", nonce="n1")
     assert url.startswith("http://127.0.0.1:5006/hv?")
     assert "session=abc123" in url
+
+
+@pytest.mark.asyncio
+async def test_screencast_ack_does_not_wait_for_a_cdp_reply():
+    """Ack must not use send() — that deadlocks the reader on the reply."""
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from hsengine.engine.webrtc_cdp import CdpCamera
+
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (20, 80, 200)).save(buf, format="JPEG", quality=70)
+    cam = CdpCamera("t")
+
+    class _WS:
+        def __init__(self) -> None:
+            self.out: list[str] = []
+
+        async def send(self, raw: str) -> None:
+            self.out.append(raw)
+
+    cam._ws = _WS()
+    cam._write_lock = asyncio.Lock()
+    await asyncio.wait_for(
+        cam._on_screencast(
+            {"sessionId": "s1", "data": base64.b64encode(buf.getvalue()).decode()}
+        ),
+        timeout=1.0,
+    )
+    assert cam.frames == 1
+    assert cam.latest_image is not None
+    assert any("screencastFrameAck" in m for m in cam._ws.out)
 
 
 def test_jpeg_screencast_frame_becomes_rgb_image():

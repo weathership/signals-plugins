@@ -128,6 +128,7 @@ class CdpCamera:
         self._reader: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future] = {}
         self._next_id = 0
+        self._write_lock: asyncio.Lock | None = None
         self._on_image: Callable[[Any], None] | None = None
         self._screencast = False
         self.latest_image: Any = None
@@ -158,6 +159,7 @@ class CdpCamera:
         import websockets
 
         self._ws = await websockets.connect(ws_url, max_size=8 * 1024 * 1024)
+        self._write_lock = asyncio.Lock()
         self._reader = asyncio.create_task(self._read_loop())
         await self.send("Page.enable")
         await self.send("Runtime.enable")
@@ -193,6 +195,16 @@ class CdpCamera:
                 await asyncio.sleep(0.1)
         raise TimeoutError(f"CDP not listening on 127.0.0.1:{self.debug_port}")
 
+    async def _write(self, payload: dict) -> None:
+        if self._ws is None:
+            raise RuntimeError("CDP websocket closed")
+        lock = self._write_lock
+        if lock is None:
+            await self._ws.send(json.dumps(payload))
+            return
+        async with lock:
+            await self._ws.send(json.dumps(payload))
+
     async def send(self, method: str, params: dict | None = None) -> dict:
         if self._ws is None:
             raise RuntimeError("CDP websocket closed")
@@ -200,10 +212,9 @@ class CdpCamera:
         msg_id = self._next_id
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending[msg_id] = fut
-        payload = {"id": msg_id, "method": method, "params": params or {}}
-        await self._ws.send(json.dumps(payload))
+        await self._write({"id": msg_id, "method": method, "params": params or {}})
         try:
-            reply = await asyncio.wait_for(fut, timeout=8.0)
+            reply = await asyncio.wait_for(fut, timeout=15.0)
         except TimeoutError:
             self._pending.pop(msg_id, None)
             raise
@@ -223,7 +234,9 @@ class CdpCamera:
                         fut.set_result(msg)
                     continue
                 if msg.get("method") == "Page.screencastFrame":
-                    await self._on_screencast(msg.get("params") or {})
+                    # Never await send() here — that deadlocks the reader
+                    # waiting for an Ack reply it cannot read.
+                    asyncio.create_task(self._on_screencast(msg.get("params") or {}))
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -232,7 +245,14 @@ class CdpCamera:
     async def _on_screencast(self, params: dict) -> None:
         sid = params.get("sessionId")
         try:
-            await self.send("Page.screencastFrameAck", {"sessionId": sid})
+            self._next_id += 1
+            await self._write(
+                {
+                    "id": self._next_id,
+                    "method": "Page.screencastFrameAck",
+                    "params": {"sessionId": sid},
+                }
+            )
         except Exception:
             log.debug("screencast ack failed", exc_info=True)
         blob = params.get("data") or ""
@@ -316,6 +336,19 @@ class CdpCamera:
             },
         )
         self._screencast = True
+        try:
+            await self.send(
+                "Runtime.evaluate",
+                {
+                    "expression": (
+                        "document.body && (document.body.style.transform='translateZ(0)');"
+                        "true"
+                    ),
+                    "returnByValue": True,
+                },
+            )
+        except Exception:
+            log.debug("screencast kick failed", exc_info=True)
 
     async def stop_screencast(self) -> None:
         if not self._screencast:
