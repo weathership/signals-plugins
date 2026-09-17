@@ -3,8 +3,9 @@
 Register: WarGames/WOPR, Ex Machina, Hackers, Swordfish, Sneakers,
 Trainspotting, Withnail and I, Fight Club, Midnight in Paris / Hemingway,
 Event Horizon, Jurassic Park, Back to the Future, Ghostbusters, Pi (1998),
-and a wider film/lit pile. The line that always unique: current time, then
-"Press return." Fragments most of the time; full nods rarely.
+Flight of the Navigator, and a wider film/lit pile. The line that always
+unique: current time, then "Press return." Fragments most of the time;
+full nods rarely.
 Kyutai TTS only — no Cerebras round.
 """
 from __future__ import annotations
@@ -132,6 +133,10 @@ _OPEN = (
     "Two hundred sixteen",
     "Eat some pie",
     "Slow down Max",
+    "I am Max",
+    "I need a navigator",
+    "You have been scanned",
+    "We come in peace",
 )
 
 _MIDDLE = (
@@ -324,6 +329,17 @@ _MIDDLE = (
     "slow down Max",
     "Euclid is quiet",
     "a number at the center",
+    "I am Max",
+    "Trimaxion is listening",
+    "you have been scanned",
+    "I need a navigator",
+    "we come in peace",
+    "star maps later",
+    "eight years from now",
+    "inside the ship time is different",
+    "I'll take you home after this",
+    "Puckmaren can wait",
+    "R.A.L.F. is not helping",
 )
 
 _TAIL = (
@@ -411,6 +427,11 @@ _TAIL = (
     "eat some pie",
     "slow down Max",
     "two sixteen",
+    "I am Max",
+    "navigator later",
+    "you've been scanned",
+    "we come in peace",
+    "star maps after",
 )
 
 _TEMPLATES = (
@@ -620,6 +641,14 @@ _NOD = (
     "Mathematics is the language of nature.",
     "There is a pattern in everything.",
     "The stock market is a living organism. Looking anyway.",
+    "I am Max.",
+    "I need a navigator.",
+    "You have been scanned.",
+    "We come in peace.",
+    "Inside the ship, time is different. Press return.",
+    "I'll take you home. After this cut.",
+    "Trimaxion drone ship. Working.",
+    "Eight years late. Hold on.",
 )
 
 _HOOK_RE = re.compile(
