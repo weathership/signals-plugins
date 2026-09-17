@@ -92,6 +92,28 @@ def moshi_host_port() -> tuple[str, int]:
     return host, port
 
 
+def _hold_tight() -> None:
+    """Immediate voice + chip so STT never goes silent while Ripley works."""
+    import threading
+
+    try:
+        from hsengine.engine.webrtc_activity import begin
+
+        begin("ripley", "on it")
+    except Exception:
+        pass
+
+    def _ack() -> None:
+        try:
+            from hsengine.engine.webrtc_tts import speak_on_session_boards
+
+            speak_on_session_boards("Hold tight — working.", source="ack")
+        except Exception:
+            log.debug("hold-tight tts failed", exc_info=True)
+
+    threading.Thread(target=_ack, daemon=True, name="ripley-ack").start()
+
+
 def utterance_ready(words: list[str], *, min_chars: int = _TURN_MIN_CHARS) -> str | None:
     text = " ".join(w for w in words if w).strip()
     if len(text) < min_chars:
@@ -111,6 +133,7 @@ async def run_user_utterance(
     if not text:
         return ""
     log.info("user utterance %r", text)
+    _hold_tight()
     try:
         return await _run_user_utterance(
             text, session_id=session_id, speech=speech, pending_steer=pending_steer

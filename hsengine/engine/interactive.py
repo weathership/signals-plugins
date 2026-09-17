@@ -219,37 +219,58 @@ def complete_cerebras(
     finish = "stop"
     reasoning = ""
     data: dict = {}
-    with httpx.Client(timeout=120.0) as client:
-        for _round in range(_TOOL_ROUNDS if tools else 1):
-            body: dict = {
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "reasoning_effort": effort,
-            }
-            if tools:
-                from hsengine.engine.ops import CEREBRAS_TOOLS
+    who = "ripley"
+    if tool_defs is not None:
+        who = "vasquez"
+    elif not speak:
+        who = "bishop"
+    try:
+        from hsengine.engine.webrtc_activity import begin, end, pulse
+    except Exception:
+        begin = end = pulse = lambda *_a, **_k: None  # type: ignore[misc,assignment]
+    begin(who, "thinking")
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            for _round in range(_TOOL_ROUNDS if tools else 1):
+                body: dict = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "reasoning_effort": effort,
+                }
+                if tools:
+                    from hsengine.engine.ops import CEREBRAS_TOOLS
 
-                body["tools"] = tool_defs if tool_defs is not None else CEREBRAS_TOOLS
-                body["tool_choice"] = "auto"
-            r = client.post(f"{base}/chat/completions", headers=headers, json=body)
-            r.raise_for_status()
-            data = r.json()
-            choice = (data.get("choices") or [{}])[0]
-            msg = choice.get("message") or {}
-            usage = data.get("usage") or {}
-            prompt_tokens += int(usage.get("prompt_tokens") or 0)
-            completion_tokens += int(usage.get("completion_tokens") or 0)
-            finish = choice.get("finish_reason") or "stop"
-            reasoning = (msg.get("reasoning") or reasoning or "").strip()
-            calls = _tool_calls_from(msg) if tools else []
-            if calls:
-                messages.append(msg)
-                messages.extend(_run_tool_calls(calls))
-                continue
-            text = (msg.get("content") or "").strip()
-            break
+                    body["tools"] = tool_defs if tool_defs is not None else CEREBRAS_TOOLS
+                    body["tool_choice"] = "auto"
+                r = client.post(f"{base}/chat/completions", headers=headers, json=body)
+                r.raise_for_status()
+                data = r.json()
+                choice = (data.get("choices") or [{}])[0]
+                msg = choice.get("message") or {}
+                usage = data.get("usage") or {}
+                prompt_tokens += int(usage.get("prompt_tokens") or 0)
+                completion_tokens += int(usage.get("completion_tokens") or 0)
+                finish = choice.get("finish_reason") or "stop"
+                reasoning = (msg.get("reasoning") or reasoning or "").strip()
+                calls = _tool_calls_from(msg) if tools else []
+                if calls:
+                    pulse(who)
+                    for c in calls:
+                        name = ""
+                        if isinstance(c, dict):
+                            name = str((c.get("function") or {}).get("name") or "")
+                        if name:
+                            pulse(name)
+                    messages.append(msg)
+                    messages.extend(_run_tool_calls(calls))
+                    continue
+                text = (msg.get("content") or "").strip()
+                break
+    except Exception:
+        end(who)
+        raise
     result = CompleteResult(
         text=text,
         model=data.get("model") or model,
@@ -270,6 +291,8 @@ def complete_cerebras(
             daemon=True,
             name="cerebras-tts",
         ).start()
+    else:
+        end(who)
     return result
 
 
@@ -301,12 +324,20 @@ def _speech_epoch(session_id: str) -> int | None:
 
 def _speak_cerebras(text: str, epoch: int | None = None) -> None:
     try:
+        from hsengine.engine.webrtc_activity import begin, end
+
+        begin("ripley", "speaking")
+    except Exception:
+        end = lambda *_a, **_k: None  # type: ignore[misc,assignment]
+    try:
         from hsengine.engine.webrtc_tts import speak_on_session_boards
 
         log.info("speaking %r", text[:200])
         speak_on_session_boards(text, source="cerebras", epoch=epoch)
     except Exception:
         log.exception("Kyutai TTS failed for Cerebras text")
+    finally:
+        end("ripley")
 
 
 def _moshi_on() -> None:
