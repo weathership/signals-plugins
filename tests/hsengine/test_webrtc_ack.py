@@ -1,4 +1,4 @@
-"""Spoken ack space is large; consecutive lines are not a catchphrase."""
+"""Spoken ack space is large; live Connect does not speak it unless flagged."""
 from __future__ import annotations
 
 import random
@@ -65,6 +65,62 @@ def test_default_acks_are_not_about_the_tape():
     _recent.clear()
     lines = [ack_line(rng=rng) for _ in range(80)]
     assert not any(re.search(r"\btape\b", ln, re.I) for ln in lines)
+
+
+def test_catchphrases_enabled_reads_hocon_flag():
+    from hsengine.config import reset_config
+    from hsengine.engine.webrtc_ack import catchphrases_enabled
+
+    reset_config()
+    assert catchphrases_enabled() is False
+
+
+def test_hold_tight_is_silent_when_catchphrases_off(monkeypatch):
+    chips: list[tuple] = []
+    spoken: list = []
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_ack.catchphrases_enabled", lambda: False
+    )
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_activity.begin",
+        lambda *a, **k: chips.append(a),
+    )
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_tts.speak_on_session_boards",
+        lambda *a, **k: spoken.append(a),
+    )
+    from hsengine.engine.webrtc_moshi import _hold_tight
+
+    _hold_tight("show the SLB filings")
+    assert chips == [("ripley", "on it")]
+    assert spoken == []
+
+
+def test_hold_tight_speaks_ack_when_catchphrases_on(monkeypatch):
+    import threading
+
+    done = threading.Event()
+    spoken: list[str] = []
+
+    def _speak(text, **_k):
+        spoken.append(text)
+        done.set()
+
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_ack.catchphrases_enabled", lambda: True
+    )
+    monkeypatch.setattr("hsengine.engine.webrtc_activity.begin", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_ack.ack_line", lambda *a, **k: "On it."
+    )
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_tts.speak_on_session_boards", _speak
+    )
+    from hsengine.engine.webrtc_moshi import _hold_tight
+
+    _hold_tight("show the SLB filings")
+    assert done.wait(1.0)
+    assert spoken == ["On it."]
 
 
 def test_film_register_shows_up():

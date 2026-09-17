@@ -68,5 +68,22 @@ def get_list(path: str) -> list[Any]:
     return list(value)
 
 
+def get_bool(path: str, default: bool = False) -> bool:
+    try:
+        value = load_config().get(path)
+    except Exception:
+        return default
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("true", "yes", "on", "1"):
+        return True
+    if text in ("false", "no", "off", "0", ""):
+        return False
+    return default
+
+
 def reset_config() -> None:
     _load_config_at.cache_clear()

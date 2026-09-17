@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from hsengine.config import get_int, get_str, load_config, reset_config
+from hsengine.config import get_bool, get_int, get_str, load_config, reset_config
 
 
 def test_lattice_port_and_project_defaults():
@@ -11,6 +11,11 @@ def test_lattice_port_and_project_defaults():
     assert get_int("hermes.engine.grpc.port") == 50651
     assert get_str("hermes.engine.grpc.host") == "0.0.0.0"
     assert get_int("hermes.dashboard.http.bind_port") == 9119
+
+
+def test_ack_catchphrases_default_off():
+    reset_config()
+    assert get_bool("hermes.engine.webrtc.ack.catchphrases", True) is False
 
 
 def test_federation_peers_default_to_gaius_then_aegir():

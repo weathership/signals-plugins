@@ -96,7 +96,7 @@ def moshi_host_port() -> tuple[str, int]:
 
 
 def _hold_tight(utterance: str = "") -> None:
-    """Immediate voice + chip so STT never goes silent while Ripley works."""
+    """Chip immediately; film catchphrase TTS only if the flag is on."""
     import threading
 
     try:
@@ -105,6 +105,11 @@ def _hold_tight(utterance: str = "") -> None:
         begin("ripley", "on it")
     except Exception:
         pass
+
+    from hsengine.engine.webrtc_ack import catchphrases_enabled
+
+    if not catchphrases_enabled():
+        return
 
     def _ack() -> None:
         try:

@@ -1,4 +1,7 @@
-"""Immediate spoken ack while Ripley works. Combinatorial, not a catchphrase.
+"""Immediate spoken ack while Ripley works. Combinatorial film/Pi register.
+
+Gated by hermes.engine.webrtc.ack.catchphrases (default off). Live Connect
+does not speak these lines until that flag is turned back on.
 
 Register: WarGames/WOPR, Ex Machina, Hackers, Swordfish, Sneakers,
 Trainspotting, Withnail and I, Fight Club, Midnight in Paris / Hemingway,
@@ -672,6 +675,16 @@ _mu = threading.Lock()
 _RECENT = 256
 
 assert len(_OPEN) * len(_MIDDLE) * len(_TAIL) * 3 > 1000
+
+
+def catchphrases_enabled() -> bool:
+    """Live Connect stays quiet unless the HOCON flag is on."""
+    try:
+        from hsengine.config import get_bool
+
+        return bool(get_bool("hermes.engine.webrtc.ack.catchphrases", False))
+    except Exception:
+        return False
 
 
 def _hook(utterance: str) -> str:
