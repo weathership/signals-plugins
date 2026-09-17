@@ -15,9 +15,9 @@ from typing import Any
 log = logging.getLogger("hsengine.engine.webrtc.mix")
 
 CANON_RATE = 48000
-# Thoughts/agenda spoken can run past two minutes. A ring that pops left
-# ate the start of the utterance ("jumps in mid-sentence").
-BOARD_SECONDS = 300
+# Hold-tight ack + a long Ripley turn must both fit. A ring that pops left
+# ate the start (or the rest) of the utterance. 10× the 300s board.
+BOARD_SECONDS = 3000
 _SPEECH_FLOOR = 1e-4  # below this, treat as silence → clip plays
 
 

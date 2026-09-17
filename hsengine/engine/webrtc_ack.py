@@ -657,7 +657,7 @@ _NOD = (
     "Eight years late. Hold on.",
     "Compliance.",
     "Compliance. Navigator.",
-    "See you later, Navigator.",
+
 )
 
 _HOOK_RE = re.compile(

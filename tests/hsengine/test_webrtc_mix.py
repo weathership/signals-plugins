@@ -68,11 +68,11 @@ def test_board_pull_none_when_empty():
     assert board.pull(16, 48000) is None
 
 
-def test_board_default_holds_five_minutes_of_speech():
-    """A 2-minute ring clipped long thoughts/agenda turns; 5 minutes is the floor."""
+def test_board_default_holds_fifty_minutes_of_speech():
+    """Ack + a long Ripley turn must not popleft the rest of the utterance."""
     board = SpeechBoard()
-    assert BOARD_SECONDS >= 300
-    assert board.max_samples >= 48000 * 300
+    assert BOARD_SECONDS >= 3000
+    assert board.max_samples >= 48000 * 3000
 
 
 def test_board_keeps_the_start_of_a_long_utterance():
