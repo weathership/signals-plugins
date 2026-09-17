@@ -189,11 +189,7 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     nodes: list[str] = list(scene.get("nodes") or DEMO_NODES)
     edges: list[tuple[int, int, float]] = list(scene.get("edges") or DEMO_EDGES)
     if kind == "curve":
-        xs = list(range(max(2, len(nodes))))
-        ys = [1.0 + (i % 5) * 0.3 for i in xs]
-        return hv.Curve(list(zip(xs, ys)), "index", "value").opts(
-            title=title, width=1100, height=620, bgcolor="#0b0b12"
-        )
+        return _curves(scene, title)
     if kind == "heatmap":
         data = [(i, j, ((i + j) % 7) / 7.0) for i in range(8) for j in range(8)]
         return hv.HeatMap(data, ["x", "y"], "v").opts(
@@ -204,11 +200,7 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     if kind in ("timeline", "filings"):
         return _timeline(scene, title)
     if kind == "scatter":
-        xs = list(range(max(2, len(nodes))))
-        ys = [1.0 + (i % 5) * 0.3 for i in xs]
-        return hv.Scatter(list(zip(xs, ys)), "index", "value").opts(
-            title=title, width=1100, height=620, size=10, bgcolor="#0b0b12"
-        )
+        return _curves(scene, title, scatter=True)
     node_df = pd.DataFrame({"index": list(range(len(nodes))), "name": nodes})
     if highlight:
         node_df["active"] = [int(highlight in n.lower()) for n in nodes]
@@ -328,6 +320,61 @@ def _scene_events(scene: dict[str, Any]) -> list[dict[str, Any]]:
         {"at": "2026-08-31", "lane": "SLB", "label": "Form 4"},
         {"at": "2026-09-01", "lane": "SLB", "label": "Form 4"},
     ]
+
+
+def _empty_plot(title: str, message: str) -> Any:
+    import holoviews as hv
+
+    return hv.Text(0.5, 0.5, message).opts(
+        title=title or "",
+        text_color="#e8ecf4",
+        fontsize=16,
+        bgcolor="#0b0b12",
+        width=1100,
+        height=620,
+    )
+
+
+def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
+    """Real series only. Never invent index-vs-value from ticker names."""
+    import holoviews as hv
+
+    payload = _payload(scene)
+    series = payload.get("series")
+    traces: list[Any] = []
+    if isinstance(series, list):
+        for row in series:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or row.get("symbol") or "")
+            xs = row.get("x") or []
+            ys = row.get("y") or []
+            pts = row.get("points")
+            if pts:
+                data = [(p[0], p[1]) for p in pts if isinstance(p, (list, tuple)) and len(p) >= 2]
+            elif xs and ys and len(xs) == len(ys):
+                data = list(zip(xs, ys))
+            else:
+                continue
+            if len(data) < 2:
+                continue
+            if scatter:
+                traces.append(hv.Scatter(data, "x", "y", label=name))
+            else:
+                traces.append(hv.Curve(data, "x", "y", label=name))
+    if traces:
+        overlay = hv.Overlay(traces) if len(traces) > 1 else traces[0]
+        return overlay.opts(
+            title=title or "",
+            width=1100,
+            height=620,
+            bgcolor="#0b0b12",
+            legend_position="top_left",
+        )
+    return _empty_plot(
+        title,
+        "No numeric series in the payload\nFMP quote is name/exchange only",
+    )
 
 
 def _timeline(scene: dict[str, Any], title: str) -> Any:

@@ -53,6 +53,23 @@ def test_timeline_kind_builds_a_scatter_of_dates():
     assert names == ["at"]
 
 
+def test_curve_without_series_does_not_invent_a_line():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene("c1", kind="curve", title="VTIP", data='{"tickers":["VTIP"]}')
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Text"
+
+
+def test_curve_with_series_plots_those_points():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = '{"series":[{"name":"VTIP","points":[[0,100],[1,101],[2,99]]}]}'
+    scene = apps.put_scene("c2", kind="curve", title="VTIP", data=raw)
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Curve"
+
+
 def test_density_kind_is_a_week_by_lane_heatmap():
     from hsengine.engine import webrtc_viz_apps as apps
 
