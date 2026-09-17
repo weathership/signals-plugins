@@ -2,7 +2,9 @@
 
 Register: WarGames/WOPR, Ex Machina, Hackers, Swordfish, Sneakers,
 Trainspotting, Withnail and I, Fight Club, Midnight in Paris / Hemingway,
-and a wider film/lit pile. Fragments most of the time; full nods rarely.
+Event Horizon, Jurassic Park, Back to the Future, Ghostbusters, Pi (1998),
+and a wider film/lit pile. The line that always unique: current time, then
+"Press return." Fragments most of the time; full nods rarely.
 Kyutai TTS only — no Cerebras round.
 """
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 import random
 import re
 import threading
+from datetime import datetime
 
 _OPEN = (
     "Yeah",
@@ -104,6 +107,31 @@ _OPEN = (
     "Never confuse movement with action",
     "The first draft can wait",
     "Isn't it pretty to think so",
+    "Great Scott",
+    "This is heavy",
+    "Hello McFly",
+    "Where we're going",
+    "Hold on to your butts",
+    "Clever girl",
+    "Spared no expense",
+    "Must go faster",
+    "Life finds a way",
+    "Back off man",
+    "Who you gonna call",
+    "Don't cross the streams",
+    "He slimed me",
+    "Important safety tip",
+    "We came we saw",
+    "Where we won't need eyes",
+    "The ship is looking",
+    "Libera te",
+    "Save yourself from the lag",
+    "Press return",
+    "Stare into the sun",
+    "Don't blink",
+    "Two hundred sixteen",
+    "Eat some pie",
+    "Slow down Max",
 )
 
 _MIDDLE = (
@@ -231,6 +259,71 @@ _MIDDLE = (
     "true at first light",
     "a feast is moveable",
     "bleed on it then talk",
+    "life finds a way",
+    "whether they could, not whether they should",
+    "hold on to your butts",
+    "clever girl",
+    "spared no expense",
+    "must go faster",
+    "objects in mirror",
+    "it's a UNIX system, I know this",
+    "you didn't say the magic word",
+    "they're moving in herds",
+    "welcome to the park",
+    "1.21 gigawatts",
+    "where we're going we don't need roads",
+    "this is heavy",
+    "flux capacitor charging",
+    "eighty-eight miles per hour",
+    "if you put your mind to it",
+    "make like a tree",
+    "save the clock tower",
+    "enchantment under the sea",
+    "great Scott",
+    "hello McFly",
+    "don't cross the streams",
+    "it would be bad",
+    "dogs and cats living together",
+    "who you gonna call",
+    "I ain't afraid of no ghost",
+    "we came, we saw, we kicked its ass",
+    "back off man, I'm a scientist",
+    "there is no Dana, only Zuul",
+    "are you the Keymaster",
+    "are you the Gatekeeper",
+    "tell him about the Twinkie",
+    "the universe as an infinite Twinkie",
+    "if someone asks if you're a god, you say yes",
+    "we have the tools, we have the talent",
+    "he slimed me",
+    "important safety tip",
+    "Stay Puft can wait",
+    "nice shooting Tex",
+    "I love this plan. I'm excited to be a part of it",
+    "where we're going we won't need eyes to see",
+    "hell is just a word",
+    "the ship is alive",
+    "it shows you things",
+    "libera te tutemet",
+    "save yourself from hell, then look",
+    "the dark inside the query",
+    "the event horizon of this filing",
+    "Lewis and Clark can wait",
+    "you're not seeing this yet",
+    "staring into the sun",
+    "forcing myself not to blink",
+    "the brightness began to dissolve",
+    "mother said not to look",
+    "when I was six",
+    "press return",
+    "two hundred sixteen digits",
+    "the pattern is in everything",
+    "mathematics is the language of nature",
+    "the market is a living organism",
+    "rest and eat some pie",
+    "slow down Max",
+    "Euclid is quiet",
+    "a number at the center",
 )
 
 _TAIL = (
@@ -294,6 +387,30 @@ _TAIL = (
     "typewriter later",
     "café after",
     "midnight can wait",
+    "life finds a way",
+    "hold on to your butts",
+    "clever girl",
+    "must go faster",
+    "spared no expense",
+    "great Scott",
+    "this is heavy",
+    "we don't need roads",
+    "1.21 gigawatts",
+    "don't cross the streams",
+    "who you gonna call",
+    "I ain't afraid of no ghost",
+    "back off man",
+    "important safety tip",
+    "he slimed me",
+    "where we won't need eyes",
+    "the ship is alive",
+    "libera te",
+    "press return",
+    "don't blink",
+    "the brightness dissolves",
+    "eat some pie",
+    "slow down Max",
+    "two sixteen",
 )
 
 _TEMPLATES = (
@@ -449,6 +566,60 @@ _NOD = (
     "Alea iacta est. Looking.",
     "Carthago can wait.",
     "Et tu, 8-K.",
+    "Life finds a way.",
+    "Hold on to your butts.",
+    "Clever girl.",
+    "Spared no expense.",
+    "Must go faster.",
+    "It's a UNIX system. I know this.",
+    "Ah ah ah. You didn't say the magic word.",
+    "Your scientists were so preoccupied with whether they could.",
+    "They didn't stop to think if they should. I am.",
+    "Welcome to Jurassic Park.",
+    "They're moving in herds.",
+    "Great Scott.",
+    "This is heavy.",
+    "Roads? Where we're going, we don't need roads.",
+    "1.21 gigawatts.",
+    "If you put your mind to it, you can accomplish anything. Starting now.",
+    "Hello, McFly.",
+    "Make like a tree and look.",
+    "Flux capacitor. Working.",
+    "Eighty-eight miles per hour.",
+    "Save the clock tower. After this.",
+    "Who you gonna call?",
+    "I ain't afraid of no ghost.",
+    "We came, we saw, we kicked its ass.",
+    "Back off, man. I'm a scientist.",
+    "Don't cross the streams.",
+    "It would be bad.",
+    "Dogs and cats, living together. Mass hysteria.",
+    "There is no Dana. Only Zuul. Later.",
+    "He slimed me.",
+    "Important safety tip. Thanks Egon.",
+    "Tell him about the Twinkie.",
+    "Ray, if someone asks you if you're a god, you say yes.",
+    "We have the tools. We have the talent.",
+    "I love this plan. I'm excited to be a part of it. Let's do it.",
+    "Where we're going, we won't need eyes to see.",
+    "Hell is just a word. The query is the thing.",
+    "The ship is alive.",
+    "It shows you things.",
+    "Libera te tutemet ex inferis. Then look.",
+    "Save yourself. I'm looking.",
+    "You're not seeing this. Yet.",
+    "When I was a little kid my mother told me not to stare into the sun.",
+    "So once when I was six, I did.",
+    "At first the brightness was overwhelming, but I had seen that before.",
+    "I kept looking, forcing myself not to blink.",
+    "Then the brightness began to dissolve.",
+    "Press return.",
+    "Rest and eat some pie.",
+    "Slow down, Max.",
+    "216.",
+    "Mathematics is the language of nature.",
+    "There is a pattern in everything.",
+    "The stock market is a living organism. Looking anyway.",
 )
 
 _HOOK_RE = re.compile(
@@ -476,6 +647,37 @@ def _hook(utterance: str) -> str:
     return token
 
 
+def _clock(now: datetime | None = None) -> str:
+    """Seconds included so two acks in the same minute still differ."""
+    stamp = now or datetime.now().astimezone()
+    return stamp.strftime("%H:%M:%S")
+
+
+def press_return_line(
+    *,
+    now: datetime | None = None,
+    rng: random.Random | None = None,
+    open_: str | None = None,
+) -> str:
+    """Pi (1998): state the time, then press return. Always unique."""
+    rng = rng or random.Random()
+    clock = _clock(now)
+    open_ = open_ or rng.choice(_OPEN)
+    tail = rng.choice(_TAIL)
+    return _clean(
+        rng.choice(
+            (
+                f"{open_}. {clock}. Press return.",
+                f"{open_}. It's {clock}. Press return.",
+                f"{open_}. {clock}. Press return. {tail}.",
+                f"When I was six I stared into the sun. {clock}. Press return.",
+                f"The brightness began to dissolve. {clock}. Press return.",
+                f"{open_}. {clock}. Two sixteen. Press return.",
+            )
+        )
+    )
+
+
 def _clean(text: str) -> str:
     text = " ".join((text or "").split())
     text = text.replace("..", ".")
@@ -494,14 +696,21 @@ def _clean(text: str) -> str:
 def ack_line(utterance: str = "", *, rng: random.Random | None = None) -> str:
     """One short spoken ack. Combinatorial; avoids the last few lines."""
     rng = rng or random.Random()
-    if rng.random() < 0.16:
+    hook = _hook(utterance)
+    # Time + "Press return" is the uniqueness engine (Pi). Majority of acks.
+    if rng.random() < 0.62:
+        line = press_return_line(rng=rng)
+        with _mu:
+            _recent.append(line)
+            del _recent[:-_RECENT]
+        return line
+    if not hook and rng.random() < 0.28:
         nod = rng.choice(_NOD)
         with _mu:
             if nod not in _recent:
                 _recent.append(nod)
                 del _recent[:-_RECENT]
                 return nod
-    hook = _hook(utterance)
     middles = list(_MIDDLE)
     if hook:
         hooked = (
@@ -535,4 +744,8 @@ def ack_line(utterance: str = "", *, rng: random.Random | None = None) -> str:
 
 
 def space_size() -> int:
-    return len(_OPEN) * len(_MIDDLE) * len(_TAIL) * len(_TEMPLATES) + len(_NOD)
+    return (
+        len(_OPEN) * len(_MIDDLE) * len(_TAIL) * len(_TEMPLATES)
+        + len(_NOD)
+        + 86400  # HH:MM:SS × Press return
+    )

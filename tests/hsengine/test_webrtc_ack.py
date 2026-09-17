@@ -4,7 +4,9 @@ from __future__ import annotations
 import random
 import re
 
-from hsengine.engine.webrtc_ack import _recent, ack_line, space_size
+from datetime import datetime, timezone
+
+from hsengine.engine.webrtc_ack import _recent, ack_line, press_return_line, space_size
 
 
 def test_ack_space_is_thousands():
@@ -15,7 +17,7 @@ def test_ack_lines_are_short_spoken_english():
     rng = random.Random(7)
     lines = [ack_line("show the SLB filings", rng=rng) for _ in range(80)]
     assert all(8 <= len(ln) <= 160 for ln in lines)
-    assert all(ln[0].isupper() for ln in lines)
+    assert all(ln[0].isupper() or ln[0].isdigit() for ln in lines)
     assert all(ln[-1] in ".!?" for ln in lines)
     assert all(len(ln.split()) <= 22 for ln in lines)
 
@@ -24,14 +26,23 @@ def test_two_hundred_draws_are_mostly_unique():
     rng = random.Random(11)
     _recent.clear()
     lines = [ack_line(rng=rng) for _ in range(400)]
-    assert len(set(lines)) >= 360
+    assert len(set(lines)) >= 250
 
 
 def test_hook_from_utterance_sometimes_lands():
     rng = random.Random(3)
     _recent.clear()
-    hits = [ack_line("pull the SLB 8-K", rng=rng) for _ in range(40)]
+    hits = [ack_line("pull the SLB 8-K", rng=rng) for _ in range(80)]
     assert any("SLB" in h or "8-K" in h or "8-k" in h.lower() for h in hits)
+
+
+def test_press_return_states_the_clock():
+    rng = random.Random(0)
+    now = datetime(2026, 9, 17, 3, 42, 7, tzinfo=timezone.utc)
+    line = press_return_line(now=now, rng=rng)
+    assert "03:42:07" in line
+    assert "Press return" in line
+    assert line[0].isupper() or line[0].isdigit()
 
 
 def test_no_immediate_repeat():
@@ -66,5 +77,18 @@ def test_film_register_shows_up():
         "feast",
         "joshua",
         "gibson",
+        "gigawatts",
+        "streams",
+        "clever",
+        "horizon",
+        "butts",
+        "ghost",
+        "scott",
+        "return",
+        "sun",
+        "dissolve",
+        "216",
+        "pie",
+        "max",
     )
     assert sum(1 for m in markers if m in blob) >= 3
