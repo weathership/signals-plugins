@@ -32,6 +32,8 @@ DEMO_EDGES = [
 
 # Per Connect scene. The Bokeh handler reads this; query string is only a nonce.
 SCENES: dict[str, dict[str, Any]] = {}
+# Live Panel panes — in-place object replace, no Chromium navigate.
+PANES: dict[str, Any] = {}
 
 
 def parse_data(raw: str) -> tuple[list[str], list[tuple[int, int, float]]]:
@@ -132,9 +134,25 @@ def put_scene(
         "source": origin,
         "nodes": nodes,
         "edges": edges,
+        "data": (data or "").strip(),
     }
     SCENES[session_id] = scene
     return scene
+
+
+def replace_object(session_id: str, scene: dict[str, Any]) -> bool:
+    """Swap the HoloViews object on the live pane. False if no pane yet."""
+    pane = PANES.get(session_id)
+    if pane is None:
+        return False
+    pane.object = _hv_obj(scene)
+    log.info("holoviews pane updated session=%s kind=%s", session_id, scene.get("kind"))
+    return True
+
+
+def drop_session(session_id: str) -> None:
+    PANES.pop(session_id, None)
+    SCENES.pop(session_id, None)
 
 
 def _default_title(kind: str, origin: str) -> str:
@@ -176,6 +194,8 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
         return hv.HeatMap(data, ["x", "y"], "v").opts(
             title=title, width=720, height=720, cmap="Viridis"
         )
+    if kind in ("timeline", "filings"):
+        return _timeline(scene, title)
     if kind == "scatter":
         xs = list(range(max(2, len(nodes))))
         ys = [1.0 + (i % 5) * 0.3 for i in xs]
@@ -198,6 +218,50 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
             bgcolor="#0b0b12",
             label_text_color="#e8ecf4",
         )
+    )
+
+
+def _timeline(scene: dict[str, Any], title: str) -> Any:
+    import holoviews as hv
+    import pandas as pd
+
+    events: list[dict[str, Any]] = []
+    raw = (scene.get("data") or "").strip()
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {}
+        for row in payload.get("events") or []:
+            if not isinstance(row, dict):
+                continue
+            at = str(row.get("at") or row.get("date") or "").strip()
+            lane = str(row.get("lane") or row.get("name") or row.get("symbol") or "").strip()
+            if at and lane:
+                events.append({"at": at, "lane": lane, "label": str(row.get("label") or "")})
+    if not events:
+        events = [
+            {"at": "2026-08-06", "lane": "NOV", "label": "13G/A"},
+            {"at": "2026-08-27", "lane": "SLB", "label": "Form 4"},
+            {"at": "2026-08-31", "lane": "SLB", "label": "8-K"},
+            {"at": "2026-08-31", "lane": "SLB", "label": "Form 4"},
+            {"at": "2026-09-01", "lane": "SLB", "label": "Form 4"},
+        ]
+    df = pd.DataFrame(events)
+    df["at"] = pd.to_datetime(df["at"], errors="coerce")
+    df = df.dropna(subset=["at"])
+    if df.empty:
+        return hv.Scatter([(0, 0)], "t", "lane").opts(title=title, width=1100, height=640, bgcolor="#0b0b12")
+    return hv.Scatter(df, kdims=["at"], vdims=["lane"]).opts(
+        title=title or "Filings timeline",
+        width=1100,
+        height=640,
+        size=14,
+        color="lane",
+        cmap="Category20",
+        bgcolor="#0b0b12",
+        xlabel="",
+        ylabel="",
     )
 
 
@@ -231,6 +295,8 @@ def modify_doc(doc: Any) -> None:
         height=720,
         linked_axes=False,
     )
+    if sid:
+        PANES[sid] = pane
     pane.server_doc(doc)
     doc.title = title
     log.info(

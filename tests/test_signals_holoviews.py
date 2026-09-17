@@ -38,6 +38,21 @@ def test_aperture_falls_back_to_demo_without_aegir():
     assert meta["source"] in ("aegir", "demo")
 
 
+def test_timeline_kind_builds_a_scatter_of_dates():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene(
+        "tl",
+        kind="timeline",
+        title="Filings",
+        data='{"events":[{"at":"2026-08-31","lane":"SLB","label":"8-K"},{"at":"2026-09-01","lane":"SLB","label":"Form 4"}]}',
+    )
+    obj = apps._hv_obj(scene)
+    assert scene["kind"] == "timeline"
+    names = [str(k) for k in getattr(obj, "kdims", [])]
+    assert names == ["at"]
+
+
 def test_modify_doc_attaches_a_bokeh_figure():
     from bokeh.document import Document
 

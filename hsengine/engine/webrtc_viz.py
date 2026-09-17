@@ -109,17 +109,25 @@ async def _show_live(
         data=data,
     )
     port = webrtc_bokeh.ensure_server()
-    url = webrtc_bokeh.document_url(port, session_id, nonce=uuid.uuid4().hex[:8])
 
     def _push(image: Any) -> None:
         webrtc_program.PROGRAM.replace_image(image)
 
     cam = _cameras.get(session_id)
-    if cam is None:
+    in_place = cam is not None and webrtc_viz_apps.replace_object(session_id, scene)
+    if in_place:
+        url = webrtc_bokeh.document_url(port, session_id)
+        await asyncio.sleep(0.35)
+        if cam.latest_image is None and not cam._screencast:
+            await cam.start_screencast()
+            await cam._wait_first_frame()
+    elif cam is None:
+        url = webrtc_bokeh.document_url(port, session_id, nonce=uuid.uuid4().hex[:8])
         cam = CdpCamera(session_id)
         _cameras[session_id] = cam
         await cam.start(url, on_image=_push)
     else:
+        url = webrtc_bokeh.document_url(port, session_id, nonce=uuid.uuid4().hex[:8])
         await cam.navigate(url)
         if not cam._screencast:
             await cam.start_screencast()
@@ -138,6 +146,7 @@ async def _show_live(
             "url": url,
             "capture": "Page.startScreencast",
             "frames": cam.frames,
+            "in_place": in_place,
         },
     )
     return {"ok": True, **webrtc_program.PROGRAM.status()}
@@ -156,6 +165,9 @@ def pointer(*, x: float, y: float, type: str = "mousePressed", button: str = "le
 
 
 async def close_session(session_id: str) -> None:
+    from hsengine.engine import webrtc_viz_apps
+
+    webrtc_viz_apps.drop_session(session_id)
     cam = _cameras.pop(session_id, None)
     if cam is None:
         return

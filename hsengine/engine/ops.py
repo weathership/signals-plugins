@@ -930,9 +930,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
             "description": (
                 "Put a live HoloViews/Bokeh page on the AgentRTC video "
                 "(headless Chromium compositor + CDP screencast). Humans "
-                "spectate; you drive. kind=chord|aperture|scatter|curve|"
-                "heatmap. source=aegir is optional data. Aegir is not "
-                "required. Call this instead of describing a figure."
+                "spectate; you drive. kind=chord|timeline|scatter|curve|"
+                "heatmap|aperture. timeline: filings/events JSON "
+                "{events:[{at,lane,label}]}. Prefer in-place updates; "
+                "do not reload the page for every plot. Call this "
+                "instead of describing a figure."
             ),
             "parameters": {
                 "type": "object",
