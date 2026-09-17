@@ -53,6 +53,35 @@ def test_timeline_kind_builds_a_scatter_of_dates():
     assert names == ["at"]
 
 
+def test_density_kind_is_a_week_by_lane_heatmap():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene(
+        "dens",
+        kind="density",
+        title="Filings density",
+        data='{"events":[{"at":"2026-08-31","lane":"SLB","label":"8-K"},{"at":"2026-09-01","lane":"SLB","label":"Form 4"},{"at":"2026-08-06","lane":"NOV","label":"13G/A"}]}',
+    )
+    obj = apps._hv_obj(scene)
+    assert scene["kind"] == "density"
+    assert [str(k) for k in obj.kdims] == ["week", "lane"]
+    assert [str(v) for v in obj.vdims] == ["n"]
+
+
+def test_parse_fmp_hit_title():
+    from hsengine.engine.webrtc_viz_apps import _parse_fmp_hit
+
+    assert _parse_fmp_hit("SLB — Form 4 — 2026-09-01", "SLB") == ("2026-09-01", "Form4")
+    assert _parse_fmp_hit("8-K — 2026-08-31", "SLB") == ("2026-08-31", "8-K")
+    assert _parse_fmp_hit("no date here", "SLB") is None
+
+
+def test_tickers_from_json():
+    from hsengine.engine.webrtc_viz_apps import _tickers_from_scene
+
+    assert _tickers_from_scene({"data": '{"tickers":["SLB","HAL"]}'}) == ["SLB", "HAL"]
+
+
 def test_modify_doc_attaches_a_bokeh_figure():
     from bokeh.document import Document
 

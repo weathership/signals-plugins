@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 log = logging.getLogger("hsengine.engine.webrtc.viz.apps")
@@ -160,6 +161,10 @@ def _default_title(kind: str, origin: str) -> str:
         return "Aperture — SKOS constituent lattice"
     if kind == "chord":
         return "Ontology chord"
+    if kind in ("density", "filings_density"):
+        return "Filings density"
+    if kind in ("timeline", "filings"):
+        return "Filings timeline"
     return kind.replace("_", " ").title()
 
 
@@ -194,6 +199,8 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
         return hv.HeatMap(data, ["x", "y"], "v").opts(
             title=title, width=720, height=720, cmap="Viridis"
         )
+    if kind in ("density", "filings_density"):
+        return _density(scene, title)
     if kind in ("timeline", "filings"):
         return _timeline(scene, title)
     if kind == "scatter":
@@ -221,32 +228,113 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     )
 
 
+_DATE_RE = re.compile(r"(20\d{2}-\d{2}-\d{2})")
+_FORM_RE = re.compile(
+    r"(Form\s*\d+[A-Z]?|8-K|10-K|10-Q|13G/?A?|S-\d+|4\b)", re.IGNORECASE
+)
+
+
+def _payload(scene: dict[str, Any]) -> dict[str, Any]:
+    raw = (scene.get("data") or "").strip()
+    if not raw:
+        return {}
+    try:
+        out = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return out if isinstance(out, dict) else {}
+
+
+def _events_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for row in payload.get("events") or []:
+        if not isinstance(row, dict):
+            continue
+        at = str(row.get("at") or row.get("date") or "").strip()
+        lane = str(
+            row.get("lane") or row.get("name") or row.get("symbol") or ""
+        ).strip()
+        if at and lane:
+            events.append(
+                {"at": at, "lane": lane, "label": str(row.get("label") or "")}
+            )
+    return events
+
+
+def _tickers_from_scene(scene: dict[str, Any]) -> list[str]:
+    payload = _payload(scene)
+    raw = payload.get("tickers") or payload.get("symbols")
+    if isinstance(raw, str):
+        raw = [p.strip() for p in raw.split(",") if p.strip()]
+    if isinstance(raw, list) and raw:
+        return [str(t).strip().upper() for t in raw if str(t).strip()]
+    nodes = [str(n).strip().upper() for n in (scene.get("nodes") or []) if str(n).strip()]
+    if nodes and all(2 <= len(n) <= 5 and n.replace(".", "").isalnum() for n in nodes):
+        return nodes
+    return []
+
+
+def _parse_fmp_hit(title: str, ticker: str) -> tuple[str, str] | None:
+    found = _DATE_RE.search(title or "")
+    if not found:
+        return None
+    form = _FORM_RE.search(title or "")
+    label = form.group(1).replace(" ", "") if form else "filing"
+    return found.group(1), label
+
+
+def events_from_fmp(tickers: list[str]) -> list[dict[str, Any]]:
+    """Gaius FMP filings / 8-K / insider → {at, lane, label}. Empty if Gaius is quiet."""
+    from hsengine.engine import ops
+
+    events: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for ticker in tickers:
+        for stream in ("filings", "eight_k", "insider"):
+            try:
+                out = ops.fmp(query=ticker, stream=stream, limit=16)
+            except Exception:
+                log.debug("fmp %s %s failed", ticker, stream, exc_info=True)
+                continue
+            for hit in out.get("hits") or []:
+                if not isinstance(hit, dict):
+                    continue
+                parsed = _parse_fmp_hit(str(hit.get("title") or ""), ticker)
+                if parsed is None:
+                    continue
+                at, label = parsed
+                key = (at, ticker, label)
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append({"at": at, "lane": ticker, "label": label})
+    events.sort(key=lambda e: (e["at"], e["lane"]))
+    return events
+
+
+def _scene_events(scene: dict[str, Any]) -> list[dict[str, Any]]:
+    events = _events_from_payload(_payload(scene))
+    if events:
+        return events
+    tickers = _tickers_from_scene(scene)
+    if tickers:
+        pulled = events_from_fmp(tickers)
+        if pulled:
+            return pulled
+    return [
+        {"at": "2026-08-06", "lane": "NOV", "label": "13G/A"},
+        {"at": "2026-08-27", "lane": "SLB", "label": "Form 4"},
+        {"at": "2026-08-31", "lane": "SLB", "label": "8-K"},
+        {"at": "2026-08-31", "lane": "SLB", "label": "Form 4"},
+        {"at": "2026-09-01", "lane": "SLB", "label": "Form 4"},
+    ]
+
+
 def _timeline(scene: dict[str, Any], title: str) -> Any:
     import holoviews as hv
     import pandas as pd
 
-    events: list[dict[str, Any]] = []
-    raw = (scene.get("data") or "").strip()
-    if raw:
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            payload = {}
-        for row in payload.get("events") or []:
-            if not isinstance(row, dict):
-                continue
-            at = str(row.get("at") or row.get("date") or "").strip()
-            lane = str(row.get("lane") or row.get("name") or row.get("symbol") or "").strip()
-            if at and lane:
-                events.append({"at": at, "lane": lane, "label": str(row.get("label") or "")})
-    if not events:
-        events = [
-            {"at": "2026-08-06", "lane": "NOV", "label": "13G/A"},
-            {"at": "2026-08-27", "lane": "SLB", "label": "Form 4"},
-            {"at": "2026-08-31", "lane": "SLB", "label": "8-K"},
-            {"at": "2026-08-31", "lane": "SLB", "label": "Form 4"},
-            {"at": "2026-09-01", "lane": "SLB", "label": "Form 4"},
-        ]
+    events = _scene_events(scene)
     df = pd.DataFrame(events)
     df["at"] = pd.to_datetime(df["at"], errors="coerce")
     df = df.dropna(subset=["at"])
@@ -262,6 +350,35 @@ def _timeline(scene: dict[str, Any], title: str) -> Any:
         bgcolor="#0b0b12",
         xlabel="",
         ylabel="",
+    )
+
+
+def _density(scene: dict[str, Any], title: str) -> Any:
+    """Week × ticker heatmap of filing counts — density, not a 4-point scatter."""
+    import holoviews as hv
+    import pandas as pd
+
+    events = _scene_events(scene)
+    df = pd.DataFrame(events)
+    df["at"] = pd.to_datetime(df["at"], errors="coerce")
+    df = df.dropna(subset=["at"])
+    if df.empty:
+        return hv.HeatMap([(0, "—", 0)], ["week", "lane"], "n").opts(
+            title=title, width=1100, height=420, cmap="Magma", bgcolor="#0b0b12"
+        )
+    df["week"] = df["at"].dt.to_period("W").dt.start_time
+    counts = df.groupby(["week", "lane"], as_index=False).size()
+    counts = counts.rename(columns={"size": "n"})
+    return hv.HeatMap(counts, kdims=["week", "lane"], vdims=["n"]).opts(
+        title=title or "Filings density",
+        width=1100,
+        height=420,
+        cmap="Magma",
+        colorbar=True,
+        bgcolor="#0b0b12",
+        xlabel="",
+        ylabel="",
+        tools=["hover"],
     )
 
 
