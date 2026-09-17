@@ -956,7 +956,7 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "viz_select",
             "description": (
-                "Highlight a node on the current AgentRTC program still "
+                "Highlight a node on the live AgentRTC video figure "
                 "(drill into an ontology arc or data feature)."
             ),
             "parameters": {
@@ -989,7 +989,7 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "Hover the live HoloViews figure so Bokeh popup details "
                 "follow the narrative. lane=SLB (or node). t=0..1 along "
                 "the time axis (default mid). Use this on density/"
-                "timeline, not a still."
+                "timeline — this is the live video, not a still."
             ),
             "parameters": {
                 "type": "object",

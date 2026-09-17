@@ -37,16 +37,9 @@ def _engine_loop() -> asyncio.AbstractEventLoop | None:
 
 
 def _blank_frame(image: Any) -> bool:
-    """Reject 500-page / empty-canvas captures so Listen does not go white."""
-    try:
-        import numpy as np
+    from hsengine.engine.webrtc_cdp import is_blank_plate
 
-        arr = np.asarray(image.convert("RGB"), dtype=np.float32)
-        step = max(1, arr.shape[0] // 24)
-        mean = float(arr[::step, ::step].mean())
-    except Exception:
-        return False
-    return mean >= 248.0 or mean <= 6.0
+    return is_blank_plate(image)
 
 
 def _session_id() -> str:

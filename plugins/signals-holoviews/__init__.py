@@ -1,8 +1,8 @@
-"""HoloViews program stills on the AgentRTC video track.
+"""HoloViews on the AgentRTC video track.
 
-Renders on the engine (same process as WebRTC). Bishop/Ripley call viz_show
-to fade the looping clip out and a chord/scatter/curve in. Nested Hermes
-gets the same tools. HoloViews is required on the engine. Datashader is not this pass.
+Bishop/Ripley/Vasquez call viz_show; the live Chromium compositor is the
+video. Nested Hermes gets the same tools. HoloViews is required on the
+engine. Datashader is not this pass.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ _SHOW = {
                 "type": "string",
                 "description": "chord, aperture, scatter, curve, or heatmap.",
             },
-            "title": {"type": "string", "description": "Title burned onto the still."},
+            "title": {"type": "string", "description": "Title on the live figure."},
             "highlight": {
                 "type": "string",
                 "description": "Node/label to emphasize on a chord.",
@@ -52,7 +52,7 @@ _SHOW = {
 _SELECT = {
     "name": "viz_select",
     "description": (
-        "Re-render the current AgentRTC program still with a node highlighted. "
+        "Highlight a node on the live AgentRTC video figure. "
         "Use after viz_show to drill into an ontology arc or data feature."
     ),
     "parameters": {
@@ -104,7 +104,7 @@ _INPUT = {
 
 _CLEAR = {
     "name": "viz_clear",
-    "description": "Fade the program still out and restore the looping AgentRTC clip.",
+    "description": "Take the live HoloViews page off the video and restore the looping clip.",
     "parameters": {
         "type": "object",
         "properties": {

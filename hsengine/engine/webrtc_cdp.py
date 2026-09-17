@@ -22,6 +22,19 @@ log = logging.getLogger("hsengine.engine.webrtc.cdp")
 VIEW_W = 1280
 VIEW_H = 720
 JPEG_QUALITY = 65
+PUMP_HZ = 12
+# Keep the headless compositor dirty so Page.screencastFrame is a video,
+# not one JPEG after first paint.
+_CAST_KEEPALIVE_JS = """
+(() => {
+  if (window.__hvCast) return true;
+  const s = document.createElement('style');
+  s.textContent = '@keyframes __hvcast{from{filter:brightness(1)}to{filter:brightness(1.002)}}html{animation:__hvcast 90ms infinite alternate;}';
+  document.documentElement.appendChild(s);
+  window.__hvCast = true;
+  return true;
+})()
+"""
 
 
 def chromium_executable() -> str | None:
@@ -116,6 +129,19 @@ def jpeg_to_image(data: bytes) -> Any:
     return Image.open(io.BytesIO(data)).convert("RGB")
 
 
+def is_blank_plate(image: Any) -> bool:
+    """Reject 500-page / empty-canvas captures so Listen does not go white."""
+    try:
+        import numpy as np
+
+        arr = np.asarray(image.convert("RGB"), dtype=np.float32)
+        step = max(1, arr.shape[0] // 24)
+        mean = float(arr[::step, ::step].mean())
+    except Exception:
+        return False
+    return mean >= 248.0 or mean <= 6.0
+
+
 class CdpCamera:
     """One Chromium + one page target + screencast → latest RGB image."""
 
@@ -133,6 +159,8 @@ class CdpCamera:
         self._screencast = False
         self.latest_image: Any = None
         self.frames = 0
+        self._last_frame_at = 0.0
+        self._pump_task: asyncio.Task | None = None
 
     async def start(self, url: str, *, on_image: Callable[[Any], None] | None = None) -> None:
         binary = chromium_executable()
@@ -259,13 +287,18 @@ class CdpCamera:
         if not blob:
             return
         try:
-            jpeg = base64.b64decode(blob)
-            image = jpeg_to_image(jpeg)
+            image = jpeg_to_image(base64.b64decode(blob))
         except Exception:
             log.debug("screencast jpeg decode failed", exc_info=True)
             return
+        self._accept_image(image)
+
+    def _accept_image(self, image: Any) -> None:
+        if image is None or is_blank_plate(image):
+            return
         self.latest_image = image
         self.frames += 1
+        self._last_frame_at = time.monotonic()
         if self._on_image is not None:
             self._on_image(image)
 
@@ -307,18 +340,17 @@ class CdpCamera:
             if self.latest_image is not None and self.frames > 0:
                 return
             await asyncio.sleep(0.1)
-        # Same compositor, still HoloViews — seed one surface capture so we
-        # never fade in a black placeholder.
+        # Same compositor — seed one surface capture so we never start
+        # the track on a black placeholder.
         shot = await self.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY, "fromSurface": True})
         blob = shot.get("data") or ""
         if not blob:
             raise TimeoutError("CDP screencast produced no frames")
         jpeg = base64.b64decode(blob)
         image = jpeg_to_image(jpeg)
-        self.latest_image = image
-        self.frames += 1
-        if self._on_image is not None:
-            self._on_image(image)
+        self._accept_image(image)
+        if self.latest_image is None:
+            raise TimeoutError("CDP screencast produced no usable frames")
 
     async def navigate(self, url: str) -> None:
         await self.send("Page.navigate", {"url": url})
@@ -339,21 +371,54 @@ class CdpCamera:
         try:
             await self.send(
                 "Runtime.evaluate",
-                {
-                    "expression": (
-                        "document.body && (document.body.style.transform='translateZ(0)');"
-                        "true"
-                    ),
-                    "returnByValue": True,
-                },
+                {"expression": _CAST_KEEPALIVE_JS, "returnByValue": True},
             )
         except Exception:
             log.debug("screencast kick failed", exc_info=True)
+        if self._pump_task is None or self._pump_task.done():
+            self._pump_task = asyncio.create_task(self._frame_pump())
+
+    async def _frame_pump(self) -> None:
+        """Screenshot the live page when screencast goes idle — still video, not a still."""
+        interval = 1.0 / max(1, PUMP_HZ)
+        while self._screencast and self._ws is not None:
+            await asyncio.sleep(interval)
+            if not self._screencast:
+                return
+            if time.monotonic() - self._last_frame_at < interval * 0.8:
+                continue
+            try:
+                shot = await self.send(
+                    "Page.captureScreenshot",
+                    {
+                        "format": "jpeg",
+                        "quality": JPEG_QUALITY,
+                        "fromSurface": True,
+                    },
+                )
+            except Exception:
+                log.debug("viz frame pump failed", exc_info=True)
+                return
+            blob = shot.get("data") or ""
+            if not blob:
+                continue
+            try:
+                self._accept_image(jpeg_to_image(base64.b64decode(blob)))
+            except Exception:
+                log.debug("viz frame pump decode failed", exc_info=True)
 
     async def stop_screencast(self) -> None:
         if not self._screencast:
             return
         self._screencast = False
+        task = self._pump_task
+        self._pump_task = None
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
         try:
             await self.send("Page.stopScreencast")
         except Exception:

@@ -1,4 +1,4 @@
-"""Scene data for AgentRTC program stills.
+"""Scene data for AgentRTC HoloViews video.
 
 HoloViews is required. Aegir aperture chords load if the federated
 workspace package is importable; otherwise a SKOS-shaped demo chord.

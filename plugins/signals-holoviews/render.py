@@ -1,4 +1,4 @@
-"""Render a program still with HoloViews (required) onto PNG.
+"""Offline HoloViews PNG renderer (tests / glance). Live video is CDP.
 
 HoloViews is a Signals-hsengine dependency, not an extra. Matplotlib is
 the PNG backend / chord fallback when ``hv.Chord`` cannot draw on Agg
@@ -47,7 +47,7 @@ def render_scene(
         import holoviews as _hv  # noqa: F401
     except ImportError as e:
         raise RuntimeError(
-            "holoviews is required for AgentRTC program stills "
+            "holoviews is required for AgentRTC video "
             "(signals-hsengine / hermes-agent[signals])"
         ) from e
     try:

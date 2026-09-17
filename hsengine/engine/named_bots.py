@@ -486,7 +486,7 @@ def viz_tool_defs() -> list[dict[str, Any]]:
 
 
 def reference_jpeg() -> bytes | None:
-    """End-of-sequence compositor frame (CDP latest, else program still)."""
+    """End-of-sequence compositor frame for instruct (not the spectator video)."""
     import io
 
     img = None

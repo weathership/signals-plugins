@@ -88,6 +88,28 @@ async def test_screencast_ack_does_not_wait_for_a_cdp_reply():
     assert any("screencastFrameAck" in m for m in cam._ws.out)
 
 
+def test_white_screencast_frame_is_not_accepted():
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from hsengine.engine.webrtc_cdp import CdpCamera, is_blank_plate
+
+    white = Image.new("RGB", (32, 32), (255, 255, 255))
+    green = Image.new("RGB", (32, 32), (12, 180, 40))
+    assert is_blank_plate(white) is True
+    assert is_blank_plate(green) is False
+    cam = CdpCamera("t")
+    cam._accept_image(green)
+    cam._accept_image(white)
+    assert cam.frames == 1
+    assert cam.latest_image.getpixel((2, 2))[1] > 100
+
+
+def test_screencast_keepalive_is_a_css_animation():
+    assert "@keyframes __hvcast" in webrtc_cdp._CAST_KEEPALIVE_JS
+    assert "infinite" in webrtc_cdp._CAST_KEEPALIVE_JS
+
+
 def test_jpeg_screencast_frame_becomes_rgb_image():
     pytest.importorskip("PIL")
     from PIL import Image

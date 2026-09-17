@@ -1,4 +1,4 @@
-"""Program stills fade over the AgentRTC clip. No HoloViews required."""
+"""Live compositor pixels on the AgentRTC clip clock. No HoloViews required."""
 from __future__ import annotations
 
 import json
@@ -33,20 +33,52 @@ def test_program_set_is_live_immediately_with_zero_fade():
     assert wp.PROGRAM.active() is True
 
 
-def test_composite_blends_program_over_base():
+def test_composite_is_the_figure_not_a_blend():
     pytest.importorskip("PIL")
     from PIL import Image
 
     base = Image.new("RGB", (80, 80), (0, 0, 0))
-    viz = Image.new("RGB", (40, 40), (255, 0, 0))
-    wp.PROGRAM.set(viz, kind="chord", fade_s=0.05)
-    import time
-
-    time.sleep(0.08)
+    viz = Image.new("RGB", (80, 80), (255, 0, 0))
+    wp.PROGRAM.set(viz, kind="density", fade_s=10.0)
     out = wp.PROGRAM.composite(base)
     assert out.size == (80, 80)
     px = out.getpixel((40, 40))
-    assert px[0] > 20
+    assert px[0] > 200
+
+
+def test_mix_frame_stamps_compositor_on_clip_clock():
+    pytest.importorskip("av")
+    pytest.importorskip("PIL")
+    pytest.importorskip("numpy")
+    from fractions import Fraction
+
+    import av
+    import numpy as np
+    from PIL import Image
+
+    clip = av.VideoFrame.from_ndarray(
+        np.zeros((72, 128, 3), dtype=np.uint8), format="rgb24"
+    )
+    clip.pts = 9000
+    clip.time_base = Fraction(1, 90000)
+    viz = Image.new("RGB", (128, 72), (10, 200, 40))
+    wp.PROGRAM.set(viz, kind="density", fade_s=0.05)
+    out = wp.mix_frame(clip)
+    assert out.pts == 9000
+    assert out.time_base == clip.time_base
+    arr = out.to_ndarray(format="rgb24")
+    assert int(arr[36, 64, 1]) > 150
+
+
+def test_replace_image_drops_white_plates():
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    first = Image.new("RGB", (32, 32), (0, 180, 40))
+    white = Image.new("RGB", (32, 32), (255, 255, 255))
+    wp.PROGRAM.set(first, kind="density", fade_s=0.05)
+    wp.PROGRAM.replace_image(white)
+    assert wp.PROGRAM._image is first
 
 
 def test_viz_show_without_chromium_is_an_error():

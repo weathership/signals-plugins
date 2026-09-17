@@ -1,7 +1,8 @@
-"""Agent-driven program overlay on the outbound WebRTC video track.
+"""Live compositor pixels on the outbound WebRTC video track.
 
-Not a HoloViews dependency. A plugin (or test) pushes RGB frames; this
-board fades them over the looping clip. Captions stay on top.
+The looping clip is the RTP clock. While a HoloViews camera is live,
+outbound video pixels are that compositor — not a still faded over
+demo.mp4. Captions stay on top.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ Renderer = Callable[..., tuple[Any, dict]]
 
 
 class ProgramBoard:
-    """One program still, faded onto the clip. Thread-safe for tool + recv."""
+    """Latest compositor frame for the video track. Thread-safe for tool + recv."""
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
@@ -44,9 +45,7 @@ class ProgramBoard:
     def status(self) -> dict:
         with self._lock:
             alpha = self._alpha()
-            live = self._image is not None and (
-                self._alpha1 > 0.01 or alpha > 0.01
-            )
+            live = self._image is not None and self._alpha1 > 0.01
             return {
                 "ok": True,
                 "live": live,
@@ -85,8 +84,8 @@ class ProgramBoard:
     def clear(self, *, fade_s: float = 0.7) -> dict:
         with self._lock:
             now = time.monotonic()
-            cur = self._alpha(now)
-            self._alpha0 = cur
+            self._image = None
+            self._alpha0 = 0.0
             self._alpha1 = 0.0
             self._t0 = now
             self._fade_s = max(0.05, float(fade_s))
@@ -96,23 +95,29 @@ class ProgramBoard:
 
     def active(self) -> bool:
         with self._lock:
-            return self._image is not None and (
-                self._alpha1 > 0.01 or self._alpha() > 0.01
-            )
+            return self._image is not None and self._alpha1 > 0.01
 
     def replace_image(self, image: Any) -> None:
         """Swap the live compositor frame without resetting fade."""
+        if image is None:
+            return
+        try:
+            from hsengine.engine.webrtc_cdp import is_blank_plate
+
+            if is_blank_plate(image):
+                return
+        except Exception:
+            pass
         with self._lock:
             self._image = image
 
     def composite(self, base: Any) -> Any:
-        """Blend the program still onto a PIL RGB image. No-op when faded out."""
+        """Fit the live frame onto a PIL RGB canvas. No-op when idle."""
         with self._lock:
             img = self._image
-            alpha = self._alpha()
             title = self._title
-            if img is None or alpha <= 0.01:
-                if img is not None and alpha <= 0.01 and self._alpha1 == 0.0:
+            if img is None or self._alpha1 <= 0.01:
+                if self._alpha1 <= 0.01:
                     self._image = None
                 return base
             try:
@@ -122,10 +127,9 @@ class ProgramBoard:
             if not isinstance(base, Image.Image):
                 return base
             fitted = _fit(img, base.size)
-            blended = Image.blend(base, fitted, alpha)
             if title:
-                _paint_title(blended, title)
-            return blended
+                _paint_title(fitted, title)
+            return fitted
 
 
 def _fit(viz: Any, size: tuple[int, int]) -> Any:
@@ -133,7 +137,7 @@ def _fit(viz: Any, size: tuple[int, int]) -> Any:
 
     tw, th = int(size[0]), int(size[1])
     if viz.size == (tw, th):
-        return viz.convert("RGB")
+        return viz.convert("RGB").copy()
     vw, vh = viz.size
     scale = min(tw / max(1, vw), th / max(1, vh))
     nw = max(1, int(vw * scale))
@@ -177,8 +181,8 @@ def compositor_image() -> Any | None:
     with PROGRAM._lock:
         img = PROGRAM._image
         title = PROGRAM._title
-        a = PROGRAM._alpha()
-    if img is None or a <= 0.01:
+        live = img is not None and PROGRAM._alpha1 > 0.01
+    if not live:
         return None
     fitted = _fit(img, (1280, 720))
     if title:
@@ -197,19 +201,31 @@ def image_to_video_frame(image: Any, *, pts: int, time_base: Any) -> Any:
 
 
 def mix_frame(frame: Any) -> Any:
-    """Blend the program still onto an av.VideoFrame. Identity if idle."""
+    """Stamp live compositor pixels onto the clip RTP clock. Identity if idle."""
     if not PROGRAM.active():
         return frame
     try:
         import numpy as np
-        from PIL import Image
         import av
     except Exception:
         return frame
+    with PROGRAM._lock:
+        img = PROGRAM._image
+        title = PROGRAM._title
+        live = img is not None and PROGRAM._alpha1 > 0.01
+    if not live:
+        return frame
     try:
-        arr = frame.to_ndarray(format="rgb24")
-        mixed = PROGRAM.composite(Image.fromarray(arr))
-        out = av.VideoFrame.from_ndarray(np.asarray(mixed), format="rgb24")
+        try:
+            w = int(frame.width)
+            h = int(frame.height)
+        except Exception:
+            arr = frame.to_ndarray(format="rgb24")
+            h, w = int(arr.shape[0]), int(arr.shape[1])
+        fitted = _fit(img, (w, h))
+        if title:
+            _paint_title(fitted, title)
+        out = av.VideoFrame.from_ndarray(np.asarray(fitted), format="rgb24")
         out.pts = frame.pts
         tb = getattr(frame, "time_base", None)
         if tb is not None:
