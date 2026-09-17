@@ -363,14 +363,15 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
             else:
                 traces.append(hv.Curve(data, "x", "y", label=name))
     if traces:
-        overlay = hv.Overlay(traces) if len(traces) > 1 else traces[0]
-        return overlay.opts(
+        opts = dict(
             title=title or "",
             width=1100,
             height=620,
             bgcolor="#0b0b12",
-            legend_position="top_left",
         )
+        if len(traces) == 1:
+            return traces[0].opts(**opts)
+        return hv.Overlay(traces).opts(**opts, legend_position="top_left")
     return _empty_plot(
         title,
         "No numeric series in the payload\nFMP quote is name/exchange only",
