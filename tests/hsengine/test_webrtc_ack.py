@@ -14,17 +14,17 @@ def test_ack_space_is_thousands():
 def test_ack_lines_are_short_spoken_english():
     rng = random.Random(7)
     lines = [ack_line("show the SLB filings", rng=rng) for _ in range(80)]
-    assert all(8 <= len(ln) <= 120 for ln in lines)
+    assert all(8 <= len(ln) <= 160 for ln in lines)
     assert all(ln[0].isupper() for ln in lines)
     assert all(ln[-1] in ".!?" for ln in lines)
-    assert all(len(ln.split()) <= 16 for ln in lines)
+    assert all(len(ln.split()) <= 22 for ln in lines)
 
 
 def test_two_hundred_draws_are_mostly_unique():
     rng = random.Random(11)
     _recent.clear()
-    lines = [ack_line(rng=rng) for _ in range(200)]
-    assert len(set(lines)) >= 160
+    lines = [ack_line(rng=rng) for _ in range(400)]
+    assert len(set(lines)) >= 360
 
 
 def test_hook_from_utterance_sometimes_lands():
@@ -58,11 +58,13 @@ def test_film_register_shows_up():
         "secrets",
         "passport",
         "planet",
-        "gibson",
+        "choose life",
+        "holiday",
+        "jack",
+        "true sentence",
+        "fight",
+        "feast",
         "joshua",
-        "downtown",
-        "glass",
-        "wopr",
-        "payload",
+        "gibson",
     )
-    assert sum(1 for m in markers if m in blob) >= 2
+    assert sum(1 for m in markers if m in blob) >= 3

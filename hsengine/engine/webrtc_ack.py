@@ -1,8 +1,9 @@
 """Immediate spoken ack while Ripley works. Combinatorial, not a catchphrase.
 
-Register borrows WarGames (WOPR), Ex Machina, Hackers, Swordfish, and
-Sneakers — fragments and cadence, not a five-quote loop. No ticker-tape.
-Kyutai TTS only; no Cerebras round.
+Register: WarGames/WOPR, Ex Machina, Hackers, Swordfish, Sneakers,
+Trainspotting, Withnail and I, Fight Club, Midnight in Paris / Hemingway,
+and a wider film/lit pile. Fragments most of the time; full nods rarely.
+Kyutai TTS only — no Cerebras round.
 """
 from __future__ import annotations
 
@@ -50,6 +51,59 @@ _OPEN = (
     "Through the glass",
     "No more secrets",
     "Too many secrets",
+    "Choose life",
+    "Choose this",
+    "We're out",
+    "Lust for life",
+    "We've gone on holiday by mistake",
+    "I demand a minute",
+    "I'm remaining in character",
+    "First rule",
+    "Second rule",
+    "I am Jack's patience",
+    "Hit me with it",
+    "One true sentence",
+    "Write it true",
+    "Paris is a moveable feast",
+    "Grace under pressure",
+    "Pretty to think so",
+    "Lost generation",
+    "At the café",
+    "The dude abides",
+    "Make it so",
+    "Fascinating",
+    "There is no spoon",
+    "Follow the white rabbit",
+    "We need to go deeper",
+    "I'm sorry Dave",
+    "Houston",
+    "Science the problem",
+    "Fear is the mind-killer",
+    "See you space cowboy",
+    "I aim to misbehave",
+    "These go to eleven",
+    "Inconceivable",
+    "You talkin' to me",
+    "Round up the usual suspects",
+    "Here's looking at you",
+    "Forget it Jake",
+    "Follow the money",
+    "The game is on",
+    "I am not a number",
+    "This message will wait",
+    "Always be looking",
+    "I'm mad as hell",
+    "Carpe the second",
+    "Get in the van",
+    "Don't advise a haircut",
+    "Free to those who can afford it",
+    "One minute at a time",
+    "Not a unique snowflake",
+    "Project later",
+    "Bleed on the typewriter",
+    "Never confuse movement with action",
+    "The first draft can wait",
+    "Isn't it pretty to think so",
 )
 
 _MIDDLE = (
@@ -97,6 +151,86 @@ _MIDDLE = (
     "building a payload",
     "not a stealth bomber",
     "hydra can wait",
+    "choosing life for a second",
+    "relishing this one",
+    "it's a chemical world",
+    "not the worst toilet",
+    "we're getting out",
+    "holiday by mistake",
+    "I demand to have some time",
+    "a pig didn't sit on this",
+    "Monty can wait",
+    "this'll happen anyway",
+    "I'm a trained actor about it",
+    "get in the back of the van",
+    "you do not talk about it yet",
+    "I am Jack's complete lack of surprise",
+    "I am Jack's smirking revenge",
+    "the things you own",
+    "lost everything useful",
+    "hit me as hard as the data allows",
+    "this is your life ending one minute at a time",
+    "not a beautiful unique snowflake",
+    "first rule of this turn",
+    "second rule of this turn",
+    "his name is Robert Paulson later",
+    "one true sentence",
+    "all you have to do is write one true sentence",
+    "a moveable feast",
+    "courage is grace under pressure",
+    "the world breaks everyone",
+    "you are all a lost generation",
+    "never confuse movement with action",
+    "the first draft of anything",
+    "sit down and bleed a little",
+    "pretty to think so",
+    "at the Dingo",
+    "Gertrude would cut this",
+    "Gil's still in the car",
+    "midnight in this problem",
+    "there is no spoon",
+    "the net is vast",
+    "tears in rain later",
+    "more human than human",
+    "I'm sorry Dave I'm looking",
+    "failure is not an option this second",
+    "follow the money",
+    "deep throat can wait",
+    "the stuff that dreams are made of",
+    "ready for my close-up",
+    "the horror is a spreadsheet",
+    "these go to eleven",
+    "have you tried turning it to eleven",
+    "inconceivable until it isn't",
+    "as you wish, after this",
+    "the dude abides in the query",
+    "that rug really tied the room together",
+    "we need to go deeper",
+    "don't start Global Thermonuclear War",
+    "see you space cowboy",
+    "I aim to misbehave shortly",
+    "live long and look",
+    "make it so in a minute",
+    "the spice must flow later",
+    "fear is the mind-killer",
+    "I am not a number",
+    "I am a free man looking",
+    "the game is on",
+    "shaken not stirred",
+    "usual suspects",
+    "forget it Jake it's this filing",
+    "you can't handle the truth yet",
+    "I'm as mad as hell and I'm looking",
+    "you talkin' to me or the figure",
+    "here's looking at you kid",
+    "we'll always have this cut",
+    "of all the gin joints",
+    "round up the usual suspects",
+    "the beginning of a beautiful friendship",
+    "I drink to make this more interesting",
+    "true at first light",
+    "a feast is moveable",
+    "bleed on it then talk",
 )
 
 _TAIL = (
@@ -129,6 +263,37 @@ _TAIL = (
     "through the glass",
     "payload's cooking",
     "don't start Global Thermonuclear War",
+    "choose life",
+    "we're out of here in a minute",
+    "relish it",
+    "holiday by mistake",
+    "I demand a second",
+    "remaining in character",
+    "first rule",
+    "don't talk about it yet",
+    "I am Jack's delay",
+    "one minute at a time",
+    "one true sentence",
+    "pretty to think so",
+    "grace under pressure",
+    "lost generation for a beat",
+    "the dude abides",
+    "these go to eleven",
+    "inconceivable",
+    "no spoon yet",
+    "deeper in a second",
+    "I'm sorry Dave",
+    "Houston wait",
+    "make it so",
+    "see you space cowboy",
+    "misbehave shortly",
+    "follow the money",
+    "usual suspects",
+    "here's looking at you",
+    "a beautiful friendship",
+    "typewriter later",
+    "café after",
+    "midnight can wait",
 )
 
 _TEMPLATES = (
@@ -142,9 +307,10 @@ _TEMPLATES = (
     "{open}. {middle}, {tail}.",
     "{open} — {middle}. {tail}.",
     "{middle}. {open}, {tail}.",
+    "{open}. {tail} {middle}.",
+    "{open} — {middle}. {open}.",
 )
 
-# Whole-line nods. Drawn rarely so they stay a spice, not a motif.
 _NOD = (
     "Shall we play a game?",
     "How about a nice game of chess?",
@@ -167,6 +333,122 @@ _NOD = (
     "It's a test.",
     "Sixty seconds.",
     "Not an Apache. Not a stealth bomber. Just working.",
+    "Choose life.",
+    "I chose not to choose life. I chose this cut.",
+    "We're out of here.",
+    "Lust for life. One second.",
+    "We've gone on holiday by mistake.",
+    "I demand to have some booze. Metaphorically.",
+    "I'm remaining in character.",
+    "Get in the back of the van.",
+    "This'll happen to you.",
+    "Free to those who can afford it.",
+    "First rule. You do not talk about it yet.",
+    "Second rule. Same as the first.",
+    "I am Jack's complete lack of surprise.",
+    "I am Jack's smirking revenge.",
+    "This is your life, and it's ending one minute at a time.",
+    "You are not a beautiful unique snowflake. Hold on.",
+    "I want you to hit me as hard as you can. With the question.",
+    "The things you own end up owning you. Not this.",
+    "His name is Robert Paulson. Later.",
+    "Write one true sentence.",
+    "All you have to do is write one true sentence.",
+    "Paris is a moveable feast.",
+    "Courage is grace under pressure.",
+    "The world breaks everyone.",
+    "You are all a lost generation.",
+    "Never confuse movement with action.",
+    "The first draft of anything is a mess. This isn't the draft.",
+    "There is nothing to writing. Sit down at a typewriter and bleed.",
+    "Isn't it pretty to think so?",
+    "I drink to make other people more interesting. Looking anyway.",
+    "A moveable feast. Stay put.",
+    "There is no spoon.",
+    "Follow the white rabbit.",
+    "We need to go deeper.",
+    "I'm sorry Dave. I'm looking.",
+    "Houston, working the problem.",
+    "Fear is the mind-killer.",
+    "See you space cowboy.",
+    "I aim to misbehave.",
+    "These go to eleven.",
+    "Inconceivable.",
+    "The dude abides.",
+    "That rug really tied the room together.",
+    "You talkin' to me?",
+    "Here's looking at you, kid.",
+    "Round up the usual suspects.",
+    "Forget it Jake. It's this turn.",
+    "Follow the money.",
+    "You can't handle the truth yet.",
+    "I'm mad as hell and I'm going to look.",
+    "Of all the gin joints.",
+    "Louis, I think this is the beginning of a beautiful friendship.",
+    "We'll always have this cut.",
+    "I am not a number. I am a free man.",
+    "The game is on.",
+    "Make it so.",
+    "Live long and look.",
+    "The spice must flow later.",
+    "More human than human.",
+    "The net is vast and infinite.",
+    "Tears in rain. After this.",
+    "Never give up. Never surrender.",
+    "I know kung fu. Not useful here.",
+    "There is no right and wrong. Only this beat.",
+    "My voice is my passport.",
+    "Play it, Joshua.",
+    "Would you like to play Global Thermonuclear War? No.",
+    "How about a nice game of chess instead.",
+    "Gentlemen, you can't fight in here. This is the looking room.",
+    "I'm as mad as hell.",
+    "We're gonna need a bigger boat. Or a better plot.",
+    "I love the smell of a query in the morning.",
+    "Say hello to my little figure.",
+    "I'll be back. With the answer.",
+    "Come with me if you want to look.",
+    "Get to the chopper. Metaphorically.",
+    "Yippee-ki-yay. Working.",
+    "Nobody puts this cut in a corner.",
+    "Have you tried turning it to eleven?",
+    "It's only a flesh wound. Keep talking.",
+    "We are the knights who say hold on.",
+    "This is an ex-parrot until I'm done.",
+    "Don't panic.",
+    "So long, and thanks for the question.",
+    "The answer is not forty-two yet.",
+    "Winter is coming. This query first.",
+    "A Lannister always pays his attention.",
+    "I drink and I know things. Looking.",
+    "Valar dohaeris. One second.",
+    "That's no moon. That's a filing.",
+    "Use the force, later.",
+    "These aren't the droids. These are the numbers.",
+    "Do or do not. I'm doing.",
+    "I have a bad feeling about the boilerplate.",
+    "Help me Obi-Wan. Help me the 8-K.",
+    "Elementary.",
+    "The game is afoot.",
+    "Once more unto the breach.",
+    "We few, we happy few, we band of queries.",
+    "To be or not to be. To look.",
+    "Though this be madness, yet there is method.",
+    "I have of late, but wherefore I know not.",
+    "Now is the winter of our data.",
+    "A horse, a horse, my kingdom for a second.",
+    "If music be the food of love, hold on.",
+    "We are such stuff as dreams are made on.",
+    "Lord, what fools these filings be.",
+    "The lady doth protest too much. The 10-Q.",
+    "Something wicked this way comes. Or a heatmap.",
+    "Out, damned spot. Out, damned lag.",
+    "Is this a dagger I see before me? No. A figure.",
+    "Friends, Romans, spectators.",
+    "I came, I saw, I queried.",
+    "Alea iacta est. Looking.",
+    "Carthago can wait.",
+    "Et tu, 8-K.",
 )
 
 _HOOK_RE = re.compile(
@@ -178,7 +460,7 @@ _HOOK_RE = re.compile(
 
 _recent: list[str] = []
 _mu = threading.Lock()
-_RECENT = 48
+_RECENT = 256
 
 assert len(_OPEN) * len(_MIDDLE) * len(_TAIL) * 3 > 1000
 
@@ -204,15 +486,15 @@ def _clean(text: str) -> str:
     if text and text[0].islower():
         text = text[0].upper() + text[1:]
     words = text.split()
-    if len(words) > 16:
-        text = " ".join(words[:16]).rstrip(".,") + "."
+    if len(words) > 18:
+        text = " ".join(words[:18]).rstrip(".,") + "."
     return text
 
 
 def ack_line(utterance: str = "", *, rng: random.Random | None = None) -> str:
     """One short spoken ack. Combinatorial; avoids the last few lines."""
     rng = rng or random.Random()
-    if rng.random() < 0.14:
+    if rng.random() < 0.16:
         nod = rng.choice(_NOD)
         with _mu:
             if nod not in _recent:
@@ -222,15 +504,16 @@ def ack_line(utterance: str = "", *, rng: random.Random | None = None) -> str:
     hook = _hook(utterance)
     middles = list(_MIDDLE)
     if hook:
-        middles.extend(
-            (
-                f"on {hook}",
-                f"looking at {hook}",
-                f"pulling {hook}",
-                f"the {hook} cut",
-            )
+        hooked = (
+            f"on {hook}",
+            f"looking at {hook}",
+            f"pulling {hook}",
+            f"the {hook} cut",
         )
-    for _ in range(24):
+        middles.extend(hooked)
+        if rng.random() < 0.5:
+            middles = list(hooked) * 4 + middles
+    for _ in range(32):
         open_ = rng.choice(_OPEN)
         middle = rng.choice(middles)
         tail = rng.choice(_TAIL)
