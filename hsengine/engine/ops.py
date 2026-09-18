@@ -386,7 +386,7 @@ def search(*, query: str, stream: str = "all", limit: int = 6) -> dict[str, Any]
 def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]:
     """Live FMP via ServerQuery FMP (Gaius holds the key).
 
-    stream: search|quote|news|filings|statement|metrics|calendar|employees|eight_k|insider
+    stream: search|quote|news|filings|statement|metrics|calendar|employees|eight_k|insider|profile|eod
     """
     from hsengine.engine import federation
     from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
@@ -406,6 +406,8 @@ def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]
         "8k",
         "insider",
         "profile",
+        "eod",
+        "price",
     )
     if kind not in _streams:
         kind = "search"
@@ -1033,8 +1035,10 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "Look up markets on Financial Modeling Prep via Gaius "
                 "(the engine holds the API key). Streams: search, quote, "
                 "news, filings, statement, metrics, calendar, employees, "
-                "eight_k, insider. Use this instead of web_search for "
-                "tickers, filings, and listed companies. Speak from hits."
+                "eight_k, insider, profile, eod. quote is a live price; "
+                "eight_k/news/insider are per-ticker. Use this instead of "
+                "web_search for tickers, filings, and listed companies. "
+                "Speak from hits."
             ),
             "parameters": {
                 "type": "object",
@@ -1047,7 +1051,7 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": (
                             "search|quote|news|filings|statement|metrics|"
-                            "calendar|employees|eight_k|insider"
+                            "calendar|employees|eight_k|insider|profile|eod"
                         ),
                     },
                 },
