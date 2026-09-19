@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 log = logging.getLogger("signals_wiki")
+
+_WIKILINK = re.compile(r"\[\[([^\]|#]+)(?:\|([^\]]*))?\]\]")
 
 router = APIRouter()
 
@@ -94,6 +97,42 @@ def _mirror_put(rel: str, body: bytes) -> None:
         log.debug("wiki rustfs put skipped", exc_info=True)
 
 
+def extract_wikilinks(text: str) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for match in _WIKILINK.finditer(text or ""):
+        target = (match.group(1) or "").strip()
+        label = (match.group(2) or target).strip()
+        if not target or target in seen:
+            continue
+        seen.add(target)
+        out.append({"target": target, "label": label})
+    return out
+
+
+def resolve_wikilink(pages: list[dict], query: str) -> str | None:
+    """Map [[target]] onto a vault-relative .md path. Unique stem wins."""
+    q = (query or "").replace("\\", "/").strip().lstrip("/")
+    if not q:
+        return None
+    if q.endswith(".md"):
+        q = q[:-3]
+    paths = [str(p.get("path") or "") for p in pages]
+    exact = f"{q}.md"
+    if exact in paths:
+        return exact
+    stem = Path(q).name.lower()
+    hits = [
+        p
+        for p in paths
+        if Path(p).stem.lower() == stem or p[:-3].lower() == q.lower()
+    ]
+    if not hits:
+        return None
+    hits.sort(key=len)
+    return hits[0]
+
+
 def list_pages() -> list[dict]:
     vault = vault_path()
     if not vault.is_dir():
@@ -151,13 +190,34 @@ async def page(path: str) -> dict:
         raise HTTPException(status_code=404, detail=f"not on disk: {path}")
     text = full.read_text(encoding="utf-8")
     _mirror_put(path, text.encode("utf-8"))
+    links = extract_wikilinks(text)
+    resolved = []
+    pages = list_pages()
+    for link in links:
+        hit = resolve_wikilink(pages, link["target"])
+        resolved.append({**link, "path": hit})
+    title = full.stem.replace("-", " ")
+    for line in text.splitlines():
+        if line.startswith("# "):
+            title = line[2:].strip()
+            break
     return {
         "ok": True,
         "path": path,
+        "title": title,
         "bytes": len(text.encode("utf-8")),
         "text": text,
+        "links": resolved,
         "object": f"s3://{BUCKET}/{_object_key(path)}",
     }
+
+
+@router.get("/resolve")
+async def resolve(q: str) -> dict:
+    hit = resolve_wikilink(list_pages(), q)
+    if not hit:
+        raise HTTPException(status_code=404, detail=f"no page for [[{q}]]")
+    return {"ok": True, "path": hit, "query": q}
 
 
 class SyncBody(BaseModel):

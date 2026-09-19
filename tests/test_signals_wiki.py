@@ -39,3 +39,29 @@ def test_safe_rejects_dotdot(tmp_path, monkeypatch):
 def test_object_key_is_hermes_wiki_prefix():
     mod = _load()
     assert mod._object_key("design/note.md") == "wiki/design/note.md"
+
+
+def test_extract_and_resolve_wikilinks(tmp_path, monkeypatch):
+    vault = tmp_path / "wiki"
+    (vault / "design").mkdir(parents=True)
+    (vault / "design" / "canonical-state-schema.md").write_text(
+        "See [[canonical-state-schema]] and [[notes/article-draft]].\n"
+    )
+    (vault / "notes").mkdir()
+    (vault / "notes" / "article-draft.md").write_text("hub\n")
+    monkeypatch.setenv("WIKI_PATH", str(vault))
+    mod = _load()
+    pages = mod.list_pages()
+    links = mod.extract_wikilinks(
+        "See [[canonical-state-schema]] and [[notes/article-draft|the article]]."
+    )
+    assert [x["target"] for x in links] == [
+        "canonical-state-schema",
+        "notes/article-draft",
+    ]
+    assert mod.resolve_wikilink(pages, "canonical-state-schema") == (
+        "design/canonical-state-schema.md"
+    )
+    assert mod.resolve_wikilink(pages, "notes/article-draft") == (
+        "notes/article-draft.md"
+    )

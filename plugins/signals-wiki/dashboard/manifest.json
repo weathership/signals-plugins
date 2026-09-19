@@ -1,14 +1,14 @@
 {
   "name": "signals-wiki",
   "label": "Wiki",
-  "description": "Hermes wiki vault, next to Files.",
+  "description": "Hermes wiki as a lineup of panels. Click a [[link]] to open the next card.",
   "icon": "FileText",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "tab": {
     "path": "/wiki",
     "position": "after:files"
   },
-  "entry": "dist/wiki.js",
+  "entry": "dist/lineup.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"
 }
