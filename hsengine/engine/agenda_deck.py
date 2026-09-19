@@ -106,9 +106,10 @@ def _prefer_session(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def load_agenda_session(agenda_id: str) -> dict[str, Any]:
     """Fetch one Agenda item from the owning peer over ServerQuery.
 
-    Walks known engines, then re-queries ``origin_project`` (Gaius, Metabot, …)
-    so supporting materials and a novel session prompt come from the agent
-    that created the item. Empty dict if no peer has it.
+    Walks known engines, then re-queries ``origin_project`` (the hosting
+    engine: Gaius, Metabase, … — Metabase holds Metabot) so supporting
+    materials and a novel session prompt come from that engine. Empty dict
+    if no peer has it.
     """
     from hsengine.engine import federation
     from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb

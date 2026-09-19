@@ -33,6 +33,36 @@ def test_server_query_agents_lists_the_offer():
     assert resp.agents[0].transport == "sdk"
 
 
+def test_peer_target_resolves_metabot_to_metabase_engine(monkeypatch):
+    from hsengine.engine import federation
+    from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
+
+    def _query(target, kind, **k):
+        if kind == zpb.SERVER_QUERY_KIND_PEERS:
+            return SimpleNamespace(
+                project="gaius",
+                peers=[SimpleNamespace(project="metabase", target="127.0.0.1:50451")],
+            )
+        if kind == zpb.SERVER_QUERY_KIND_AGENTS and "50451" in target:
+            return SimpleNamespace(
+                project="metabase",
+                agents=[
+                    SimpleNamespace(
+                        agent_id="metabase/metabot@1",
+                        project="metabase",
+                        name="metabot",
+                    )
+                ],
+            )
+        return None
+
+    monkeypatch.setattr(federation, "peer_hints", lambda: [("gaius", "127.0.0.1:50051")])
+    monkeypatch.setattr("hsengine.engine.ops._status_targets", lambda: ["127.0.0.1:50051"])
+    monkeypatch.setattr(federation, "query_peer", _query)
+    assert federation.peer_target_for_project("metabase") == "127.0.0.1:50451"
+    assert federation.peer_target_for_project("metabot") == "127.0.0.1:50451"
+
+
 def test_run_unknown_agent_is_invalid():
     req = apb.RunRequest(agent="metabot", instruction="hi")
     try:

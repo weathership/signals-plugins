@@ -46,11 +46,11 @@ def test_prefer_session_picks_owner_prompt_over_thin_copy():
         "public": "lede",
         "session_prompt": "Open on the catch-up.",
         "materials": "skip≠success",
-        "origin_project": "metabot",
+        "origin_project": "metabase",
         "target": "127.0.0.1:50451",
     }
     picked = _prefer_session([thin, rich])
-    assert picked["origin_project"] == "metabot"
+    assert picked["origin_project"] == "metabase"
     assert "catch-up" in picked["session_prompt"]
 
 
@@ -67,7 +67,7 @@ def test_load_agenda_session_rereads_origin_peer(monkeypatch):
         summary="lede",
         starts_ms=0,
         ends_ms=0,
-        origin_project="metabot",
+        origin_project="metabase",
         session_prompt="",
         session_materials="",
     )
@@ -81,7 +81,7 @@ def test_load_agenda_session_rereads_origin_peer(monkeypatch):
         summary="lede",
         starts_ms=0,
         ends_ms=0,
-        origin_project="metabot",
+        origin_project="metabase",
         session_prompt="",
         session_materials="",
     )
@@ -91,15 +91,15 @@ def test_load_agenda_session_rereads_origin_peer(monkeypatch):
             return None
         item = meta_item if "50451" in target else gaius_item
         return SimpleNamespace(
-            project="gaius" if "50051" in target else "metabot",
-            agenda_hint=SimpleNamespace(project="gaius" if "50051" in target else "metabot", item=item),
+            project="gaius" if "50051" in target else "metabase",
+            agenda_hint=SimpleNamespace(project="gaius" if "50051" in target else "metabase", item=item),
         )
 
     monkeypatch.setattr("hsengine.engine.ops._status_targets", lambda: ["127.0.0.1:50051"])
     monkeypatch.setattr(federation, "query_peer", _query)
-    monkeypatch.setattr(federation, "peer_target_for_project", lambda p: "127.0.0.1:50451" if p == "metabot" else "")
+    monkeypatch.setattr(federation, "peer_target_for_project", lambda p: "127.0.0.1:50451" if p == "metabase" else "")
     session = load_agenda_session("scratch/x.md")
-    assert session["origin_project"] == "metabot"
+    assert session["origin_project"] == "metabase"
     assert "not thoughts" in session["session_prompt"]
     assert session["target"] == "127.0.0.1:50451"
 

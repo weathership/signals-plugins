@@ -311,33 +311,61 @@ def peer_hints() -> list[tuple[str, str]]:
 
 
 def peer_target_for_project(project: str) -> str:
-    """Lattice Engine host:port for ``project``, or '' if no peer answers as that name.
+    """Lattice Engine host:port for an engine project, or a hosted agent name.
 
-    Walks configured peers' Status, then each peer's ServerQuery PEERS so a
-    Metabot (or other announced engine) is reachable even when it is not in
-    ``federation.peers``.
+    ``origin_project`` is the hosting engine (`gaius`, `metabase`). Metabase
+    holds Metabot — if the caller only has the agent name (`metabot`), this
+    walks ServerQuery AGENTS and returns that host's target.
     """
     want = (project or "").strip().lower()
     if not want:
         return ""
+    by_project: dict[str, str] = {}
     for proj, target in peer_hints():
-        if (proj or "").strip().lower() == want and target:
-            return str(target).replace("grpc://", "").strip()
+        t = str(target or "").replace("grpc://", "").strip()
+        p = (proj or "").strip().lower()
+        if p and t:
+            by_project[p] = t
+        if p == want and t:
+            return t
     from hsengine.engine.ops import _status_targets
 
-    seen: set[str] = set()
-    for seed in _status_targets():
+    seeds = [str(s).replace("grpc://", "").strip() for s in _status_targets() if s]
+    seen: set[str] = set(seeds)
+    for seed in list(seeds):
         resp = query_peer(seed, zpb.SERVER_QUERY_KIND_PEERS)
         if resp is None:
             continue
         for hint in resp.peers:
             proj = str(getattr(hint, "project", "") or "").strip().lower()
             target = str(getattr(hint, "target", "") or "").replace("grpc://", "").strip()
-            if not target or target in seen:
+            if not target:
                 continue
-            seen.add(target)
+            if proj:
+                by_project[proj] = target
             if proj == want:
                 return target
+            if target not in seen:
+                seen.add(target)
+                seeds.append(target)
+    if want in by_project:
+        return by_project[want]
+    for seed in seeds:
+        resp = query_peer(seed, zpb.SERVER_QUERY_KIND_AGENTS)
+        if resp is None:
+            continue
+        host = str(getattr(resp, "project", "") or "").strip().lower()
+        for agent in getattr(resp, "agents", []) or []:
+            name = str(getattr(agent, "name", "") or "").strip().lower()
+            agent_id = str(getattr(agent, "agent_id", "") or "").strip().lower()
+            hosted = str(getattr(agent, "project", "") or "").strip().lower()
+            if want not in {name, hosted} and not agent_id.endswith("/" + want):
+                continue
+            if hosted and hosted in by_project:
+                return by_project[hosted]
+            if host and host in by_project:
+                return by_project[host]
+            return seed
     return ""
 
 
