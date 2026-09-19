@@ -46,6 +46,24 @@ def test_speak_into_aborts_remaining_chunks_after_interrupt(monkeypatch):
     assert board.speaking() is False
 
 
+def test_speak_into_from_a_running_event_loop(monkeypatch):
+    import asyncio
+
+    pcm = np.ones(2400, dtype=np.float32) * 0.4
+
+    async def _chunks(text: str):
+        yield pcm
+
+    monkeypatch.setattr("hsengine.engine.webrtc_tts.synthesize_chunks", _chunks)
+    board = SpeechBoard()
+
+    async def _inside():
+        speak_into(board, "hello from the engine loop")
+        return board.speaking()
+
+    assert asyncio.run(_inside()) is True
+
+
 def test_speak_into_preempts_clip_on_the_board(monkeypatch):
     pcm = np.ones(4800, dtype=np.float32) * 0.4
 

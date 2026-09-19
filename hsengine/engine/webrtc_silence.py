@@ -10,6 +10,7 @@ import asyncio
 import logging
 import math
 import random
+import threading
 import time
 from typing import Any, Callable
 
@@ -304,7 +305,12 @@ class SilenceDirector:
             if outcome.monologue:
                 spoken = interactive.spoken_text(outcome.monologue)
                 if spoken:
-                    interactive._speak_cerebras(spoken)
+                    threading.Thread(
+                        target=interactive._speak_cerebras,
+                        args=(spoken,),
+                        daemon=True,
+                        name="quiet-tts",
+                    ).start()
                     session_history.record_turn(
                         self._session_id, assistant=spoken, model="ripley"
                     )

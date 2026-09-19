@@ -173,6 +173,31 @@ def test_bishop_delegation_cap_is_two():
     assert dtc._get_max_concurrent_children() == orig
 
 
+def test_bishop_execute_uses_the_spoken_ceiling(monkeypatch):
+    import asyncio
+
+    from hsengine.engine.named_bots import BishopOutcome, ripley_speak_outcome
+    from hsengine.engine.webrtc_moshi import _ripley_spoken_max_tokens
+
+    seen: list[int] = []
+
+    def _complete(**k):
+        seen.append(int(k.get("max_tokens") or 0))
+        return type("R", (), {"text": "hello from the execute pass", "model": "x"})()
+
+    monkeypatch.setattr("hsengine.engine.interactive.complete_cerebras", _complete)
+    out = asyncio.run(
+        ripley_speak_outcome(
+            BishopOutcome(monologue="Speak the thought."),
+            session_id="s1",
+        )
+    )
+    assert "hello" in out
+    assert seen
+    assert all(n >= _ripley_spoken_max_tokens() for n in seen)
+    assert all(n > 280 for n in seen)
+
+
 def test_bishop_run_is_silent(monkeypatch):
     seen: dict = {}
 

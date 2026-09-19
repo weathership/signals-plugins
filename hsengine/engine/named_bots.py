@@ -453,7 +453,9 @@ async def ripley_speak_outcome(
 
     from hsengine.engine import interactive
     from hsengine.engine.opening import split_spoken_beats
+    from hsengine.engine.webrtc_moshi import _ripley_spoken_max_tokens
 
+    ceiling = _ripley_spoken_max_tokens()
     beats = split_spoken_beats(outcome.monologue) if outcome.monologue else [""]
     spoken: list[str] = []
     for i, beat in enumerate(beats):
@@ -474,7 +476,7 @@ async def ripley_speak_outcome(
             interactive.complete_cerebras,
             prompt=speak_u,
             system_prompt=speak_s,
-            max_tokens=220 if i else 280,
+            max_tokens=ceiling,
             temperature=0.55,
             reasoning_effort="none",
             tools=False,

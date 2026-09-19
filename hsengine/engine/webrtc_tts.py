@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -138,6 +139,35 @@ def _epoch_snapshot(boards: list[Any], epoch: int | None) -> dict[int, int]:
     return out
 
 
+def _run_isolated(coro_fn: Any) -> Any:
+    """Run an async TTS pump from sync code.
+
+    ``asyncio.run`` raises if the engine loop is already running (quiet-line
+    invent calls TTS on that loop). A private thread always owns the pump.
+    """
+    try:
+        asyncio.get_running_loop()
+        nested = True
+    except RuntimeError:
+        nested = False
+    if not nested:
+        return asyncio.run(coro_fn())
+    box: dict[str, Any] = {}
+
+    def _thr() -> None:
+        try:
+            box["v"] = asyncio.run(coro_fn())
+        except BaseException as e:
+            box["e"] = e
+
+    t = threading.Thread(target=_thr, daemon=True, name="kyutai-tts-pump")
+    t.start()
+    t.join()
+    if "e" in box:
+        raise box["e"]
+    return box.get("v")
+
+
 def _stream_onto(
     boards: list[Any], text: str, *, source: str, epoch: int | None
 ) -> tuple[int, bool]:
@@ -156,7 +186,7 @@ def _stream_onto(
             total += _push_chunks(live, pcm, source)
         return total, False
 
-    return asyncio.run(_run())
+    return _run_isolated(_run)
 
 
 def speak_into(
