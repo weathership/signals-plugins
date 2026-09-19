@@ -3,7 +3,7 @@
   "label": "Wiki",
   "description": "Hermes wiki as a lineup of panels. Click a [[link]] to open the next card.",
   "icon": "FileText",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "tab": {
     "path": "/wiki",
     "position": "after:files"

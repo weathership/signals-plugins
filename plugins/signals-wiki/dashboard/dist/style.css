@@ -141,3 +141,45 @@
   border-radius: 3px;
   font-size: 0.8rem;
 }
+
+.signals-wiki-root {
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: capitalize;
+}
+
+.signals-wiki-recent {
+  padding-left: 0.85rem !important;
+  opacity: 0.92;
+}
+
+.signals-wiki-entry {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: baseline;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border, #2a2a38);
+  color: inherit;
+  padding: 0.4rem 0.15rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.signals-wiki-entry:hover,
+.signals-wiki-more {
+  background: var(--accent, #2a2a44);
+}
+
+.signals-wiki-entry-kind {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground, #9aa3b5);
+}
+
+.signals-wiki-entry-dir .signals-wiki-entry-name {
+  font-weight: 600;
+}

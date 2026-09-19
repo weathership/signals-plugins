@@ -133,6 +133,122 @@ def resolve_wikilink(pages: list[dict], query: str) -> str | None:
     return hits[0]
 
 
+ROOTS = ("archive", "current", "scratch")  # alphabetical
+
+
+def _vault_rel(root: str, rel: str) -> str:
+    rel = (rel or "").replace("\\", "/").strip("/")
+    if root == "current" and _virtual_current("current"):
+        return rel
+    return f"{root}/{rel}" if rel else root
+
+
+RAIL_PREVIEW = 4
+LIST_PAGE_SIZE = 20
+
+
+def _root_dir(root: str) -> Path:
+    root = (root or "").strip().lower()
+    if root not in ROOTS:
+        raise HTTPException(status_code=400, detail="root must be archive, current, or scratch")
+    vault = vault_path()
+    if root == "current":
+        physical = vault / "current"
+        if physical.is_dir():
+            return physical
+        return vault
+    return vault / root
+
+
+def _virtual_current(root: str) -> bool:
+    return root == "current" and not (vault_path() / "current").is_dir()
+
+
+def _skip_name(root: str, name: str) -> bool:
+    if not _virtual_current(root):
+        return False
+    return name in ("archive", "scratch")
+
+
+def list_level(
+    root: str,
+    rel: str = "",
+    *,
+    offset: int = 0,
+    limit: int = LIST_PAGE_SIZE,
+) -> dict:
+    """One filesystem position: children of *rel* under *root*, newest first."""
+    base = _root_dir(root)
+    rel = (rel or "").replace("\\", "/").strip("/")
+    if rel:
+        if any(p in ("..", "") for p in Path(rel).parts):
+            raise HTTPException(status_code=400, detail="bad path")
+        here = (base / rel).resolve()
+        if not here.is_relative_to(base.resolve()):
+            raise HTTPException(status_code=400, detail="outside root")
+    else:
+        here = base.resolve()
+    entries: list[dict] = []
+    if here.is_dir():
+        for child in here.iterdir():
+            if child.name.startswith("."):
+                continue
+            if _skip_name(root, child.name):
+                continue
+            try:
+                st = child.stat()
+            except OSError:
+                continue
+            kind = "dir" if child.is_dir() else "file"
+            if kind == "file" and child.suffix.lower() not in {".md", ".markdown", ".txt"}:
+                continue
+            rel_child = str((Path(rel) / child.name) if rel else Path(child.name)).replace("\\", "/")
+            entries.append(
+                {
+                    "kind": kind,
+                    "name": child.name,
+                    "path": rel_child,
+                    "vault_path": _vault_rel(root, rel_child),
+                    "mtime": int(st.st_mtime),
+                    "bytes": int(st.st_size) if kind == "file" else 0,
+                }
+            )
+    entries.sort(key=lambda e: (-int(e["mtime"]), str(e["name"]).lower()))
+    off = max(0, int(offset))
+    lim = max(1, min(int(limit), 80))
+    page = entries[off : off + lim]
+    more = off + lim < len(entries)
+    return {
+        "ok": True,
+        "root": root,
+        "path": rel,
+        "vault_path": _vault_rel(root, rel),
+        "offset": off,
+        "limit": lim,
+        "total": len(entries),
+        "more": more,
+        "next_offset": off + lim if more else None,
+        "entries": page,
+    }
+
+
+def rail() -> dict:
+    """Archive / Current / Scratch with a few recent children each."""
+    sections = []
+    for root in ROOTS:
+        listing = list_level(root, "", offset=0, limit=RAIL_PREVIEW)
+        sections.append(
+            {
+                "id": root,
+                "label": root.capitalize(),
+                "recent": listing["entries"],
+                "more": bool(listing["more"] or listing["total"] > RAIL_PREVIEW),
+                "total": listing["total"],
+            }
+        )
+    return {"ok": True, "sections": sections}
+
+
 def list_pages() -> list[dict]:
     vault = vault_path()
     if not vault.is_dir():
@@ -177,6 +293,21 @@ async def status() -> dict:
 async def tree() -> dict:
     pages = list_pages()
     return {"ok": True, "vault": str(vault_path()), "pages": pages}
+
+
+@router.get("/rail")
+async def rail_get() -> dict:
+    return rail()
+
+
+@router.get("/listing")
+async def listing(
+    root: str,
+    path: str = "",
+    offset: int = 0,
+    limit: int = LIST_PAGE_SIZE,
+) -> dict:
+    return list_level(root, path, offset=offset, limit=limit)
 
 
 class PageQuery(BaseModel):

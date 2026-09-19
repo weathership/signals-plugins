@@ -41,6 +41,51 @@ def test_object_key_is_hermes_wiki_prefix():
     assert mod._object_key("design/note.md") == "wiki/design/note.md"
 
 
+def test_rail_is_archive_current_scratch_and_current_hides_scratch(
+    tmp_path, monkeypatch
+):
+    vault = tmp_path / "wiki"
+    (vault / "design").mkdir(parents=True)
+    (vault / "design" / "note.md").write_text("# n\n")
+    (vault / "scratch" / "2026-09-19").mkdir(parents=True)
+    (vault / "scratch" / "2026-09-19" / "a.md").write_text("s\n")
+    monkeypatch.setenv("WIKI_PATH", str(vault))
+    mod = _load()
+    rail = mod.rail()
+    assert [s["id"] for s in rail["sections"]] == ["archive", "current", "scratch"]
+    current = rail["sections"][1]
+    names = {e["name"] for e in current["recent"]}
+    assert "scratch" not in names
+    assert "archive" not in names
+    assert "design" in names
+    scratch = rail["sections"][2]
+    assert scratch["recent"][0]["name"] == "2026-09-19"
+    archive = rail["sections"][0]
+    assert archive["recent"] == []
+    assert archive["total"] == 0
+
+
+def test_listing_paginates_and_more_opens_next_offset(tmp_path, monkeypatch):
+    vault = tmp_path / "wiki" / "scratch"
+    vault.mkdir(parents=True)
+    for i in range(6):
+        p = vault / f"2026-09-{i+10:02d}"
+        p.mkdir()
+        (p / "n.md").write_text("x\n")
+        os_utime = __import__("os").utime
+        os_utime(p, (1_000_000 + i, 1_000_000 + i))
+    monkeypatch.setenv("WIKI_PATH", str(vault.parent))
+    mod = _load()
+    first = mod.list_level("scratch", "", offset=0, limit=4)
+    assert first["more"] is True
+    assert first["next_offset"] == 4
+    assert len(first["entries"]) == 4
+    second = mod.list_level("scratch", "", offset=4, limit=4)
+    assert second["more"] is False
+    seen = {e["path"] for e in first["entries"] + second["entries"]}
+    assert len(seen) == 6
+
+
 def test_extract_and_resolve_wikilinks(tmp_path, monkeypatch):
     vault = tmp_path / "wiki"
     (vault / "design").mkdir(parents=True)
