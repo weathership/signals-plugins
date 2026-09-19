@@ -1,7 +1,7 @@
 """Put one Agenda item onto Gaius over Engine/PutAgendaItem.
 
-Gaius holds the Agenda. Hermes named profiles (Ripley, Grok) identify
-themselves as origin_agent; stored origin_project is gaius.
+Gaius holds the calendar row. Session materials go to rustfs under
+``s3://hermes/resources/<item-id>/`` and are fetched at Connect from Hermes.
 """
 from __future__ import annotations
 
@@ -64,8 +64,6 @@ def put_agenda_item(
         starts_ms=int(starts_ms or 0),
         ends_ms=int(ends_ms or 0),
         with_whom=with_whom or "",
-        session_prompt=session_prompt or "",
-        session_materials=session_materials or "",
     )
     if tags:
         item.tags.extend(str(t) for t in tags)
@@ -92,6 +90,19 @@ def put_agenda_item(
     }
     if resp.item and resp.item.id:
         out["path"] = resp.item.id
+        if (session_prompt or "").strip() or (session_materials or "").strip():
+            try:
+                from hsengine.engine.resources_store import put_session_materials
+
+                stored = put_session_materials(
+                    resp.item.id,
+                    prompt=session_prompt,
+                    materials=session_materials,
+                )
+                out["resources"] = stored
+            except Exception as e:
+                log.warning("rustfs session materials put failed: %s", e)
+                out["resources_error"] = str(e)
     if not resp.ok:
         out["error"] = resp.note or "Gaius refused PutAgendaItem"
     return out

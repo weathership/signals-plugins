@@ -54,7 +54,7 @@ def test_prefer_session_picks_owner_prompt_over_thin_copy():
     assert "catch-up" in picked["session_prompt"]
 
 
-def test_load_agenda_session_rereads_origin_peer(monkeypatch):
+def test_load_agenda_session_fetches_resources_from_origin(monkeypatch):
     from types import SimpleNamespace
 
     from hsengine.engine import federation
@@ -67,41 +67,40 @@ def test_load_agenda_session_rereads_origin_peer(monkeypatch):
         summary="lede",
         starts_ms=0,
         ends_ms=0,
-        origin_project="metabase",
-        session_prompt="",
-        session_materials="",
-    )
-    meta_item = SimpleNamespace(
-        id="scratch/x.md",
-        title="Discover reliability catch-up",
-        body=(
-            "Public lede.\n\n## Session prompt\n\n"
-            "Open on Discover reliability, not thoughts.\n"
-        ),
-        summary="lede",
-        starts_ms=0,
-        ends_ms=0,
-        origin_project="metabase",
-        session_prompt="",
-        session_materials="",
+        origin_project="hermes",
+        origin_agent="ripley",
     )
 
     def _query(target, kind, **k):
-        if kind != zpb.SERVER_QUERY_KIND_AGENDA:
-            return None
-        item = meta_item if "50451" in target else gaius_item
-        return SimpleNamespace(
-            project="gaius" if "50051" in target else "metabase",
-            agenda_hint=SimpleNamespace(project="gaius" if "50051" in target else "metabase", item=item),
-        )
+        if kind == zpb.SERVER_QUERY_KIND_AGENDA:
+            return SimpleNamespace(
+                project="gaius",
+                agenda_hint=SimpleNamespace(project="gaius", item=gaius_item),
+            )
+        if kind == zpb.SERVER_QUERY_KIND_RESOURCES:
+            return SimpleNamespace(
+                project="hermes",
+                resources_hint=SimpleNamespace(
+                    objects=[
+                        SimpleNamespace(
+                            name="prompt.md",
+                            text="Open on Discover reliability, not thoughts.",
+                            uri="s3://hermes/resources/scratch/x/prompt.md",
+                        )
+                    ]
+                ),
+            )
+        return None
 
     monkeypatch.setattr("hsengine.engine.ops._status_targets", lambda: ["127.0.0.1:50051"])
     monkeypatch.setattr(federation, "query_peer", _query)
-    monkeypatch.setattr(federation, "peer_target_for_project", lambda p: "127.0.0.1:50451" if p == "metabase" else "")
+    monkeypatch.setattr(
+        federation, "peer_target_for_project", lambda p: "127.0.0.1:50651" if p == "hermes" else ""
+    )
     session = load_agenda_session("scratch/x.md")
-    assert session["origin_project"] == "metabase"
+    assert session["origin_project"] == "hermes"
     assert "not thoughts" in session["session_prompt"]
-    assert session["target"] == "127.0.0.1:50451"
+    assert session["target"] == "127.0.0.1:50051"
 
 
 def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
@@ -116,6 +115,7 @@ def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
             seen["origin_project"] = req.origin_project
             seen["origin_agent"] = req.origin_agent
             seen["title"] = req.item.title
+            seen["item_prompt"] = req.item.session_prompt
             return SimpleNamespace(
                 ok=True,
                 note="",
@@ -140,11 +140,22 @@ def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
         "hsengine.engine.generated.zndx.engine.v1.engine_pb2_grpc.EngineStub",
         lambda ch: _Stub(),
     )
-    out = put_agenda_item(title="Ripley catch-up", origin_agent="ripley")
+    stored: list = []
+    monkeypatch.setattr(
+        "hsengine.engine.resources_store.put_session_materials",
+        lambda note_id, **k: stored.append({"id": note_id, **k}) or [{"name": "prompt.md"}],
+    )
+    out = put_agenda_item(
+        title="Ripley catch-up",
+        origin_agent="ripley",
+        session_prompt="Open on Discover.",
+    )
     assert out["ok"] is True
     assert seen["origin_project"] == "hermes"
     assert seen["origin_agent"] == "ripley"
+    assert not (seen.get("item_prompt") or "")
     assert out["path"].startswith("scratch/")
+    assert stored and stored[0]["prompt"] == "Open on Discover."
 
 
 def test_split_keeps_deck_off_the_public_lede():

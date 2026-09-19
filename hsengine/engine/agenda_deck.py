@@ -70,8 +70,8 @@ def split_public_deck(body: str) -> tuple[str, str]:
 def _session_from_item(item: Any, *, wanted: str, served_by: str, target: str) -> dict[str, Any]:
     body = str(getattr(item, "body", "") or "")
     parts = split_agenda_body(body)
-    prompt = str(getattr(item, "session_prompt", "") or "").strip() or parts["session_prompt"]
-    materials = str(getattr(item, "session_materials", "") or "").strip() or parts["materials"]
+    prompt = parts["session_prompt"]
+    materials = parts["materials"]
     origin = (
         str(getattr(item, "origin_project", "") or "").strip()
         or (served_by or "").strip()
@@ -103,13 +103,91 @@ def _prefer_session(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return max(rows, key=score)
 
 
-def load_agenda_session(agenda_id: str) -> dict[str, Any]:
-    """Fetch one Agenda item from the owning peer over ServerQuery.
+def _merge_origin_resources(session: dict[str, Any]) -> dict[str, Any]:
+    """Connect-time: ask the origin engine for rustfs session materials."""
+    origin = (session.get("origin_project") or "").strip()
+    note_id = (session.get("id") or "").strip()
+    if not origin or not note_id or origin == "gaius":
+        # Gaius holds the calendar row. Materials live on the origin engine.
+        # gaius-as-origin still may serve RESOURCES; try it.
+        pass
+    from hsengine.engine import federation
+    from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
 
-    Walks known engines, then re-queries ``origin_project`` (the hosting
-    engine: Gaius, Metabase, … — Metabase holds Metabot) so supporting
-    materials and a novel session prompt come from that engine. Empty dict
-    if no peer has it.
+    target = ""
+    try:
+        target = federation.peer_target_for_project(origin) if origin else ""
+    except Exception:
+        target = ""
+    if not target and origin == "hermes":
+        # This process is Hermes — read rustfs locally.
+        try:
+            from hsengine.engine.resources_store import list_session_materials
+
+            objs = list_session_materials(note_id)
+        except Exception:
+            log.debug("local resources list failed", exc_info=True)
+            objs = []
+        return _apply_resource_objects(session, objs)
+    if not target:
+        return session
+    resp = federation.query_peer(
+        target, zpb.SERVER_QUERY_KIND_RESOURCES, note_id=note_id
+    )
+    if resp is None:
+        if origin == "hermes":
+            try:
+                from hsengine.engine.resources_store import list_session_materials
+
+                objs = list_session_materials(note_id)
+                return _apply_resource_objects(session, objs)
+            except Exception:
+                log.debug("local resources fallback failed", exc_info=True)
+        return session
+    hint = getattr(resp, "resources_hint", None)
+    objs = []
+    for obj in getattr(hint, "objects", []) or []:
+        objs.append(
+            {
+                "name": str(getattr(obj, "name", "") or ""),
+                "text": str(getattr(obj, "text", "") or ""),
+                "uri": str(getattr(obj, "uri", "") or ""),
+            }
+        )
+    if objs:
+        log.info(
+            "agenda session %s resources from origin_project=%s n=%s",
+            note_id,
+            origin,
+            len(objs),
+        )
+    return _apply_resource_objects(session, objs)
+
+
+def _apply_resource_objects(
+    session: dict[str, Any], objects: list[dict[str, Any]]
+) -> dict[str, Any]:
+    for obj in objects:
+        name = str(obj.get("name") or "").lower()
+        text = str(obj.get("text") or "").strip()
+        if not text:
+            continue
+        if name in {"prompt.md", "session_prompt.md"}:
+            session["session_prompt"] = text
+        elif name in {"materials.md", "supporting.md"}:
+            session["materials"] = text
+        else:
+            extra = session.get("materials") or ""
+            session["materials"] = (extra + "\n\n" + text).strip()
+    return session
+
+
+def load_agenda_session(agenda_id: str) -> dict[str, Any]:
+    """Fetch the Gaius calendar row, then origin RESOURCES at Connect.
+
+    PutAgendaItem only writes the Agenda zettel. Session prompt/materials
+    live in the origin project's rustfs prefix and are requested here, when
+    the user clicks the calendar link — Ripley-created items from Hermes.
     """
     from hsengine.engine import federation
     from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
@@ -136,34 +214,7 @@ def load_agenda_session(agenda_id: str) -> dict[str, Any]:
         log.info("agenda session %s not found on peers", wanted)
         return {}
     picked = _prefer_session(found)
-    owner = (picked.get("origin_project") or picked.get("served_by") or "").strip()
-    owner_target = ""
-    if owner:
-        try:
-            owner_target = federation.peer_target_for_project(owner)
-        except Exception:
-            log.debug("owner target lookup failed for %s", owner, exc_info=True)
-            owner_target = ""
-    if owner_target and owner_target != picked.get("target"):
-        resp = federation.query_peer(
-            owner_target, zpb.SERVER_QUERY_KIND_AGENDA, note_id=wanted
-        )
-        if resp is not None:
-            item = resp.agenda_hint.item
-            if item.id or item.title or item.body:
-                served = str(resp.project or resp.agenda_hint.project or owner)
-                owned = _session_from_item(
-                    item, wanted=wanted, served_by=served, target=owner_target
-                )
-                if owned.get("session_prompt") or owned.get("materials") or owned.get("public"):
-                    picked = owned
-                    log.info(
-                        "agenda session %s routed to origin_project=%s target=%s",
-                        wanted,
-                        owner,
-                        owner_target,
-                    )
-    return picked
+    return _merge_origin_resources(picked)
 
 
 _VOICE_RAILS = (

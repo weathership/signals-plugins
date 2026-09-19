@@ -114,7 +114,12 @@ def build_source_posture(root: Path | None = None, *, project: str = PROJECT) ->
     )
 
 
-def local_response(kind: int, *, dashboard_healthy: bool = True) -> zpb.ServerQueryResponse:
+def local_response(
+    kind: int,
+    *,
+    dashboard_healthy: bool = True,
+    note_id: str = "",
+) -> zpb.ServerQueryResponse:
     resp = zpb.ServerQueryResponse(project=PROJECT)
     if kind in (
         zpb.SERVER_QUERY_KIND_UNSPECIFIED,
@@ -149,4 +154,19 @@ def local_response(kind: int, *, dashboard_healthy: bool = True) -> zpb.ServerQu
         from hsengine.engine import workload_catalog
 
         resp.schedules.extend(workload_catalog.catalog())
+    if kind == zpb.SERVER_QUERY_KIND_RESOURCES:
+        from hsengine.engine.resources_store import list_session_materials
+
+        hint = resp.resources_hint
+        hint.project = PROJECT
+        hint.note_id = (note_id or "").strip()
+        objs = list_session_materials(hint.note_id) if hint.note_id else []
+        for obj in objs:
+            hint.objects.add(
+                name=str(obj.get("name") or ""),
+                text=str(obj.get("text") or ""),
+                uri=str(obj.get("uri") or ""),
+            )
+        if not objs:
+            hint.note = "no session materials" if hint.note_id else "note_id required"
     return resp

@@ -174,8 +174,10 @@ class EngineServicer:
         """Create (or refresh) one Agenda item on the engine that HOLDS the Agenda
         (Gaius). Other engines answer UNIMPLEMENTED. The caller is a lattice
         engine + named agent/profile (Hermes Ripley, Hermes Grok, Metabase Metabot).
-        Gaius writes the zettel; origin_project on the stored item is `gaius`.
-        origin_agent records who asked. (added 2026-09-19 — additive v1.)
+        Gaius writes the calendar zettel only. origin_project is the CALLER
+        engine (hermes when Ripley/Grok create). Session materials are NOT in
+        this RPC — they live in origin object storage and are fetched at
+        Connect via ServerQuery RESOURCES. (added 2026-09-19 — additive v1.)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

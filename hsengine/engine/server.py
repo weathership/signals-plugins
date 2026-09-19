@@ -234,7 +234,10 @@ class ZndxEngineServicer(zpb_grpc.EngineServicer):
     async def ServerQuery(self, request, context):
         dash = await asyncio.to_thread(probe.probe_dashboard)
         return await asyncio.to_thread(
-            s2s.local_response, int(request.kind or 0), dashboard_healthy=dash.healthy
+            s2s.local_response,
+            int(request.kind or 0),
+            dashboard_healthy=dash.healthy,
+            note_id=str(request.note_id or ""),
         )
 
     async def Complete(self, request, context):

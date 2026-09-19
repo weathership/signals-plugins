@@ -51,6 +51,7 @@ class ServerQueryKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SERVER_QUERY_KIND_SEARCH: _ClassVar[ServerQueryKind]
     SERVER_QUERY_KIND_FMP: _ClassVar[ServerQueryKind]
     SERVER_QUERY_KIND_AGENTS: _ClassVar[ServerQueryKind]
+    SERVER_QUERY_KIND_RESOURCES: _ClassVar[ServerQueryKind]
 
 class ActivityState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -124,6 +125,7 @@ SERVER_QUERY_KIND_AGENDA: ServerQueryKind
 SERVER_QUERY_KIND_SEARCH: ServerQueryKind
 SERVER_QUERY_KIND_FMP: ServerQueryKind
 SERVER_QUERY_KIND_AGENTS: ServerQueryKind
+SERVER_QUERY_KIND_RESOURCES: ServerQueryKind
 ACTIVITY_STATE_UNSPECIFIED: ActivityState
 ACTIVITY_QUEUED: ActivityState
 ACTIVITY_RUNNING: ActivityState
@@ -502,7 +504,7 @@ class ServerQueryRequest(_message.Message):
     def __init__(self, kind: _Optional[_Union[ServerQueryKind, str]] = ..., ttl: _Optional[int] = ..., nonce: _Optional[str] = ..., origin_project: _Optional[str] = ..., note_id: _Optional[str] = ..., limit: _Optional[int] = ..., since_ms: _Optional[int] = ..., stream: _Optional[str] = ..., query: _Optional[str] = ...) -> None: ...
 
 class ServerQueryResponse(_message.Message):
-    __slots__ = ("project", "remotes", "head", "peers", "schedules", "note", "surfaces", "queues", "workloads", "posture", "products", "cognition", "contributions", "activities", "thoughts_hint", "agenda_hint", "search_hint", "fmp_hint", "agents")
+    __slots__ = ("project", "remotes", "head", "peers", "schedules", "note", "surfaces", "queues", "workloads", "posture", "products", "cognition", "contributions", "activities", "thoughts_hint", "agenda_hint", "search_hint", "fmp_hint", "agents", "resources_hint")
     PROJECT_FIELD_NUMBER: _ClassVar[int]
     REMOTES_FIELD_NUMBER: _ClassVar[int]
     HEAD_FIELD_NUMBER: _ClassVar[int]
@@ -522,6 +524,7 @@ class ServerQueryResponse(_message.Message):
     SEARCH_HINT_FIELD_NUMBER: _ClassVar[int]
     FMP_HINT_FIELD_NUMBER: _ClassVar[int]
     AGENTS_FIELD_NUMBER: _ClassVar[int]
+    RESOURCES_HINT_FIELD_NUMBER: _ClassVar[int]
     project: str
     remotes: _containers.RepeatedCompositeFieldContainer[GitRemote]
     head: str
@@ -541,7 +544,8 @@ class ServerQueryResponse(_message.Message):
     search_hint: SearchHint
     fmp_hint: FmpHint
     agents: _containers.RepeatedCompositeFieldContainer[AgentHint]
-    def __init__(self, project: _Optional[str] = ..., remotes: _Optional[_Iterable[_Union[GitRemote, _Mapping]]] = ..., head: _Optional[str] = ..., peers: _Optional[_Iterable[_Union[PeerHint, _Mapping]]] = ..., schedules: _Optional[_Iterable[_Union[ScheduleHint, _Mapping]]] = ..., note: _Optional[_Union[WikiNote, _Mapping]] = ..., surfaces: _Optional[_Iterable[_Union[Surface, _Mapping]]] = ..., queues: _Optional[_Iterable[_Union[QueueHint, _Mapping]]] = ..., workloads: _Optional[_Iterable[_Union[WorkloadOffer, _Mapping]]] = ..., posture: _Optional[_Union[SourcePosture, _Mapping]] = ..., products: _Optional[_Iterable[_Union[ProductHint, _Mapping]]] = ..., cognition: _Optional[_Union[CognitionHint, _Mapping]] = ..., contributions: _Optional[_Union[ContributionsHint, _Mapping]] = ..., activities: _Optional[_Iterable[_Union[Activity, _Mapping]]] = ..., thoughts_hint: _Optional[_Union[ThoughtsHint, _Mapping]] = ..., agenda_hint: _Optional[_Union[AgendaHint, _Mapping]] = ..., search_hint: _Optional[_Union[SearchHint, _Mapping]] = ..., fmp_hint: _Optional[_Union[FmpHint, _Mapping]] = ..., agents: _Optional[_Iterable[_Union[AgentHint, _Mapping]]] = ...) -> None: ...
+    resources_hint: ResourcesHint
+    def __init__(self, project: _Optional[str] = ..., remotes: _Optional[_Iterable[_Union[GitRemote, _Mapping]]] = ..., head: _Optional[str] = ..., peers: _Optional[_Iterable[_Union[PeerHint, _Mapping]]] = ..., schedules: _Optional[_Iterable[_Union[ScheduleHint, _Mapping]]] = ..., note: _Optional[_Union[WikiNote, _Mapping]] = ..., surfaces: _Optional[_Iterable[_Union[Surface, _Mapping]]] = ..., queues: _Optional[_Iterable[_Union[QueueHint, _Mapping]]] = ..., workloads: _Optional[_Iterable[_Union[WorkloadOffer, _Mapping]]] = ..., posture: _Optional[_Union[SourcePosture, _Mapping]] = ..., products: _Optional[_Iterable[_Union[ProductHint, _Mapping]]] = ..., cognition: _Optional[_Union[CognitionHint, _Mapping]] = ..., contributions: _Optional[_Union[ContributionsHint, _Mapping]] = ..., activities: _Optional[_Iterable[_Union[Activity, _Mapping]]] = ..., thoughts_hint: _Optional[_Union[ThoughtsHint, _Mapping]] = ..., agenda_hint: _Optional[_Union[AgendaHint, _Mapping]] = ..., search_hint: _Optional[_Union[SearchHint, _Mapping]] = ..., fmp_hint: _Optional[_Union[FmpHint, _Mapping]] = ..., agents: _Optional[_Iterable[_Union[AgentHint, _Mapping]]] = ..., resources_hint: _Optional[_Union[ResourcesHint, _Mapping]] = ...) -> None: ...
 
 class FmpHit(_message.Message):
     __slots__ = ("symbol", "title", "snippet", "url", "exchange", "as_of", "source")
@@ -708,6 +712,28 @@ class PutAgendaItemResponse(_message.Message):
     item: AgendaHintItem
     note: str
     def __init__(self, ok: _Optional[bool] = ..., item: _Optional[_Union[AgendaHintItem, _Mapping]] = ..., note: _Optional[str] = ...) -> None: ...
+
+class ResourceObject(_message.Message):
+    __slots__ = ("name", "text", "uri")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    URI_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    text: str
+    uri: str
+    def __init__(self, name: _Optional[str] = ..., text: _Optional[str] = ..., uri: _Optional[str] = ...) -> None: ...
+
+class ResourcesHint(_message.Message):
+    __slots__ = ("project", "note_id", "objects", "note")
+    PROJECT_FIELD_NUMBER: _ClassVar[int]
+    NOTE_ID_FIELD_NUMBER: _ClassVar[int]
+    OBJECTS_FIELD_NUMBER: _ClassVar[int]
+    NOTE_FIELD_NUMBER: _ClassVar[int]
+    project: str
+    note_id: str
+    objects: _containers.RepeatedCompositeFieldContainer[ResourceObject]
+    note: str
+    def __init__(self, project: _Optional[str] = ..., note_id: _Optional[str] = ..., objects: _Optional[_Iterable[_Union[ResourceObject, _Mapping]]] = ..., note: _Optional[str] = ...) -> None: ...
 
 class Thought(_message.Message):
     __slots__ = ("id", "at_ms", "kind", "title", "summary", "excerpt", "domains", "salience", "chain_id", "generation", "note_path", "profile", "model")
