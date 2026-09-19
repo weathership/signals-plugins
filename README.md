@@ -11,7 +11,7 @@ clone as other third-party plugins).
 | `plugins/signals-memory` | `MemoryProvider` | `memory.provider: signals-memory` |
 | `plugins/signals-compact` | `ContextEngine` via `register(ctx)` | `context.engine: signals` |
 | `plugins/signals-listen` | dashboard UI + `plugin_api.py` | WebRTC viewer / AgentRTC Listen tab |
-| `plugins/signals-zettel` | general (`/zettel`, `zettel_capture`) | Pasted text → scratch zettel in the wiki vault |
+| `plugins/signals-zettel` | general (`/zettel`, `/rtc-review`, `zettel_capture`) | Pasted text or a Grok review of the last AgentRTC session → scratch zettel |
 | `plugins/signals-holoviews` | general (`viz_show` / `viz_select` / `viz_input` / `viz_clear`) | Live HoloViews/Bokeh via headless Chromium CDP screencast on the AgentRTC video track |
 | `hsengine/` (pip extra `signals-hsengine`) | sidecar process | Lattice engine + AgentRTC (`python -m hsengine`) |
 
@@ -72,7 +72,11 @@ CLI/dashboard chat and AgentRTC share `$HERMES_HOME/state.db`,
 `signals-memory/turns.jsonl`. A note filed in Hermes chat is on the next
 Connect; recall lines are tagged `[cli]` vs `[agent-rtc]` so the invent
 pass can tell text chat from a voice call. At similar recency, AgentRTC
-sessions are boosted; cron is demoted.
+sessions are boosted; cron is demoted. In Chat (Grok), `/rtc-review`
+(alias `/grok-review`) asks the SuperGrok subscription to review the last
+AgentRTC transcript and file a scratch zettel; the next Connect within
+~12 minutes picks it up as USER-PROVIDED entropy. Spoken Ripley stays on
+Cerebras.
 
 Activate:
 
@@ -192,7 +196,7 @@ plugins/
   signals-memory/       MemoryProvider + hybrid.py (tiered recall)
   signals-compact/      ContextEngine
   signals-listen/       dashboard Listen tab + plugin_api
-  signals-zettel/       /zettel <pasted text> into wiki/scratch
+  signals-zettel/       /zettel paste; /rtc-review Grok lift into wiki/scratch
   signals-holoviews/    viz_show stills faded onto the AgentRTC video feed
 hsengine/               sidecar: AgentRTC, named bots, overlay, ops
   bots/{ripley,bishop}/ SOUL.md

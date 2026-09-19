@@ -96,6 +96,49 @@ def test_consult_posts_chat_completions_with_oauth(monkeypatch):
     assert "tools" not in seen["json"]
 
 
+def test_consult_honors_custom_system(monkeypatch):
+    seen: dict = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "model": "grok-4.6",
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {},
+            }
+
+    class _Client:
+        def __init__(self, timeout=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            seen["json"] = json
+            return _Resp()
+
+    monkeypatch.setattr(
+        "tools.xai_http.resolve_xai_http_credentials",
+        lambda **k: {
+            "api_key": "oauth-token",
+            "base_url": "https://api.x.ai/v1",
+            "provider": "xai-oauth",
+        },
+    )
+    monkeypatch.setattr("httpx.Client", _Client)
+    out = consult(question="review this", system="Write a zettel.", max_tokens=128)
+    assert out["ok"] is True
+    assert seen["json"]["messages"][0]["content"] == "Write a zettel."
+    assert seen["json"]["max_tokens"] == 128
+
+
 def test_consult_uses_reasoning_when_content_empty(monkeypatch):
     class _Resp:
         def raise_for_status(self):

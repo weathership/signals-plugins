@@ -1,7 +1,7 @@
 name: signals-zettel
 kind: standalone
-version: 0.1.0
-description: File pasted text as a scratch zettel in the Hermes wiki vault
+version: 0.2.0
+description: Scratch zettels in the Hermes wiki vault, including Grok AgentRTC review
 author: zndx
 hooks: []
-tags: [zettel, wiki, clipboard]
+tags: [zettel, wiki, clipboard, grok, agent-rtc]

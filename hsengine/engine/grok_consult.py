@@ -14,6 +14,11 @@ log = logging.getLogger("hsengine.engine.grok_consult")
 DEFAULT_MODEL = "grok-4.6"
 DEFAULT_BASE = "https://api.x.ai/v1"
 MAX_TOKENS = 2048
+DEFAULT_SYSTEM = (
+    "You are a consult for an AgentRTC conversation "
+    "(Ripley/Bishop/Vasquez). Be specific. Do not greet. "
+    "Name the stuck distinction, then one next move."
+)
 
 
 def grok_available() -> bool:
@@ -47,7 +52,13 @@ def configured_model() -> str:
     return DEFAULT_MODEL
 
 
-def consult(*, question: str, context: str = "") -> dict[str, Any]:
+def consult(
+    *,
+    question: str,
+    context: str = "",
+    system: str = "",
+    max_tokens: int = 0,
+) -> dict[str, Any]:
     q = (question or "").strip()
     if not q:
         return {"ok": False, "error": "question required"}
@@ -82,15 +93,11 @@ def consult(*, question: str, context: str = "") -> dict[str, Any]:
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a consult for an AgentRTC conversation "
-                    "(Ripley/Bishop/Vasquez). Be specific. Do not greet. "
-                    "Name the stuck distinction, then one next move."
-                ),
+                "content": (system or "").strip() or DEFAULT_SYSTEM,
             },
             {"role": "user", "content": user},
         ],
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": int(max_tokens) if max_tokens else MAX_TOKENS,
         "temperature": 0.4,
     }
     try:
