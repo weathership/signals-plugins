@@ -310,6 +310,37 @@ def peer_hints() -> list[tuple[str, str]]:
     return hints
 
 
+def peer_target_for_project(project: str) -> str:
+    """Lattice Engine host:port for ``project``, or '' if no peer answers as that name.
+
+    Walks configured peers' Status, then each peer's ServerQuery PEERS so a
+    Metabot (or other announced engine) is reachable even when it is not in
+    ``federation.peers``.
+    """
+    want = (project or "").strip().lower()
+    if not want:
+        return ""
+    for proj, target in peer_hints():
+        if (proj or "").strip().lower() == want and target:
+            return str(target).replace("grpc://", "").strip()
+    from hsengine.engine.ops import _status_targets
+
+    seen: set[str] = set()
+    for seed in _status_targets():
+        resp = query_peer(seed, zpb.SERVER_QUERY_KIND_PEERS)
+        if resp is None:
+            continue
+        for hint in resp.peers:
+            proj = str(getattr(hint, "project", "") or "").strip().lower()
+            target = str(getattr(hint, "target", "") or "").replace("grpc://", "").strip()
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            if proj == want:
+                return target
+    return ""
+
+
 def complete_on_peer(
     peer: str,
     *,

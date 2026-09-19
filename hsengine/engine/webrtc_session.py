@@ -303,6 +303,18 @@ class WebRtcHub:
                     public = (session.get("public") or "").strip()
                     if public:
                         pack["agenda_item"] = public[:1200]
+                    if session.get("origin_project"):
+                        pack["origin_project"] = str(session["origin_project"])
+                    if session.get("session_prompt"):
+                        pack["session_prompt"] = str(session["session_prompt"])
+                    if session.get("materials"):
+                        pack["materials"] = str(session["materials"])
+                    log.info(
+                        "webrtc opening origin=%s prompt=%s materials=%s",
+                        pack.get("origin_project") or "-",
+                        "yes" if pack.get("session_prompt") else "no",
+                        "yes" if pack.get("materials") else "no",
+                    )
                 from hsengine.engine.opening import compose_opening
 
                 plan = await asyncio.to_thread(

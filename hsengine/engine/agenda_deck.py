@@ -17,6 +17,10 @@ from typing import Any
 log = logging.getLogger("hsengine.engine.agenda_deck")
 
 DECK_HEADING = re.compile(r"(?im)^##\s+Deck\s*$")
+_SECTION = re.compile(r"(?im)^##\s+(.+?)\s*$")
+_PROMPT_TITLES = frozenset({"session prompt", "agentrtc", "connect prompt"})
+_MATERIALS_TITLES = frozenset({"materials", "supporting materials"})
+_DECK_TITLES = frozenset({"deck"})
 _END_SLIDE = re.compile(r"(?m)^<!--\s*end_slide\s*-->\s*$")
 _SPEAKER_NOTE = re.compile(r"<!--\s*speaker_note:\s*(.*?)\s*-->", re.S | re.I)
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\s*\n", re.S)
@@ -25,16 +29,87 @@ DEFAULT_MEETING_S = 30 * 60
 MIN_SLOT_S = 45.0
 
 
-def split_public_deck(body: str) -> tuple[str, str]:
+def split_agenda_body(body: str) -> dict[str, str]:
+    """Split public lede, optional session prompt, materials, and presenterm deck.
+
+    Novel AgentRTC prompts live under ``## Session prompt`` (aliases
+    ``## AgentRTC``, ``## Connect prompt``), supporting notes under
+    ``## Materials``, slides under ``## Deck``. Speaker notes stay in the
+    deck. Missing sections are empty strings — the caller uses its default
+    Connect opening when ``session_prompt`` is empty.
+    """
     text = body or ""
-    m = DECK_HEADING.search(text)
-    if not m:
-        return text.strip(), ""
-    return text[: m.start()].strip(), text[m.end() :].strip()
+    buckets = {"public": "", "deck": "", "session_prompt": "", "materials": ""}
+    matches = list(_SECTION.finditer(text))
+    if not matches:
+        buckets["public"] = text.strip()
+        return buckets
+    buckets["public"] = text[: matches[0].start()].strip()
+    for i, m in enumerate(matches):
+        title = m.group(1).strip().lower()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        chunk = text[m.end() : end].strip()
+        if title in _PROMPT_TITLES:
+            buckets["session_prompt"] = chunk
+        elif title in _MATERIALS_TITLES:
+            buckets["materials"] = chunk
+        elif title in _DECK_TITLES:
+            buckets["deck"] = chunk
+        else:
+            heading = "## " + m.group(1).strip()
+            extra = heading + (("\n" + chunk) if chunk else "")
+            buckets["public"] = (buckets["public"] + "\n\n" + extra).strip()
+    return buckets
 
 
-def load_agenda_session(agenda_id: str) -> dict[str, str]:
-    """Fetch one Agenda item from Gaius over ServerQuery. Empty dict if missing."""
+def split_public_deck(body: str) -> tuple[str, str]:
+    parts = split_agenda_body(body)
+    return parts["public"], parts["deck"]
+
+
+def _session_from_item(item: Any, *, wanted: str, served_by: str, target: str) -> dict[str, Any]:
+    body = str(getattr(item, "body", "") or "")
+    parts = split_agenda_body(body)
+    prompt = str(getattr(item, "session_prompt", "") or "").strip() or parts["session_prompt"]
+    materials = str(getattr(item, "session_materials", "") or "").strip() or parts["materials"]
+    origin = (
+        str(getattr(item, "origin_project", "") or "").strip()
+        or (served_by or "").strip()
+    )
+    public = parts["public"] or str(getattr(item, "summary", "") or "")
+    return {
+        "id": str(getattr(item, "id", "") or wanted),
+        "title": str(getattr(item, "title", "") or ""),
+        "public": public,
+        "deck": parts["deck"],
+        "session_prompt": prompt,
+        "materials": materials,
+        "origin_project": origin,
+        "served_by": served_by,
+        "target": target,
+        "starts_ms": int(getattr(item, "starts_ms", 0) or 0),
+        "ends_ms": int(getattr(item, "ends_ms", 0) or 0),
+    }
+
+
+def _prefer_session(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    def score(row: dict[str, str]) -> tuple[int, int, int]:
+        return (
+            4 if row.get("session_prompt") else 0,
+            2 if row.get("materials") else 0,
+            len(row.get("public") or "") + len(row.get("deck") or ""),
+        )
+
+    return max(rows, key=score)
+
+
+def load_agenda_session(agenda_id: str) -> dict[str, Any]:
+    """Fetch one Agenda item from the owning peer over ServerQuery.
+
+    Walks known engines, then re-queries ``origin_project`` (Gaius, Metabot, …)
+    so supporting materials and a novel session prompt come from the agent
+    that created the item. Empty dict if no peer has it.
+    """
     from hsengine.engine import federation
     from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
     from hsengine.engine.ops import _status_targets
@@ -42,6 +117,7 @@ def load_agenda_session(agenda_id: str) -> dict[str, str]:
     wanted = (agenda_id or "").strip()
     if not wanted:
         return {}
+    found: list[dict[str, Any]] = []
     for target in _status_targets():
         resp = federation.query_peer(
             target, zpb.SERVER_QUERY_KIND_AGENDA, note_id=wanted
@@ -51,17 +127,42 @@ def load_agenda_session(agenda_id: str) -> dict[str, str]:
         item = resp.agenda_hint.item
         if not (item.id or item.title or item.body):
             continue
-        public, deck = split_public_deck(item.body or "")
-        return {
-            "id": item.id or wanted,
-            "title": item.title or "",
-            "public": public or item.summary or "",
-            "deck": deck,
-            "starts_ms": int(getattr(item, "starts_ms", 0) or 0),
-            "ends_ms": int(getattr(item, "ends_ms", 0) or 0),
-        }
-    log.info("agenda session %s not found on peers", wanted)
-    return {}
+        served = str(resp.project or resp.agenda_hint.project or "")
+        found.append(
+            _session_from_item(item, wanted=wanted, served_by=served, target=target)
+        )
+    if not found:
+        log.info("agenda session %s not found on peers", wanted)
+        return {}
+    picked = _prefer_session(found)
+    owner = (picked.get("origin_project") or picked.get("served_by") or "").strip()
+    owner_target = ""
+    if owner:
+        try:
+            owner_target = federation.peer_target_for_project(owner)
+        except Exception:
+            log.debug("owner target lookup failed for %s", owner, exc_info=True)
+            owner_target = ""
+    if owner_target and owner_target != picked.get("target"):
+        resp = federation.query_peer(
+            owner_target, zpb.SERVER_QUERY_KIND_AGENDA, note_id=wanted
+        )
+        if resp is not None:
+            item = resp.agenda_hint.item
+            if item.id or item.title or item.body:
+                served = str(resp.project or resp.agenda_hint.project or owner)
+                owned = _session_from_item(
+                    item, wanted=wanted, served_by=served, target=owner_target
+                )
+                if owned.get("session_prompt") or owned.get("materials") or owned.get("public"):
+                    picked = owned
+                    log.info(
+                        "agenda session %s routed to origin_project=%s target=%s",
+                        wanted,
+                        owner,
+                        owner_target,
+                    )
+    return picked
 
 
 _VOICE_RAILS = (

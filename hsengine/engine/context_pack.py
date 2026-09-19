@@ -179,12 +179,17 @@ def pipeline_block(pack: dict[str, str] | None) -> str:
     title = " ".join((pack.get("agenda_title") or "").split())
     item = (pack.get("agenda_item") or "").strip()
     aid = " ".join((pack.get("agenda_id") or "").split())
-    meeting = bool(title or item or aid)
+    meeting = bool(title or item or aid or pack.get("session_prompt") or pack.get("materials"))
+    owner = " ".join((pack.get("origin_project") or "").split())
+    prompt = (pack.get("session_prompt") or "").strip()
+    materials = (pack.get("materials") or "").strip()
     if meeting:
         lines = [
             "CALENDAR SESSION (they joined this meeting via the calendar link — "
             "required opening material, not recent_thoughts, not a leftover thread):"
         ]
+        if owner:
+            lines.append("owner: " + owner)
         if title:
             lines.append(title)
         if aid:
@@ -192,6 +197,18 @@ def pipeline_block(pack: dict[str, str] | None) -> str:
         if item:
             lines.append(item)
         parts.append("\n".join(lines))
+    if prompt:
+        parts.append(
+            "OWNER SESSION PROMPT (invent from this; it is the meeting's novel "
+            "opening, not speaker notes, not the deck, not recent_thoughts):\n"
+            + prompt
+        )
+    if materials:
+        parts.append(
+            "SUPPORTING MATERIALS (from the owning agent; not speaker notes, "
+            "not the deck):\n"
+            + materials
+        )
     agenda = usable_spoken(pack.get("agenda_spoken") or "")
     if agenda and not meeting:
         parts.append("Today's agenda brief:\n" + agenda)

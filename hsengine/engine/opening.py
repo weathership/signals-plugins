@@ -96,6 +96,7 @@ def facts_from_pack(pack: dict[str, str] | None, *, returning: bool) -> frozense
         (pack.get("agenda_title") or "").strip()
         or (pack.get("agenda_item") or "").strip()
         or (pack.get("agenda_id") or "").strip()
+        or (pack.get("session_prompt") or "").strip()
     ):
         tags.add("has_meeting")
         tags.add("has_agenda")
@@ -316,8 +317,10 @@ def bishop_handoff(
         "No rumination frames (sitting with, turning over, returning to a thread). "
         "If a USER-PROVIDED zettel is in the glance, that is required entropy "
         "from them — distinct from interior monologue and federated-workspace thoughts. "
-        "If a CALENDAR SESSION is in the glance, they joined that meeting — "
-        "open on it. Do not lead with recent_thoughts."
+        "If an OWNER SESSION PROMPT is in the glance, invent from that — "
+        "the owning agent wrote it for this Connect, not speaker notes. "
+        "If a CALENDAR SESSION is in the glance and there is no owner prompt, "
+        "they joined that meeting — open on it. Do not lead with recent_thoughts."
     )
     return "\n".join(lines)
 

@@ -27,6 +27,25 @@ def test_pipeline_block_calendar_session_beats_thoughts():
     assert "Lilly" not in text
 
 
+def test_pipeline_block_owner_prompt_beats_default_headline():
+    text = pipeline_block(
+        {
+            "agenda_id": "scratch/x.md",
+            "agenda_title": "Discover reliability catch-up",
+            "origin_project": "gaius",
+            "session_prompt": "Open on Discover reliability, not leftover thoughts.",
+            "materials": "Theta skip is not success.",
+            "thoughts_spoken": "The Lilly 10-K is still the live thread on the board.",
+        }
+    )
+    assert "OWNER SESSION PROMPT" in text
+    assert "Open on Discover reliability" in text
+    assert "SUPPORTING MATERIALS" in text
+    assert "Theta skip" in text
+    assert "owner: gaius" in text
+    assert "Latest thoughts brief" not in text
+
+
 def test_pipeline_block_joins_spoken_briefs():
     text = pipeline_block(
         {

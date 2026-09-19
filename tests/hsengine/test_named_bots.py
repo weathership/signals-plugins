@@ -82,6 +82,7 @@ def test_bishop_prompt_varies_the_move():
     assert n >= bishop_max_tokens()
     assert "do not grok_consult" in open_p.lower()
     assert "calendar session" in open_p.lower()
+    assert "owner session prompt" in open_p.lower()
     assert "do not call recent_thoughts" in open_p.lower() or "do not lead with" in open_p.lower()
     _, deepen, _ = bishop_prompt(move="deepen")
     assert "grok_consult" in deepen

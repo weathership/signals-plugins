@@ -3,12 +3,105 @@ from __future__ import annotations
 
 from hsengine.engine.agenda_deck import (
     OPENING_GESTURES,
+    _prefer_session,
+    load_agenda_session,
     pick_opening_gesture,
     propose_opening_prompt,
     spoken_opening_prompt,
+    split_agenda_body,
     split_public_deck,
     strip_invented_prompt,
 )
+
+
+def test_split_session_prompt_is_not_speaker_notes():
+    parts = split_agenda_body(
+        "Catch up Discover reliability.\n\n"
+        "## Session prompt\n\n"
+        "Open on the Discover catch-up, not leftover thoughts.\n\n"
+        "## Materials\n\n"
+        "Theta skip is not success.\n\n"
+        "## Deck\n\n"
+        "Opening\n===\n\nHello.\n\n<!-- speaker_note: do not read this first. -->\n"
+    )
+    assert "Catch up Discover reliability" in parts["public"]
+    assert "Open on the Discover catch-up" in parts["session_prompt"]
+    assert "Theta skip is not success" in parts["materials"]
+    assert "speaker_note" in parts["deck"]
+    assert "speaker_note" not in parts["public"]
+    assert "speaker_note" not in parts["session_prompt"]
+
+
+def test_prefer_session_picks_owner_prompt_over_thin_copy():
+    thin = {
+        "title": "Discover",
+        "public": "lede",
+        "session_prompt": "",
+        "materials": "",
+        "origin_project": "gaius",
+        "target": "127.0.0.1:50051",
+    }
+    rich = {
+        "title": "Discover",
+        "public": "lede",
+        "session_prompt": "Open on the catch-up.",
+        "materials": "skip≠success",
+        "origin_project": "metabot",
+        "target": "127.0.0.1:50451",
+    }
+    picked = _prefer_session([thin, rich])
+    assert picked["origin_project"] == "metabot"
+    assert "catch-up" in picked["session_prompt"]
+
+
+def test_load_agenda_session_rereads_origin_peer(monkeypatch):
+    from types import SimpleNamespace
+
+    from hsengine.engine import federation
+    from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
+
+    gaius_item = SimpleNamespace(
+        id="scratch/x.md",
+        title="Discover reliability catch-up",
+        body="Public lede.\n",
+        summary="lede",
+        starts_ms=0,
+        ends_ms=0,
+        origin_project="metabot",
+        session_prompt="",
+        session_materials="",
+    )
+    meta_item = SimpleNamespace(
+        id="scratch/x.md",
+        title="Discover reliability catch-up",
+        body=(
+            "Public lede.\n\n## Session prompt\n\n"
+            "Open on Discover reliability, not thoughts.\n"
+        ),
+        summary="lede",
+        starts_ms=0,
+        ends_ms=0,
+        origin_project="metabot",
+        session_prompt="",
+        session_materials="",
+    )
+
+    def _query(target, kind, **k):
+        if kind != zpb.SERVER_QUERY_KIND_AGENDA:
+            return None
+        item = meta_item if "50451" in target else gaius_item
+        return SimpleNamespace(
+            project="gaius" if "50051" in target else "metabot",
+            agenda_hint=SimpleNamespace(project="gaius" if "50051" in target else "metabot", item=item),
+        )
+
+    monkeypatch.setattr("hsengine.engine.ops._status_targets", lambda: ["127.0.0.1:50051"])
+    monkeypatch.setattr(federation, "query_peer", _query)
+    monkeypatch.setattr(federation, "peer_target_for_project", lambda p: "127.0.0.1:50451" if p == "metabot" else "")
+    session = load_agenda_session("scratch/x.md")
+    assert session["origin_project"] == "metabot"
+    assert "not thoughts" in session["session_prompt"]
+    assert session["target"] == "127.0.0.1:50451"
 
 
 def test_split_keeps_deck_off_the_public_lede():
