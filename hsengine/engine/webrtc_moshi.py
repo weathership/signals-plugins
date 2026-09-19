@@ -15,7 +15,7 @@ log = logging.getLogger("hsengine.engine.webrtc.moshi")
 
 _MOSHI_RATE = 24000
 _CHUNK = 1920  # 80 ms at 24 kHz
-_TURN_QUIET_S = 2.0
+_TURN_QUIET_S = 3.0
 _TURN_MIN_CHARS = 8
 # Echo of our own TTS is not barge-in. Real user speech over TTS still wins
 # once a fragment is long enough to be an utterance.

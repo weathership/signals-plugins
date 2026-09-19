@@ -14,6 +14,7 @@ from hsengine.engine.webrtc_captions import CaptionBoard, paint_caption
 from hsengine.engine.webrtc_moshi import (
     MoshiCaptioner,
     TurnTaker,
+    _TURN_QUIET_S,
     _ripley_spoken_max_tokens,
     utterance_ready,
 )
@@ -50,6 +51,10 @@ def test_moshi_captioner_joins_word_events():
     cap.on_message({"type": "Word", "text": "three"})
     assert board.get() == "there one two three"
     assert cap.on_message({"type": "Step", "prs": [0.1, 0.2]}) is None
+
+
+def test_user_turn_quiet_gap_is_three_seconds():
+    assert _TURN_QUIET_S == 3.0
 
 
 def test_utterance_ready_needs_enough_text():
