@@ -78,6 +78,7 @@ def test_dispatch_fmp(monkeypatch):
     assert "hermes" in names
     assert "viz_show" in names
     assert "viz_input" in names
+    assert "grok_consult" in names
 
 
 def test_dispatch_hermes_requires_interactive(monkeypatch):
@@ -112,6 +113,7 @@ def test_spoken_system_mentions_kb_and_web_search():
     assert "shares this same session" in text or "share this same session" in text
     assert "gaius" in text
     assert "local wiki" in text
+    assert "grok_consult" in text
     assert "this minute" not in text
     assert "elapsed" not in text
 
@@ -165,6 +167,36 @@ def test_session_search_is_a_cerebras_tool():
     assert "session_search" in names
     assert "conversation" in names
     assert "hermes" in names
+    assert "grok_consult" in names
+
+
+def test_dispatch_grok_consult(monkeypatch):
+    seen: dict = {}
+
+    def _consult(*, question, context=""):
+        seen["question"] = question
+        seen["context"] = context
+        return {
+            "ok": True,
+            "text": "the stuck distinction is kasten vs archive",
+            "model": "grok-4.6",
+            "provider": "xai-oauth",
+        }
+
+    monkeypatch.setattr("hsengine.engine.grok_consult.consult", _consult)
+    data = json.loads(
+        ops.dispatch(
+            "grok_consult",
+            {"question": "kasten or archive?", "context": "three turns on schema"},
+        )
+    )
+    assert data["ok"] is True
+    assert data["provider"] == "xai-oauth"
+    assert seen["question"] == "kasten or archive?"
+    grok = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "grok_consult")
+    desc = grok["function"]["description"].lower()
+    assert "circling" in desc or "complex" in desc
+    assert "once" in desc
 
 
 def test_session_search_this_call_finds_overflow(monkeypatch, tmp_path):

@@ -39,7 +39,7 @@ enter if missing:
 |-----|------|
 | **Ripley** | Spoken voice. First person. Tools on user turns; execute pass has no tools. |
 | **Bishop** | Silent invent pass. Tools, including `hermes` / `delegate_task`. Never heard. |
-| **Vasquez** | Silent viz. One compositor JPEG at end of sequence; `viz_*` only. Instruct (`reasoning_effort=none`). Never heard. |
+| **Vasquez** | Silent viz. One compositor JPEG at end of sequence; `viz_*` plus occasional `grok_consult`. Instruct (`reasoning_effort=none`). Never heard. |
 
 **Agent-mediated:** Bishop invents; Ripley speaks; Vasquez glances the
 live HoloViews frame and adjusts it. Humans spectate and may ask
@@ -50,7 +50,11 @@ While the `interactive_session` Activity is in force, all three bots (and
 `hermes()` children) use Cerebras via the session-runtime overlay — not
 an env var, not a process-wide model swap. Vasquez is instruct
 (`reasoning_effort=none`) with a compositor JPEG; she does not use
-lattice thinking.
+lattice thinking. Spoken turns stay on Cerebras. When a thread is
+circling a complex idea, Ripley, Bishop, or Vasquez may call
+`grok_consult` once — Hermes' configured Grok subscription (`xai-oauth`,
+`model.default`) as a second opinion. That does not swap the overlay;
+dashboard/CLI keep Grok as their default model.
 
 Delegation cap on a Bishop turn: `hermes` at most twice, and Hermes may
 run at most **two** `delegate_task` children. Subagents share the

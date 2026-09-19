@@ -1059,6 +1059,33 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "grok_consult",
+            "description": (
+                "Ask the configured Hermes Grok subscription (xai-oauth) for a "
+                "second opinion. Use when the thread is circling the same idea "
+                "or the undertaking is too complex for one Cerebras turn. At "
+                "most once per stuck topic. Not for greetings or simple lookups."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The stuck distinction or question.",
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Short excerpt of the looping thread.",
+                    },
+                },
+                "required": ["question"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 def _int_arg(args: dict[str, Any], key: str, default: int) -> int:
@@ -1208,6 +1235,18 @@ def _dispatch_viz_input(args: dict[str, Any]) -> str:
     )
 
 
+def _dispatch_grok_consult(args: dict[str, Any]) -> str:
+    from hsengine.engine.grok_consult import consult
+
+    return json.dumps(
+        consult(
+            question=str(args.get("question") or ""),
+            context=str(args.get("context") or ""),
+        ),
+        default=str,
+    )
+
+
 def _dispatch_session_search(args: dict[str, Any]) -> str:
     around = args.get("around_message_id")
     around_id = None
@@ -1239,6 +1278,7 @@ _DISPATCH = {
     "kb_search": _dispatch_kb,
     "web_search": _dispatch_web,
     "fmp": _dispatch_fmp,
+    "grok_consult": _dispatch_grok_consult,
     "hermes": _dispatch_hermes,
     "viz_show": _dispatch_viz_show,
     "viz_select": _dispatch_viz_select,

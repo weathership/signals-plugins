@@ -27,6 +27,9 @@ def test_templates_exist():
     assert "viz_show" in template_soul(VASQUEZ)
     assert "viz_hover" in template_soul(VASQUEZ)
     assert "hover" in template_soul(VASQUEZ).lower()
+    assert "grok_consult" in template_soul(VASQUEZ)
+    assert "grok_consult" in template_soul(BISHOP)
+    assert "grok_consult" in template_soul(RIPLEY)
     assert "delegate_task" in template_soul(BISHOP)
     assert "MONOLOGUE" in template_soul(BISHOP)
     bishop = template_soul(BISHOP)
@@ -76,6 +79,9 @@ def test_bishop_prompt_varies_the_move():
     assert "two-ideas" in open_p or "formula" in open_p.lower()
     assert "Lilly" in open_p
     assert n >= 200
+    assert "do not grok_consult" in open_p.lower()
+    _, deepen, _ = bishop_prompt(move="deepen")
+    assert "grok_consult" in deepen
 
 
 def test_ripley_opening_prompts_prefer_monologue():
@@ -118,6 +124,25 @@ def test_ensure_bots_creates_managed_profiles(tmp_path, monkeypatch):
     assert bcfg["delegation"]["max_concurrent_children"] == 2
     again = ensure_bots()
     assert again[RIPLEY] == out[RIPLEY]
+
+
+def test_ensure_bots_refreshes_stale_vasquez_soul(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    home = tmp_path / ".hermes"
+    home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    ensure_bots()
+    soul = tmp_path / ".hermes" / "profiles" / "vasquez" / "SOUL.md"
+    soul.write_text(
+        "You are Vasquez, the silent visual gunner on this AgentRTC call. You are not heard.\n\n"
+        "You may only call viz_show, viz_select, viz_hover, viz_input, and viz_clear.\n"
+        "Never hermes, never delegate_task, never sitrep. Never speak.\n",
+        encoding="utf-8",
+    )
+    ensure_bots()
+    text = soul.read_text(encoding="utf-8")
+    assert "grok_consult" in text
+    assert "You may only call viz_show" not in text
 
 
 def test_ensure_bots_does_not_clobber_custom_soul(tmp_path, monkeypatch):
@@ -188,8 +213,17 @@ def test_vasquez_run_sends_one_jpeg_and_only_viz_tools(monkeypatch):
     assert seen.get("reasoning_effort") == "none"
     assert seen.get("images") == [b"\xff\xd8fakejpeg"]
     names = [t["function"]["name"] for t in (seen.get("tool_defs") or [])]
-    assert set(names) <= {"viz_show", "viz_select", "viz_input", "viz_clear", "viz_hover"}
+    assert set(names) <= {
+        "viz_show",
+        "viz_select",
+        "viz_input",
+        "viz_clear",
+        "viz_hover",
+        "grok_consult",
+    }
     assert "viz_hover" in names
+    assert "grok_consult" in names
     assert "hermes" not in names
+    assert "grok_consult" in seen.get("prompt", "")
     assert "show the chord" in seen.get("prompt", "")
     assert out == "ACTION: NONE"

@@ -166,6 +166,17 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             )
         except Exception:
             replace = False
+        if (
+            not replace
+            and "grok_consult" not in current
+            and (
+                "You may only call viz_show, viz_select, viz_hover, viz_input, and viz_clear."
+                in current
+                or "You may call recent_thoughts, kb_search, web_search, or fmp."
+                in current
+            )
+        ):
+            replace = True
     if replace:
         soul.write_text(template + "\n", encoding="utf-8")
     _merge_profile_yaml(
@@ -303,6 +314,7 @@ def bishop_prompt(
             "pipelines, or how the notes arrived. Banned rumination frames: "
             "'I've been sitting with', 'turning something over', 'thread I'm "
             "returning to', 'keeps surfacing', 'good to be back'. "
+            "Do not grok_consult on Connect. "
             "If the handoff includes a USER-PROVIDED zettel, that is their "
             "paste — not interior monologue, not federated-workspace thoughts, "
             "not Gaius, not recent_thoughts. It is required opening entropy. "
@@ -333,7 +345,8 @@ def bishop_prompt(
         lines.append(
             "Call conversation. Deepen the last live thread. Do not web-search. "
             "If a figure would help (ontology chord, Aegir aperture, a plot), "
-            "call viz_show."
+            "call viz_show. If the live thread is circling the same complex "
+            "idea, grok_consult once then STEER/MONOLOGUE from that."
         )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")
     return system, "\n".join(lines), 240 if move in ("open", "next") else 200
@@ -481,7 +494,14 @@ _VASQUEZ_GAP_S = 2.0
 def viz_tool_defs() -> list[dict[str, Any]]:
     from hsengine.engine.ops import CEREBRAS_TOOLS
 
-    names = {"viz_show", "viz_select", "viz_input", "viz_clear", "viz_hover"}
+    names = {
+        "viz_show",
+        "viz_select",
+        "viz_input",
+        "viz_clear",
+        "viz_hover",
+        "grok_consult",
+    }
     return [t for t in CEREBRAS_TOOLS if t.get("function", {}).get("name") in names]
 
 
@@ -547,6 +567,8 @@ def vasquez_run(
         f"Reason: {reason or 'end-of-sequence'}.",
         "This is one reference frame of the live HoloViews page after the last beat.",
         "If it already matches, ACTION: NONE.",
+        "If the live thread is circling the same complex idea, grok_consult "
+        "once then viz; otherwise do not consult.",
     ]
     nar = " ".join((narrative or "").split())
     sp = " ".join((spoken or "").split())

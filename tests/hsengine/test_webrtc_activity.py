@@ -20,6 +20,8 @@ def test_format_line_names_the_persona():
     assert "hermes" in format_line("hermes")
     assert format_line("viz_show").startswith("Vasquez")
     assert format_line("fmp").startswith("Ripley")
+    assert format_line("grok_consult").startswith("Bishop")
+    assert "consult" in format_line("grok_consult")
 
 
 def test_pulse_viz_and_fmp_show_on_the_board():
@@ -34,6 +36,9 @@ def test_pulse_viz_and_fmp_show_on_the_board():
         assert "Vasquez" in text
         pulse("bishop")
         assert "Bishop" in board.get()
+        pulse("grok_consult")
+        assert "Bishop" in board.get()
+        assert "consult" in board.get()
     finally:
         unbind(board)
 
