@@ -1,0 +1,68 @@
+.signals-wiki {
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) 1fr;
+  gap: 1rem;
+  min-height: 70vh;
+  align-items: start;
+}
+
+.signals-wiki-tree {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  padding: 0.5rem;
+  max-height: 75vh;
+  overflow: auto;
+  background: var(--card, #12121a);
+}
+
+.signals-wiki-tree button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.signals-wiki-tree button.active,
+.signals-wiki-tree button:hover {
+  background: var(--accent, #2a2a44);
+}
+
+.signals-wiki-body {
+  border: 1px solid var(--border, #2a2a38);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  min-height: 70vh;
+  overflow: auto;
+}
+
+.signals-wiki-body pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.signals-wiki-meta {
+  font-size: 0.8rem;
+  color: var(--muted-foreground, #9aa3b5);
+  margin-bottom: 0.75rem;
+}
+
+.signals-wiki-status {
+  font-size: 0.8rem;
+  color: var(--muted-foreground, #9aa3b5);
+  margin: 0 0 0.75rem;
+}
+
+@media (max-width: 800px) {
+  .signals-wiki {
+    grid-template-columns: 1fr;
+  }
+}

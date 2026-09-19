@@ -1,0 +1,14 @@
+{
+  "name": "signals-wiki",
+  "label": "Wiki",
+  "description": "Hermes wiki vault, next to Files.",
+  "icon": "FileText",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/wiki",
+    "position": "after:files"
+  },
+  "entry": "dist/wiki.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
