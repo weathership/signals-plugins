@@ -134,7 +134,19 @@ def conversational_context(*, agenda_id: str = "") -> dict[str, str]:
                 out["thoughts_when"] = when
         if thoughts_age is not None:
             out["thoughts_age"] = _age_label(thoughts_age)
-    has_spoken = bool(out.get("agenda_spoken") or out.get("thoughts_spoken"))
+    if agenda_id:
+        out["agenda_id"] = agenda_id
+    meeting = bool(out.get("agenda_item") or out.get("agenda_title") or agenda_id)
+    has_spoken = bool(
+        out.get("agenda_spoken") or out.get("thoughts_spoken") or meeting
+    )
+    if meeting:
+        # They joined a named session. Stale thoughts must not turn this into
+        # a "workspace gone quiet" or thoughts-headline Connect.
+        state = "fresh"
+        out["workspace"] = state
+        out["workspace_note"] = "meeting"
+        return out
     state = workspace_freshness(
         thoughts_age_min=thoughts_age,
         agenda_age_min=agenda_age,
@@ -164,10 +176,26 @@ def pipeline_block(pack: dict[str, str] | None) -> str:
     note = pack.get("workspace_note") or ""
     if state in ("stale", "empty"):
         parts.append("Workspace freshness: " + (note or state) + ".")
+    title = " ".join((pack.get("agenda_title") or "").split())
+    item = (pack.get("agenda_item") or "").strip()
+    aid = " ".join((pack.get("agenda_id") or "").split())
+    meeting = bool(title or item or aid)
+    if meeting:
+        lines = [
+            "CALENDAR SESSION (they joined this meeting via the calendar link — "
+            "required opening material, not recent_thoughts, not a leftover thread):"
+        ]
+        if title:
+            lines.append(title)
+        if aid:
+            lines.append("id: " + aid)
+        if item:
+            lines.append(item)
+        parts.append("\n".join(lines))
     agenda = usable_spoken(pack.get("agenda_spoken") or "")
-    if agenda:
+    if agenda and not meeting:
         parts.append("Today's agenda brief:\n" + agenda)
     thoughts = usable_spoken(pack.get("thoughts_spoken") or "")
-    if thoughts:
+    if thoughts and not meeting:
         parts.append("Latest thoughts brief:\n" + thoughts)
     return "\n\n".join(parts)

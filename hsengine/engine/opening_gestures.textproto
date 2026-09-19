@@ -21,6 +21,13 @@ gesture {
 gesture {
   id: "headline"
   lane: "open"
+  when: "has_meeting"
+  weight: 2.05
+  instruction: "They joined via a calendar link. The named session is the meeting. Open on that content — title and what the session is for. Do not lead with recent_thoughts or a leftover thread. Do not rundown the whole deck. One hook, then the floor."
+}
+gesture {
+  id: "headline"
+  lane: "open"
   lane: "next"
   when: "has_thoughts"
   when: "has_fresh"

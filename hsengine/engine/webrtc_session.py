@@ -295,6 +295,14 @@ class WebRtcHub:
                         "yes" if session.get("public") else "no",
                     )
                 pack = await asyncio.to_thread(conversational_context, agenda_id=aid)
+                if aid:
+                    pack["agenda_id"] = aid
+                if session:
+                    if session.get("title"):
+                        pack["agenda_title"] = session["title"]
+                    public = (session.get("public") or "").strip()
+                    if public:
+                        pack["agenda_item"] = public[:1200]
                 from hsengine.engine.opening import compose_opening
 
                 plan = await asyncio.to_thread(

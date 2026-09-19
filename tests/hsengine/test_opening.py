@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from hsengine.engine.context_pack import pipeline_block
 from hsengine.engine.opening import (
     bishop_handoff,
     compose_opening,
@@ -106,6 +107,45 @@ def test_split_spoken_beats():
         "Hi.",
         "The 10-K is still there.",
     ]
+
+
+def test_sample_sequence_pins_headline_when_meeting():
+    cat = load_catalog()
+    facts = facts_from_pack(
+        {
+            "workspace": "fresh",
+            "agenda_title": "Discover reliability catch-up",
+            "agenda_id": "scratch/2026-09-18/x.md",
+            "thoughts_spoken": "The Lilly 10-K is still the live thread on the board.",
+        },
+        returning=False,
+    )
+    assert "has_meeting" in facts
+    assert "has_agenda" in facts
+    seq = sample_sequence(cat, facts, rng=lambda: 0.9, recent=[["greet_tod", "pause"]])
+    assert "headline" in seq
+    content = [g for g in seq if g != "pause"]
+    assert content[0] in {"headline", "greet_tod"}
+    if content[0] == "greet_tod":
+        assert content[1] == "headline"
+    text = bishop_handoff(
+        seq,
+        listener=local_clock("America/Denver"),
+        facts=facts,
+        glance=pipeline_block(
+            {
+                "agenda_title": "Discover reliability catch-up",
+                "agenda_id": "scratch/2026-09-18/x.md",
+                "agenda_item": "Catch up Discover reliability.",
+                "thoughts_spoken": "The Lilly 10-K is still the live thread on the board.",
+            }
+        ),
+        catalog=cat,
+    )
+    assert "calendar link" in text.lower() or "named session is the meeting" in text.lower()
+    assert "recent_thoughts" in text.lower() or "CALENDAR SESSION" in text
+    assert "Discover reliability" in text
+    assert "Lilly" not in text
 
 
 def test_sample_sequence_pins_headline_when_zettel():

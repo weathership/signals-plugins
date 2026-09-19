@@ -9,6 +9,24 @@ from hsengine.engine.context_pack import (
 )
 
 
+def test_pipeline_block_calendar_session_beats_thoughts():
+    text = pipeline_block(
+        {
+            "agenda_id": "scratch/2026-09-18/2026-09-18-065736_discover-reliability-catch-up.md",
+            "agenda_title": "Discover reliability catch-up",
+            "agenda_item": "Catch up Discover reliability. Do not invent news.",
+            "thoughts_spoken": "The Lilly 10-K is still the live thread on the board.",
+            "agenda_spoken": "Today there is one item on the lattice.",
+            "workspace": "fresh",
+        }
+    )
+    assert "CALENDAR SESSION" in text
+    assert "Discover reliability catch-up" in text
+    assert "Catch up Discover reliability" in text
+    assert "Latest thoughts brief" not in text
+    assert "Lilly" not in text
+
+
 def test_pipeline_block_joins_spoken_briefs():
     text = pipeline_block(
         {
@@ -87,7 +105,9 @@ def test_conversational_context_reads_spoken_briefs(monkeypatch):
     assert pack["agenda_spoken"].startswith("Today is the AgentRTC")
     assert pack["thoughts_spoken"].startswith("I keep thinking")
     assert pack["agenda_title"] == "AgentRTC retrospective"
+    assert pack["agenda_id"] == "note/today"
     assert pack["workspace"] == "fresh"
+    assert pack["workspace_note"] == "meeting"
     monkeypatch.setattr(
         ops,
         "recent_thoughts",

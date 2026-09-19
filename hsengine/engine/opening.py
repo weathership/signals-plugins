@@ -92,6 +92,13 @@ def facts_from_pack(pack: dict[str, str] | None, *, returning: bool) -> frozense
         tags.add("has_thoughts")
     if usable(pack.get("agenda_spoken")):
         tags.add("has_agenda")
+    if (
+        (pack.get("agenda_title") or "").strip()
+        or (pack.get("agenda_item") or "").strip()
+        or (pack.get("agenda_id") or "").strip()
+    ):
+        tags.add("has_meeting")
+        tags.add("has_agenda")
     if workspace == "fresh":
         tags.add("has_fresh")
     elif workspace == "stale":
@@ -221,7 +228,11 @@ def sample_sequence(
             w *= 1.35  # notable thread jumps the queue
         if g.id == "headline" and "has_zettel" in facts:
             w *= 2.2
-        if g.id == "rundown" and ("has_fresh" in facts or "has_zettel" in facts):
+        if g.id == "headline" and "has_meeting" in facts:
+            w *= 2.4
+        if g.id == "rundown" and (
+            "has_fresh" in facts or "has_zettel" in facts or "has_meeting" in facts
+        ):
             w *= 0.4
         weights[g.id] = max(weights.get(g.id, 0.0), w)
     pool = [(gid, w) for gid, w in weights.items() if w > 0]
@@ -240,7 +251,9 @@ def sample_sequence(
         remaining = [(i, w) for i, w in remaining if i != choice]
     if not picked and pool:
         picked = [pool[0][0]]
-    if lane == "open" and "has_zettel" in facts and any(gid == "headline" for gid, _ in pool):
+    if lane == "open" and (
+        "has_zettel" in facts or "has_meeting" in facts
+    ) and any(gid == "headline" for gid, _ in pool):
         picked = _pin_headline(picked)
     return _insert_pause(picked, catalog.sequence, rng)
 
@@ -257,10 +270,23 @@ def _instruction(catalog: opening_pb2.Catalog, gid: str, facts: frozenset[str]) 
     matches = [g for g in catalog.gesture if g.id == gid]
     if not matches:
         return gid
+    ranked: list[tuple[int, opening_pb2.Gesture]] = []
     for g in matches:
-        if gid == "pause" or _eligible(g, facts, lane="open") or _eligible(g, facts, lane="next"):
-            return g.instruction
-    return matches[0].instruction
+        if gid != "pause" and not (
+            _eligible(g, facts, lane="open") or _eligible(g, facts, lane="next")
+        ):
+            continue
+        bonus = 0
+        whens = {t for t in g.when if t}
+        if "has_meeting" in whens:
+            bonus = 30
+        elif "has_zettel" in whens:
+            bonus = 20
+        ranked.append((bonus, g))
+    if not ranked:
+        return matches[0].instruction
+    ranked.sort(key=lambda row: -row[0])
+    return ranked[0][1].instruction
 
 
 def bishop_handoff(
@@ -289,7 +315,9 @@ def bishop_handoff(
         "Do not name the gestures. Do not mention Bishop. "
         "No rumination frames (sitting with, turning over, returning to a thread). "
         "If a USER-PROVIDED zettel is in the glance, that is required entropy "
-        "from them — distinct from interior monologue and federated-workspace thoughts."
+        "from them — distinct from interior monologue and federated-workspace thoughts. "
+        "If a CALENDAR SESSION is in the glance, they joined that meeting — "
+        "open on it. Do not lead with recent_thoughts."
     )
     return "\n".join(lines)
 
