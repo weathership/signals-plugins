@@ -52,7 +52,8 @@ def test_capture_writes_body_and_resource(tmp_path):
     assert out["relpath"] == "scratch/2026-09-12/080102_nautilus-air-gap.md"
     assert out["resource"] == "wiki:scratch/2026-09-12/080102_nautilus-air-gap.md"
     text = Path(out["path"]).read_text(encoding="utf-8")
-    assert text.startswith("# Nautilus air-gap\n")
+    assert "title: Nautilus air-gap" in text
+    assert "# Nautilus air-gap\n" in text
     assert "Brier ledger" in text
 
 
@@ -65,7 +66,7 @@ def test_capture_keeps_existing_heading(tmp_path):
         now=datetime(2026, 9, 12, 9, 0, 0),
     )
     text = Path(out["path"]).read_text(encoding="utf-8")
-    assert text.startswith("# Already titled\n")
+    assert "# Already titled\n" in text
     assert text.count("# ") == 1
     assert out["relpath"].endswith("_already-titled.md")
 
@@ -74,6 +75,30 @@ def test_capture_empty_body_fails(tmp_path):
     out = cap.capture(vault=tmp_path / "wiki", body="  \n")
     assert out["ok"] is False
     assert out["error"] == "usage: /zettel <pasted text>"
+
+
+def test_capture_about_chains_prev_next(tmp_path):
+    vault = tmp_path / "wiki"
+    vault.mkdir()
+    first = cap.capture(
+        body="# Talk one\n\nStart.",
+        vault=vault,
+        now=datetime(2026, 9, 19, 15, 0, 0),
+        about="current/notes/article-draft-canonical-state-schema.md",
+    )
+    second = cap.capture(
+        body="# Talk two\n\nContinue.",
+        vault=vault,
+        now=datetime(2026, 9, 19, 15, 10, 0),
+        about="article-draft-canonical-state-schema",
+    )
+    assert first["ok"] and second["ok"]
+    assert second["prev"] == first["relpath"]
+    first_text = Path(first["path"]).read_text(encoding="utf-8")
+    second_text = Path(second["path"]).read_text(encoding="utf-8")
+    assert f"next: {second['relpath']}" in first_text
+    assert f"prev: {first['relpath']}" in second_text
+    assert "[[article-draft-canonical-state-schema]]" in second_text
 
 
 def test_capture_appends_wiki_log(tmp_path):

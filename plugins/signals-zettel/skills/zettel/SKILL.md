@@ -34,7 +34,9 @@ or `${HERMES_HOME}/wiki`.
 ```
 
 The slug is the first line (heading if present). From the agent, call
-`zettel_capture` with `body` set to that same text.
+`zettel_capture` with `body` set to that same text. When the note is a
+discussion of a long-running `current/` doc, also pass `about` (path or
+slug) so `prev`/`next` chain to the last zettel about that doc.
 
 ## Quick Reference
 

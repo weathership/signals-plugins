@@ -24,6 +24,13 @@ _TOOL = {
                 "type": "string",
                 "description": "Full note markdown (the pasted text).",
             },
+            "about": {
+                "type": "string",
+                "description": (
+                    "Long-running current/ doc this zettel discusses "
+                    "(path or slug). Sets prev/next on the last zettel about it."
+                ),
+            },
         },
         "required": ["body"],
         "additionalProperties": False,
@@ -36,7 +43,12 @@ def _slash(raw_args: str) -> str:
 
 
 def _tool(args: dict, **_kw) -> str:
-    return tool_result(capture(body=str(args.get("body") or "")))
+    return tool_result(
+        capture(
+            body=str(args.get("body") or ""),
+            about=str(args.get("about") or ""),
+        )
+    )
 
 
 def register(ctx) -> None:

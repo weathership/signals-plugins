@@ -2,8 +2,16 @@
 
 from pathlib import Path
 
+_SKILL = Path(__file__).resolve().parent / "skills" / "wiki-kasten" / "SKILL.md"
+
 
 def register(ctx) -> None:
+    if _SKILL.is_file():
+        ctx.register_skill(
+            "wiki-kasten",
+            _SKILL,
+            description="File long-running wiki docs and chained scratch zettels.",
+        )
     try:
         import importlib.util
 
