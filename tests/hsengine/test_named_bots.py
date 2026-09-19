@@ -9,6 +9,7 @@ from hsengine.engine.named_bots import (
     BISHOP,
     RIPLEY,
     VASQUEZ,
+    bishop_max_tokens,
     BishopOutcome,
     bishop_delegation_cap,
     bishop_prompt,
@@ -78,7 +79,7 @@ def test_bishop_prompt_varies_the_move():
     assert "Connect" in open_p
     assert "two-ideas" in open_p or "formula" in open_p.lower()
     assert "Lilly" in open_p
-    assert n >= 200
+    assert n >= bishop_max_tokens()
     assert "do not grok_consult" in open_p.lower()
     _, deepen, _ = bishop_prompt(move="deepen")
     assert "grok_consult" in deepen
@@ -171,6 +172,18 @@ def test_bishop_delegation_cap_is_two():
     with bishop_delegation_cap(2):
         assert dtc._get_max_concurrent_children() == 2
     assert dtc._get_max_concurrent_children() == orig
+
+
+def test_bishop_invent_budget_is_generous_and_above_spoken_ripley():
+    from hsengine.engine.webrtc_moshi import _ripley_spoken_max_tokens
+
+    n = bishop_max_tokens()
+    assert n >= 16384
+    assert n > _ripley_spoken_max_tokens()
+    _, _, thought_n = bishop_prompt(move="thought")
+    _, _, open_n = bishop_prompt(move="open")
+    assert thought_n == n
+    assert open_n == n
 
 
 def test_bishop_execute_uses_the_spoken_ceiling(monkeypatch):

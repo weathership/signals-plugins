@@ -28,6 +28,11 @@ RIPLEY = "ripley"
 BISHOP = "bishop"
 VASQUEZ = "vasquez"
 
+# Silent invent + tools. Ceiling only; short STEER/MONOLOGUE still stops at EOS.
+# Ripley's spoken path stays on webrtc_moshi._ripley_spoken_max_tokens (TTS).
+_BISHOP_MAX_TOKENS = 32768
+_BISHOP_MIN_TOKENS = 4096
+
 _BOTS_ROOT = Path(__file__).resolve().parent.parent / "bots"
 
 _RIPLEY_META = {
@@ -277,6 +282,20 @@ def bishop_delegation_cap(n: int = 2) -> Iterator[None]:
         dtc._get_max_concurrent_children = orig
 
 
+def bishop_max_tokens() -> int:
+    """Generation ceiling for a silent Bishop invent turn."""
+    try:
+        from hsengine.config import load_config
+
+        raw = load_config().get("hermes.engine.webrtc.interactive.bishop_max_tokens")
+        n = int(raw)
+        if n >= _BISHOP_MIN_TOKENS:
+            return n
+    except Exception:
+        pass
+    return _BISHOP_MAX_TOKENS
+
+
 def bishop_prompt(
     *,
     move: str = "deepen",
@@ -349,7 +368,7 @@ def bishop_prompt(
             "idea, grok_consult once then STEER/MONOLOGUE from that."
         )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")
-    return system, "\n".join(lines), 240 if move in ("open", "next") else 200
+    return system, "\n".join(lines), bishop_max_tokens()
 
 
 def bishop_run(
