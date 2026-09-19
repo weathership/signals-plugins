@@ -40,7 +40,7 @@ Orient, then `read_file` / `write_file` / `zettel_capture`. Paths are
 |---|---|---|
 | Current | `current/<section>/<slug>.md` | Long-running docs (design, article drafts) |
 | Scratch | `scratch/YYYY-MM-DD/HHMMSS_slug.md` | One discussion beat, dated |
-| Archive | `archive/...` | Superseded current docs |
+| Archive | `archive/YYYYQN/MM-DD/<zettel>` | Fortnight-old scratch + superseded current |
 
 Scratch frontmatter: `about`, `about_path`, `prev`, `next`.
 
@@ -64,6 +64,8 @@ Scratch frontmatter: `about`, `about_path`, `prev`, `next`.
 - `./wiki` is a project-local tree, not this vault.
 - Empty `next:` on the newest zettel is correct.
 - `archive/` may be empty.
+- Scratch zettels older than 14 days are moved by `hermes wiki archive-scratch`
+  (cron `wiki-archive-scratch`, daily). `prev`/`next` rewrite with the move.
 
 ## Verification
 
