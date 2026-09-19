@@ -169,6 +169,7 @@ class SpeechBoard:
         self._lock = threading.Lock()
         self._buf: deque[float] = deque()
         self._epoch = 0
+        self._last_audible_at = 0.0
 
     @property
     def epoch(self) -> int:
@@ -211,6 +212,10 @@ class SpeechBoard:
         with self._lock:
             return bool(self._buf)
 
+    def last_audible_at(self) -> float:
+        with self._lock:
+            return float(self._last_audible_at)
+
     def pull(self, n: int, sample_rate: int) -> Any | None:
         """n samples at *sample_rate*, or None if no agent speech is queued."""
         import numpy as np
@@ -223,6 +228,7 @@ class SpeechBoard:
                 return None
             take = min(need, len(self._buf))
             chunk = np.fromiter((self._buf.popleft() for _ in range(take)), dtype=np.float32, count=take)
+            self._last_audible_at = time.monotonic()
         if chunk.size < need:
             chunk = _fit(chunk, need)
         if sample_rate != self.sample_rate:

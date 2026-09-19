@@ -15,8 +15,13 @@ log = logging.getLogger("hsengine.engine.webrtc.moshi")
 
 _MOSHI_RATE = 24000
 _CHUNK = 1920  # 80 ms at 24 kHz
-_TURN_QUIET_S = 1.2
+_TURN_QUIET_S = 2.0
 _TURN_MIN_CHARS = 8
+# Echo of our own TTS is not barge-in. Real user speech over TTS still wins
+# once a fragment is long enough to be an utterance.
+_ECHO_HOLDOFF_S = 0.45
+# Ceiling only: short turns stop at EOS. 280 cut ruminations mid-thought.
+_RIPLEY_SPOKEN_MAX_TOKENS = 4096
 SPOKEN_SYSTEM = (
     "On a live voice call. Plain spoken words only — no markdown, lists, "
     "code, or URLs. Never introduce yourself by name or as Hermes. "
@@ -73,6 +78,20 @@ def _cfg_str(path: str, default: str) -> str:
         return value if value else default
     except Exception:
         return default
+
+
+def _ripley_spoken_max_tokens() -> int:
+    """Ceiling for a spoken Ripley turn. Short dialog still stops at EOS."""
+    try:
+        from hsengine.config import load_config
+
+        raw = load_config().get("hermes.engine.webrtc.interactive.ripley_max_tokens")
+        n = int(raw)
+        if n >= 256:
+            return n
+    except Exception:
+        pass
+    return _RIPLEY_SPOKEN_MAX_TOKENS
 
 
 def moshi_url() -> str:
@@ -210,7 +229,7 @@ async def _run_user_utterance(
         interactive.complete_cerebras,
         prompt=text,
         system_prompt=apply_steer_system(ripley_spoken_system(), pending_steer),
-        max_tokens=280,
+        max_tokens=_ripley_spoken_max_tokens(),
         temperature=0.5,
         reasoning_effort="none",
         tools=True,
@@ -277,7 +296,24 @@ class TurnTaker:
             self._task.cancel()
             self._task = None
 
-    def _barge_in(self) -> None:
+    def _echo_holdoff(self) -> bool:
+        import time
+
+        speech = self._speech
+        if speech is None:
+            return False
+        speaking = getattr(speech, "speaking", None)
+        if callable(speaking) and speaking():
+            return True
+        last = getattr(speech, "last_audible_at", None)
+        at = float(last() if callable(last) else 0.0)
+        return at > 0.0 and (time.monotonic() - at) < _ECHO_HOLDOFF_S
+
+    def _barge_in(self, pending: str) -> None:
+        # Stop still calls SpeechBoard.interrupt directly. Echo of Kyutai
+        # into Moshi must not drop the rest of the board.
+        if self._echo_holdoff() and len((pending or "").strip()) < _TURN_MIN_CHARS:
+            return
         speech = self._speech
         interrupt = getattr(speech, "interrupt", None) if speech is not None else None
         if callable(interrupt):
@@ -287,7 +323,8 @@ class TurnTaker:
         import time
 
         self.last_user_at = time.monotonic()
-        self._barge_in()
+        pending = " ".join(w for w in (self._words + [word]) if w).strip()
+        self._barge_in(pending)
         self._words.append(word)
         self._gen += 1
         gen = self._gen

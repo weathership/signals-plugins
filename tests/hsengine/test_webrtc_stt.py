@@ -11,7 +11,12 @@ import pytest
 from hsengine.engine.generated import hermes_engine_pb2 as pb
 from hsengine.engine.server import HermesEngineServicer
 from hsengine.engine.webrtc_captions import CaptionBoard, paint_caption
-from hsengine.engine.webrtc_moshi import MoshiCaptioner, utterance_ready
+from hsengine.engine.webrtc_moshi import (
+    MoshiCaptioner,
+    TurnTaker,
+    _ripley_spoken_max_tokens,
+    utterance_ready,
+)
 from hsengine.engine.webrtc_stt import frame_to_mono16k, stt_available
 
 
@@ -50,6 +55,50 @@ def test_moshi_captioner_joins_word_events():
 def test_utterance_ready_needs_enough_text():
     assert utterance_ready(["hi"]) is None
     assert utterance_ready(["hello", "there"]) == "hello there"
+
+
+class _NoopTask:
+    def cancel(self):
+        return None
+
+
+class _NoopLoop:
+    def create_task(self, coro):
+        try:
+            coro.close()
+        except Exception:
+            pass
+        return _NoopTask()
+
+
+def test_tts_echo_does_not_interrupt_a_short_fragment():
+    from hsengine.engine.webrtc_mix import SpeechBoard
+
+    board = SpeechBoard()
+    board.push([0.2] * 480, sample_rate=48000)
+    taker = TurnTaker(_NoopLoop(), speech=board)
+    interrupted = []
+    board.interrupt = lambda: interrupted.append(1) or 0
+    taker.on_word("um")
+    assert interrupted == []
+    assert taker._words == ["um"]
+
+
+def test_real_user_speech_still_barges_in_over_tts():
+    from hsengine.engine.webrtc_mix import SpeechBoard
+
+    board = SpeechBoard()
+    board.push([0.2] * 480, sample_rate=48000)
+    taker = TurnTaker(_NoopLoop(), speech=board)
+    interrupted = []
+    board.interrupt = lambda: interrupted.append(1) or 0
+    for w in ("note", "that", "we", "just", "got", "cut"):
+        taker.on_word(w)
+    assert interrupted
+
+
+def test_ripley_spoken_ceiling_is_not_a_280_token_clip():
+    assert _ripley_spoken_max_tokens() >= 4096
 
 
 def test_caption_board_holds_then_clears(monkeypatch):

@@ -62,6 +62,14 @@ def test_speech_fills_stereo_clip_both_channels():
     assert int(out[0, 0]) != 200
 
 
+def test_board_records_last_audible_on_pull():
+    board = SpeechBoard()
+    assert board.last_audible_at() == 0.0
+    board.push(np.ones(32, dtype=np.float32) * 0.2)
+    assert board.pull(16, 48000) is not None
+    assert board.last_audible_at() > 0.0
+
+
 def test_board_pull_none_when_empty():
     board = SpeechBoard()
     assert board.speaking() is False
