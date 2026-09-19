@@ -168,6 +168,7 @@ def test_session_search_is_a_cerebras_tool():
     assert "conversation" in names
     assert "hermes" in names
     assert "grok_consult" in names
+    assert "agenda_create" in names
 
 
 def test_dispatch_grok_consult(monkeypatch):

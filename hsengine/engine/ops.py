@@ -766,6 +766,47 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "agenda_create",
+            "description": (
+                "Create an Agenda item on Gaius (Gaius holds the Agenda). "
+                "Use for a session they should join later, a reminder, or a "
+                "brief. Ripley/Grok identify as origin_agent. Optional "
+                "session_prompt is a novel AgentRTC opening, not speaker notes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Item title."},
+                    "body": {"type": "string", "description": "Public lede / notes."},
+                    "intent": {
+                        "type": "string",
+                        "description": "session | reminder | brief (default session).",
+                    },
+                    "starts_ms": {
+                        "type": "integer",
+                        "description": "Session start as unix ms UTC. Default now.",
+                    },
+                    "session_prompt": {
+                        "type": "string",
+                        "description": "Optional novel Connect opening prompt.",
+                    },
+                    "session_materials": {
+                        "type": "string",
+                        "description": "Optional supporting notes, not speaker notes.",
+                    },
+                    "origin_agent": {
+                        "type": "string",
+                        "description": "ripley | grok | hermes (who is asking).",
+                    },
+                },
+                "required": ["title"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "conversation",
             "description": (
                 "This call's own context: recent turns plus the running "
@@ -1123,6 +1164,23 @@ def _dispatch_agenda(args: dict[str, Any]) -> str:
     return json.dumps(agenda(item_id=str(args.get("item_id") or "")), default=str)
 
 
+def _dispatch_agenda_create(args: dict[str, Any]) -> str:
+    from hsengine.engine.agenda_put import put_agenda_item
+
+    return json.dumps(
+        put_agenda_item(
+            title=str(args.get("title") or ""),
+            body=str(args.get("body") or ""),
+            intent=str(args.get("intent") or "session"),
+            starts_ms=_int_arg(args, "starts_ms", 0),
+            session_prompt=str(args.get("session_prompt") or ""),
+            session_materials=str(args.get("session_materials") or ""),
+            origin_agent=str(args.get("origin_agent") or "ripley"),
+        ),
+        default=str,
+    )
+
+
 def _dispatch_conversation(args: dict[str, Any]) -> str:
     return json.dumps(conversation(limit=_int_arg(args, "limit", 32)), default=str)
 
@@ -1272,6 +1330,7 @@ _DISPATCH = {
     "list_activities": _dispatch_activities,
     "recent_thoughts": _dispatch_thoughts,
     "agenda": _dispatch_agenda,
+    "agenda_create": _dispatch_agenda_create,
     "conversation": _dispatch_conversation,
     "session_search": _dispatch_session_search,
     "narrative": _dispatch_narrative,

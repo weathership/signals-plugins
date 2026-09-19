@@ -74,6 +74,11 @@ class EngineStub:
                 request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.PeerAnnounce.SerializeToString,
                 response_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.AnnounceAck.FromString,
                 _registered_method=True)
+        self.PutAgendaItem = channel.unary_unary(
+                '/zndx.engine.v1.Engine/PutAgendaItem',
+                request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.PutAgendaItemRequest.SerializeToString,
+                response_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.PutAgendaItemResponse.FromString,
+                _registered_method=True)
 
 
 class EngineServicer:
@@ -165,6 +170,17 @@ class EngineServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PutAgendaItem(self, request, context):
+        """Create (or refresh) one Agenda item on the engine that HOLDS the Agenda
+        (Gaius). Other engines answer UNIMPLEMENTED. The caller is a lattice
+        engine + named agent/profile (Hermes Ripley, Hermes Grok, Metabase Metabot).
+        Gaius writes the zettel; origin_project on the stored item is `gaius`.
+        origin_agent records who asked. (added 2026-09-19 — additive v1.)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_EngineServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -207,6 +223,11 @@ def add_EngineServicer_to_server(servicer, server):
                     servicer.Announce,
                     request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.PeerAnnounce.FromString,
                     response_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.AnnounceAck.SerializeToString,
+            ),
+            'PutAgendaItem': grpc.unary_unary_rpc_method_handler(
+                    servicer.PutAgendaItem,
+                    request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.PutAgendaItemRequest.FromString,
+                    response_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.PutAgendaItemResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -425,6 +446,33 @@ class Engine:
             '/zndx.engine.v1.Engine/Announce',
             zndx_dot_engine_dot_v1_dot_engine__pb2.PeerAnnounce.SerializeToString,
             zndx_dot_engine_dot_v1_dot_engine__pb2.AnnounceAck.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PutAgendaItem(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/zndx.engine.v1.Engine/PutAgendaItem',
+            zndx_dot_engine_dot_v1_dot_engine__pb2.PutAgendaItemRequest.SerializeToString,
+            zndx_dot_engine_dot_v1_dot_engine__pb2.PutAgendaItemResponse.FromString,
             options,
             channel_credentials,
             insecure,

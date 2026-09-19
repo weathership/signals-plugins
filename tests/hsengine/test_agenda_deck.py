@@ -104,6 +104,49 @@ def test_load_agenda_session_rereads_origin_peer(monkeypatch):
     assert session["target"] == "127.0.0.1:50451"
 
 
+def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
+    from types import SimpleNamespace
+
+    from hsengine.engine.agenda_put import put_agenda_item
+
+    seen: dict = {}
+
+    class _Stub:
+        def PutAgendaItem(self, req, timeout=None):
+            seen["origin_project"] = req.origin_project
+            seen["origin_agent"] = req.origin_agent
+            seen["title"] = req.item.title
+            return SimpleNamespace(
+                ok=True,
+                note="",
+                item=SimpleNamespace(
+                    id="scratch/2026-09-19/2026-09-19-210000_ripley-catch-up.md",
+                    title=req.item.title,
+                ),
+            )
+
+    class _Ch:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(
+        "hsengine.engine.federation.peer_target_for_project", lambda p: "127.0.0.1:50051"
+    )
+    monkeypatch.setattr("grpc.insecure_channel", lambda target: _Ch())
+    monkeypatch.setattr(
+        "hsengine.engine.generated.zndx.engine.v1.engine_pb2_grpc.EngineStub",
+        lambda ch: _Stub(),
+    )
+    out = put_agenda_item(title="Ripley catch-up", origin_agent="ripley")
+    assert out["ok"] is True
+    assert seen["origin_project"] == "hermes"
+    assert seen["origin_agent"] == "ripley"
+    assert out["path"].startswith("scratch/")
+
+
 def test_split_keeps_deck_off_the_public_lede():
     public, deck = split_public_deck(
         "A half hour to decide whether the book moves.\n\n"

@@ -295,6 +295,13 @@ class ZndxEngineServicer(zpb_grpc.EngineServicer):
         )
         return zpb.AnnounceAck()
 
+    async def PutAgendaItem(self, request, context):
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details(
+            "Gaius holds the Agenda. PutAgendaItem is Engine/PutAgendaItem on Gaius :50051."
+        )
+        return zpb.PutAgendaItemResponse()
+
     async def WatchWorkload(self, request, context):
         generation = 0
         while not context.cancelled():

@@ -624,7 +624,7 @@ class SearchHint(_message.Message):
     def __init__(self, project: _Optional[str] = ..., query: _Optional[str] = ..., stream: _Optional[str] = ..., hits: _Optional[_Iterable[_Union[SearchHit, _Mapping]]] = ..., note: _Optional[str] = ...) -> None: ...
 
 class AgendaHintItem(_message.Message):
-    __slots__ = ("id", "starts_ms", "ends_ms", "kind", "intent", "title", "summary", "tags", "pinned", "open_checks", "with_whom", "body", "created_ms", "day", "origin_project", "session_prompt", "session_materials")
+    __slots__ = ("id", "starts_ms", "ends_ms", "kind", "intent", "title", "summary", "tags", "pinned", "open_checks", "with_whom", "body", "created_ms", "day", "origin_project", "session_prompt", "session_materials", "origin_agent")
     ID_FIELD_NUMBER: _ClassVar[int]
     STARTS_MS_FIELD_NUMBER: _ClassVar[int]
     ENDS_MS_FIELD_NUMBER: _ClassVar[int]
@@ -642,6 +642,7 @@ class AgendaHintItem(_message.Message):
     ORIGIN_PROJECT_FIELD_NUMBER: _ClassVar[int]
     SESSION_PROMPT_FIELD_NUMBER: _ClassVar[int]
     SESSION_MATERIALS_FIELD_NUMBER: _ClassVar[int]
+    ORIGIN_AGENT_FIELD_NUMBER: _ClassVar[int]
     id: str
     starts_ms: int
     ends_ms: int
@@ -659,7 +660,8 @@ class AgendaHintItem(_message.Message):
     origin_project: str
     session_prompt: str
     session_materials: str
-    def __init__(self, id: _Optional[str] = ..., starts_ms: _Optional[int] = ..., ends_ms: _Optional[int] = ..., kind: _Optional[str] = ..., intent: _Optional[str] = ..., title: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., pinned: _Optional[bool] = ..., open_checks: _Optional[int] = ..., with_whom: _Optional[str] = ..., body: _Optional[str] = ..., created_ms: _Optional[int] = ..., day: _Optional[str] = ..., origin_project: _Optional[str] = ..., session_prompt: _Optional[str] = ..., session_materials: _Optional[str] = ...) -> None: ...
+    origin_agent: str
+    def __init__(self, id: _Optional[str] = ..., starts_ms: _Optional[int] = ..., ends_ms: _Optional[int] = ..., kind: _Optional[str] = ..., intent: _Optional[str] = ..., title: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., pinned: _Optional[bool] = ..., open_checks: _Optional[int] = ..., with_whom: _Optional[str] = ..., body: _Optional[str] = ..., created_ms: _Optional[int] = ..., day: _Optional[str] = ..., origin_project: _Optional[str] = ..., session_prompt: _Optional[str] = ..., session_materials: _Optional[str] = ..., origin_agent: _Optional[str] = ...) -> None: ...
 
 class AgendaHint(_message.Message):
     __slots__ = ("project", "brief", "spoken", "brief_at_ms", "brief_id", "timezone", "today", "items", "item", "total_in_window", "note")
@@ -686,6 +688,26 @@ class AgendaHint(_message.Message):
     total_in_window: int
     note: str
     def __init__(self, project: _Optional[str] = ..., brief: _Optional[str] = ..., spoken: _Optional[str] = ..., brief_at_ms: _Optional[int] = ..., brief_id: _Optional[str] = ..., timezone: _Optional[str] = ..., today: _Optional[str] = ..., items: _Optional[_Iterable[_Union[AgendaHintItem, _Mapping]]] = ..., item: _Optional[_Union[AgendaHintItem, _Mapping]] = ..., total_in_window: _Optional[int] = ..., note: _Optional[str] = ...) -> None: ...
+
+class PutAgendaItemRequest(_message.Message):
+    __slots__ = ("origin_project", "origin_agent", "item")
+    ORIGIN_PROJECT_FIELD_NUMBER: _ClassVar[int]
+    ORIGIN_AGENT_FIELD_NUMBER: _ClassVar[int]
+    ITEM_FIELD_NUMBER: _ClassVar[int]
+    origin_project: str
+    origin_agent: str
+    item: AgendaHintItem
+    def __init__(self, origin_project: _Optional[str] = ..., origin_agent: _Optional[str] = ..., item: _Optional[_Union[AgendaHintItem, _Mapping]] = ...) -> None: ...
+
+class PutAgendaItemResponse(_message.Message):
+    __slots__ = ("ok", "item", "note")
+    OK_FIELD_NUMBER: _ClassVar[int]
+    ITEM_FIELD_NUMBER: _ClassVar[int]
+    NOTE_FIELD_NUMBER: _ClassVar[int]
+    ok: bool
+    item: AgendaHintItem
+    note: str
+    def __init__(self, ok: _Optional[bool] = ..., item: _Optional[_Union[AgendaHintItem, _Mapping]] = ..., note: _Optional[str] = ...) -> None: ...
 
 class Thought(_message.Message):
     __slots__ = ("id", "at_ms", "kind", "title", "summary", "excerpt", "domains", "salience", "chain_id", "generation", "note_path", "profile", "model")

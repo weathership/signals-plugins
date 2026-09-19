@@ -72,6 +72,35 @@ def _slash(raw_args: str) -> str:
     return format_slash_result(capture(body=raw_args or ""))
 
 
+def _agenda_slash(raw_args: str) -> str:
+    from hsengine.engine.agenda_put import put_agenda_item
+
+    text = (raw_args or "").strip()
+    if not text:
+        return "  usage: /agenda-create <title>"
+    prompt = ""
+    if " --prompt " in f" {text} ":
+        title, _, prompt = text.partition(" --prompt ")
+        text = title.strip()
+        prompt = prompt.strip()
+    intent = "session"
+    if text.startswith("--intent "):
+        rest = text[len("--intent ") :].strip()
+        intent, _, text = rest.partition(" ")
+        intent = (intent or "session").strip()
+        text = text.strip()
+    out = put_agenda_item(
+        title=text.split("\n", 1)[0],
+        body="\n".join(text.split("\n")[1:]).strip(),
+        intent=intent,
+        session_prompt=prompt,
+        origin_agent="grok",
+    )
+    if not out.get("ok"):
+        return f"  /agenda-create failed: {out.get('error') or out.get('note')}"
+    return f"  Agenda {out.get('path') or out.get('id')} ({out.get('origin_agent')})"
+
+
 def _tool(args: dict, **_kw) -> str:
     return tool_result(
         capture(
@@ -124,6 +153,13 @@ def register(ctx) -> None:
         handler=lambda args, **_k: rtc_review.tool_result(args),
         description=_REVIEW_TOOL["description"],
         emoji="🪞",
+    )
+    ctx.register_command(
+        "agenda-create",
+        handler=_agenda_slash,
+        description="Create a Gaius Agenda item (session/reminder/brief) as this Hermes profile.",
+        args_hint="<title> [--intent session] [--prompt ...]",
+        argument_mode="text",
     )
     if _SKILL.is_file():
         ctx.register_skill(
