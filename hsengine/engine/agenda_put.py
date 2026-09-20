@@ -100,6 +100,28 @@ def put_agenda_item(
                     materials=session_materials,
                 )
                 out["resources"] = stored
+                if stored:
+                    item.id = resp.item.id
+                    item.attachments_allowed = True
+                    del item.attachments[:]
+                    for obj in stored:
+                        att = item.attachments.add()
+                        att.name = str(obj.get("name") or "")
+                        att.uri = str(obj.get("uri") or "")
+                        name = att.name.lower()
+                        if name in {"prompt.md", "session_prompt.md"}:
+                            att.role = "prompt"
+                        elif name in {"materials.md", "supporting.md"}:
+                            att.role = "materials"
+                        else:
+                            att.role = "other"
+                        att.media_type = "text/markdown; charset=utf-8"
+                    req.item.CopyFrom(item)
+                    with grpc.insecure_channel(target) as ch:
+                        pinned = zpb_grpc.EngineStub(ch).PutAgendaItem(req, timeout=15.0)
+                    out["attachments_ok"] = bool(pinned.ok)
+                    if not pinned.ok:
+                        out["attachments_note"] = pinned.note or ""
             except Exception as e:
                 log.warning("rustfs session materials put failed: %s", e)
                 out["resources_error"] = str(e)

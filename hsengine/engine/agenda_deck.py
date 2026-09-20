@@ -77,7 +77,7 @@ def _session_from_item(item: Any, *, wanted: str, served_by: str, target: str) -
         or (served_by or "").strip()
     )
     public = parts["public"] or str(getattr(item, "summary", "") or "")
-    return {
+    session = {
         "id": str(getattr(item, "id", "") or wanted),
         "title": str(getattr(item, "title", "") or ""),
         "public": public,
@@ -89,7 +89,20 @@ def _session_from_item(item: Any, *, wanted: str, served_by: str, target: str) -
         "target": target,
         "starts_ms": int(getattr(item, "starts_ms", 0) or 0),
         "ends_ms": int(getattr(item, "ends_ms", 0) or 0),
+        "attachments_allowed": bool(getattr(item, "attachments_allowed", False)),
     }
+    objs = []
+    for att in getattr(item, "attachments", None) or []:
+        if isinstance(att, dict):
+            name, uri, role = att.get("name"), att.get("uri"), att.get("role")
+        else:
+            name = getattr(att, "name", "")
+            uri = getattr(att, "uri", "")
+            role = getattr(att, "role", "")
+        objs.append({"name": str(name or ""), "uri": str(uri or ""), "text": "", "role": str(role or "")})
+    if objs:
+        session = _apply_resource_objects(session, objs)
+    return session
 
 
 def _prefer_session(rows: list[dict[str, Any]]) -> dict[str, Any]:

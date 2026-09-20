@@ -116,6 +116,8 @@ def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
             seen["origin_agent"] = req.origin_agent
             seen["title"] = req.item.title
             seen["item_prompt"] = req.item.session_prompt
+            seen["attachments_allowed"] = req.item.attachments_allowed
+            seen["attachments"] = list(req.item.attachments)
             return SimpleNamespace(
                 ok=True,
                 note="",
@@ -143,7 +145,8 @@ def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
     stored: list = []
     monkeypatch.setattr(
         "hsengine.engine.resources_store.put_session_materials",
-        lambda note_id, **k: stored.append({"id": note_id, **k}) or [{"name": "prompt.md"}],
+        lambda note_id, **k: stored.append({"id": note_id, **k})
+        or [{"name": "prompt.md", "uri": f"s3://hermes/resources/{note_id}/prompt.md"}],
     )
     out = put_agenda_item(
         title="Ripley catch-up",
@@ -156,6 +159,8 @@ def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
     assert not (seen.get("item_prompt") or "")
     assert out["path"].startswith("scratch/")
     assert stored and stored[0]["prompt"] == "Open on Discover."
+    assert seen.get("attachments_allowed") is True
+    assert seen.get("attachments") and seen["attachments"][0].name == "prompt.md"
 
 
 def test_split_keeps_deck_off_the_public_lede():
