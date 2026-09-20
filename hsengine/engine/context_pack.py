@@ -201,8 +201,8 @@ def pipeline_block(pack: dict[str, str] | None) -> str:
     if fails or state == "failed":
         parts.append(
             "PERSISTENT FAILURES (these are failures, not briefing, not "
-            "Airflow down; remediate Theta with Airflow backfill of Monday "
-            "windows, max_active_runs=1, not DAG catchup; do not paper "
+            "Airflow down; remediate Theta with daily Airflow increments into "
+            "the week artifact, max_active_runs=1, not DAG catchup; do not paper "
             "over them): "
             + (fails or note or "theta_cycle not caught up")
             + "."

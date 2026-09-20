@@ -354,7 +354,7 @@ def bishop_prompt(
             "quiet — do not invent today's news. If the glance has PERSISTENT "
             "FAILURES (Theta miss / not caught up), those are failures: say "
             "so plainly. Do not treat them as briefing. Historical weeks are "
-            "Airflow backfill, one Monday window at a time."
+            "daily Airflow increments that refine the week consolidation."
         )
     elif move == "thought":
         lines.append("Call conversation, then recent_thoughts.")
