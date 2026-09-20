@@ -47,6 +47,7 @@ def _peer_row(target: str) -> dict[str, Any]:
                 "model": ep.get("model") or "",
                 "healthy": bool(ep.get("healthy")),
                 "gpus": list(ep.get("gpu_ids") or []),
+                "detail": ep.get("detail") or "",
             }
         )
     return {
@@ -147,27 +148,80 @@ def _probe_airflow() -> dict[str, Any]:
     return {"reachable": False, "url": base, "detail": "no health path answered 200"}
 
 
-def _coordination_row(peer: str, surf: dict[str, Any]) -> dict[str, Any]:
-    raw = str(surf.get("url") or "")
+def _parse_miss_detail(raw: str) -> tuple[str, list[str], bool]:
+    """Guru, missed kinds, theta-not-caught-up from Status detail or a legacy URL."""
     guru = ""
     missed: list[str] = []
-    url = raw
-    if raw.startswith("#"):
-        guru = raw.split()[0]
-        url = ""
-        if "miss:" in raw:
-            missed = [x.strip() for x in raw.split("miss:", 1)[1].split(",") if x.strip()]
+    not_caught = "theta_not_caught_up" in (raw or "")
+    text = raw or ""
+    if text.startswith("#"):
+        guru = text.split()[0]
+    elif "#CO." in text:
+        for tok in text.split():
+            if tok.startswith("#CO."):
+                guru = tok
+                break
+    if "miss:" in text:
+        missed = [x.strip() for x in text.split("miss:", 1)[1].split()[0].split(",") if x.strip()]
+    if "fail:" in text:
+        for x in text.split("fail:", 1)[1].split()[0].split(","):
+            k = x.strip()
+            if k and k not in missed:
+                missed.append(k)
+    if not_caught and "theta_cycle" not in missed:
+        missed.append("theta_cycle")
+    return guru, missed, not_caught
+
+
+def _theta_persistent_failures(missed: list[str], *, not_caught: bool = False) -> list[str]:
+    """Theta miss / not-caught-up is a standing failure, not a briefing."""
+    if not_caught or "theta_cycle" in missed:
+        return ["theta_cycle not caught up"]
+    return []
+
+
+def _coordination_row(peer: str, surf: dict[str, Any], *, detail: str = "") -> dict[str, Any]:
+    raw_url = str(surf.get("url") or "")
+    blob = detail or raw_url
+    guru, missed, not_caught = _parse_miss_detail(blob)
+    url = "" if raw_url.startswith("#") else raw_url
     af = _probe_airflow()
+    fails = _theta_persistent_failures(missed, not_caught=not_caught)
     return {
         "peer": peer,
         "healthy": bool(surf.get("healthy")),
         "url": url,
         "guru": guru,
         "missed_ticks": missed,
+        "theta_not_caught_up": not_caught or "theta_cycle" in missed,
+        "persistent_failures": fails,
         "airflow_reachable": bool(af.get("reachable")),
         "airflow_health": af.get("url") or "",
-        "detail": raw,
+        "detail": blob,
     }
+
+
+def persistent_failures(snap: dict[str, Any] | None = None) -> list[str]:
+    """Theta misses the federated workspace treats as standing failures."""
+    if snap is None:
+        snap = sitrep()
+    out: list[str] = []
+    for item in snap.get("persistent_failures") or []:
+        s = str(item)
+        if s and s not in out:
+            out.append(s)
+    for h in snap.get("airflow_hub") or []:
+        if not isinstance(h, dict):
+            continue
+        for item in h.get("persistent_failures") or []:
+            s = str(item)
+            if s and s not in out:
+                out.append(s)
+        if h.get("theta_not_caught_up") or "theta_cycle" in (h.get("missed_ticks") or []):
+            label = "theta_cycle not caught up"
+            if label not in out:
+                out.append(label)
+    return out
 
 
 def sitrep() -> dict[str, Any]:
@@ -176,11 +230,29 @@ def sitrep() -> dict[str, Any]:
     acts = activities(kind="", active_only=True)
     airflow_hub = []
     for p in peers:
+        coord_ep = next(
+            (
+                e
+                for e in (p.get("endpoints") or [])
+                if isinstance(e, dict) and e.get("capability") == "coordination"
+            ),
+            None,
+        )
         for s in p.get("surfaces") or []:
             if s.get("kind") == "coordination":
-                airflow_hub.append(
-                    _coordination_row(str(p.get("project") or p.get("target") or ""), s)
+                row = _coordination_row(
+                    str(p.get("project") or p.get("target") or ""),
+                    s,
+                    detail=str((coord_ep or {}).get("detail") or ""),
                 )
+                if coord_ep is not None:
+                    row["healthy"] = bool(coord_ep.get("healthy"))
+                airflow_hub.append(row)
+    fails: list[str] = []
+    for h in airflow_hub:
+        for item in h.get("persistent_failures") or []:
+            if item not in fails:
+                fails.append(item)
     return {
         "when": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
         "hermes": hermes_local(),
@@ -189,6 +261,7 @@ def sitrep() -> dict[str, Any]:
         "activities_ok": bool(acts.get("ok")),
         "activities_error": acts.get("error") or "",
         "airflow_hub": airflow_hub,
+        "persistent_failures": fails,
         "reachable_peers": sum(1 for p in peers if p.get("reachable")),
         "peer_count": len(peers),
     }
@@ -721,10 +794,12 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "work). For a silent invent pass. Ripley must not read this "
                 "aloud as a briefing or operating-posture readout — one or "
                 "two spoken sentences only, and only if something is actually "
-                "wrong or they asked. airflow_hub.healthy False with MISSTICK "
-                "is missed scheduled kinds (not Airflow down); airflow_reachable "
-                "is the Airflow 3 probe. Empty thoughts/agenda is ServerQuery, "
-                "not cognition capability."
+                "wrong or they asked. persistent_failures (theta_cycle not "
+                "caught up) are failures, not briefing. airflow_hub.healthy "
+                "False with MISSTICK is missed scheduled kinds (not Airflow "
+                "down); airflow_reachable is the Airflow 3 probe. Empty "
+                "thoughts/agenda is ServerQuery, not cognition capability. "
+                "Do not catch up Theta as a job."
             ),
             "parameters": {
                 "type": "object",

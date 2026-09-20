@@ -351,7 +351,9 @@ def bishop_prompt(
             "recent_thoughts unless the user-zettel block is missing. Older "
             "notes stay quiet. If the workspace glance is stale or empty and "
             "there is no user zettel, have her say the workspace has gone "
-            "quiet — do not invent today's news."
+            "quiet — do not invent today's news. If the glance has PERSISTENT "
+            "FAILURES (Theta miss / not caught up), those are failures: say "
+            "so plainly. Do not treat them as briefing. Do not catch up Theta."
         )
     elif move == "thought":
         lines.append("Call conversation, then recent_thoughts.")

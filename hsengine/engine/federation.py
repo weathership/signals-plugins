@@ -156,6 +156,7 @@ def _fetch_status(peer: str, timeout: float) -> dict[str, Any] | None:
                 "model": ep.model,
                 "healthy": ep.healthy,
                 "gpu_ids": list(ep.gpu_ids),
+                "detail": getattr(ep, "detail", "") or "",
             }
             for ep in st.endpoints
         ],

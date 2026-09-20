@@ -146,25 +146,48 @@ def conversational_context(*, agenda_id: str = "") -> dict[str, str]:
         state = "fresh"
         out["workspace"] = state
         out["workspace_note"] = "meeting"
-        return out
-    state = workspace_freshness(
-        thoughts_age_min=thoughts_age,
-        agenda_age_min=agenda_age,
-        has_spoken=has_spoken,
-    )
-    out["workspace"] = state
-    if state == "stale":
-        bits = []
-        if out.get("thoughts_age"):
-            bits.append("thoughts " + out["thoughts_age"])
-        if out.get("agenda_age"):
-            bits.append("agenda " + out["agenda_age"])
-        out["workspace_note"] = "stale (" + (", ".join(bits) or "ages unknown") + ")"
-    elif state == "empty":
-        out["workspace_note"] = "empty — no live agenda or thoughts brief"
     else:
-        out["workspace_note"] = "fresh"
+        state = workspace_freshness(
+            thoughts_age_min=thoughts_age,
+            agenda_age_min=agenda_age,
+            has_spoken=has_spoken,
+        )
+        out["workspace"] = state
+        if state == "stale":
+            bits = []
+            if out.get("thoughts_age"):
+                bits.append("thoughts " + out["thoughts_age"])
+            if out.get("agenda_age"):
+                bits.append("agenda " + out["agenda_age"])
+            out["workspace_note"] = "stale (" + (", ".join(bits) or "ages unknown") + ")"
+        elif state == "empty":
+            out["workspace_note"] = "empty — no live agenda or thoughts brief"
+        else:
+            out["workspace_note"] = "fresh"
+    _apply_persistent_failures(out)
     return out
+
+
+def _apply_persistent_failures(out: dict[str, str]) -> None:
+    """Theta miss / not-caught-up is a workspace failure even when briefs are fresh."""
+    try:
+        from hsengine.engine import ops
+
+        fails = ops.persistent_failures()
+    except Exception:
+        log.warning("persistent_failures fetch failed", exc_info=True)
+        fails = []
+    if not fails:
+        return
+    label = ", ".join(fails)
+    out["persistent_failures"] = label
+    note = "persistent failure: " + label
+    prev = out.get("workspace_note") or ""
+    if prev and prev not in ("fresh", "meeting"):
+        out["workspace_note"] = prev + "; " + note
+    else:
+        out["workspace_note"] = note
+    out["workspace"] = "failed"
 
 
 def pipeline_block(pack: dict[str, str] | None) -> str:
@@ -174,7 +197,16 @@ def pipeline_block(pack: dict[str, str] | None) -> str:
     parts: list[str] = []
     state = pack.get("workspace") or ""
     note = pack.get("workspace_note") or ""
-    if state in ("stale", "empty"):
+    fails = pack.get("persistent_failures") or ""
+    if fails or state == "failed":
+        parts.append(
+            "PERSISTENT FAILURES (these are failures, not briefing, not "
+            "Airflow down; do not catch up Theta as a job; do not paper "
+            "over them): "
+            + (fails or note or "theta_cycle not caught up")
+            + "."
+        )
+    elif state in ("stale", "empty"):
         parts.append("Workspace freshness: " + (note or state) + ".")
     title = " ".join((pack.get("agenda_title") or "").split())
     item = (pack.get("agenda_item") or "").strip()

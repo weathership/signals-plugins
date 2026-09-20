@@ -100,7 +100,9 @@ def facts_from_pack(pack: dict[str, str] | None, *, returning: bool) -> frozense
     ):
         tags.add("has_meeting")
         tags.add("has_agenda")
-    if workspace == "fresh":
+    if workspace == "failed" or (pack.get("persistent_failures") or "").strip():
+        tags.add("failed")
+    elif workspace == "fresh":
         tags.add("has_fresh")
     elif workspace == "stale":
         tags.add("stale")

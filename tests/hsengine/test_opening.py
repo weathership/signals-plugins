@@ -70,6 +70,20 @@ def test_welcome_back_only_when_returning():
     assert "welcome_back" not in cold_seq
 
 
+def test_facts_from_pack_theta_failure_is_not_fresh():
+    facts = facts_from_pack(
+        {
+            "workspace": "failed",
+            "persistent_failures": "theta_cycle not caught up",
+            "thoughts_spoken": "The Lilly 10-K is still the live thread on the board.",
+        },
+        returning=False,
+    )
+    assert "failed" in facts
+    assert "has_fresh" not in facts
+    assert "has_thoughts" in facts
+
+
 def test_pause_can_follow_first_gesture():
     cat = load_catalog()
     facts = frozenset({"always", "has_fresh", "has_thoughts"})

@@ -223,7 +223,8 @@ _VOICE_RAILS = (
     "Never introduce yourself by name. Do not invent facts that are not in the "
     "material or the notes you were given. Do not start a slide deck until they "
     "ask. If the workspace notes are stale or empty, that is the first-turn "
-    "failure: say the workspace has gone quiet. Do not paper over it."
+    "failure: say the workspace has gone quiet. Do not paper over it. "
+    "A Theta miss or not-caught-up is a persistent failure, not briefing."
 )
 
 # Kept for tests of the old prompt-invent pass. Connect now uses named agents

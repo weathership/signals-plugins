@@ -368,6 +368,73 @@ def test_sitrep_bundles_local_peers_and_activities(monkeypatch):
     assert hub["guru"].startswith("#CO.00000002")
     assert hub["airflow_reachable"] is True
     assert "STREAMDROP" in hub["detail"]
+    assert snap["persistent_failures"] == []
+
+
+def test_sitrep_theta_miss_is_a_persistent_failure(monkeypatch):
+    monkeypatch.setattr(
+        ops,
+        "hermes_local",
+        lambda: {
+            "project": "hermes",
+            "dashboard": {"healthy": True, "detail": "http 200"},
+            "moshi": True,
+            "interactive": True,
+            "gpus": [5],
+            "workload": "interactive.agent_rtc",
+        },
+    )
+    monkeypatch.setattr(ops, "_status_targets", lambda: ["127.0.0.1:50051"])
+    monkeypatch.setattr(
+        ops,
+        "_peer_row",
+        lambda target: {
+            "target": target,
+            "reachable": True,
+            "project": "gaius",
+            "total_gpus": 6,
+            "endpoints": [
+                {
+                    "capability": "coordination",
+                    "model": "",
+                    "healthy": False,
+                    "gpus": [],
+                    "detail": (
+                        "#CO.0000000D.MISSTICK miss:theta_cycle,"
+                        "weekly_signals_summary fail:theta_cycle "
+                        "theta_not_caught_up"
+                    ),
+                }
+            ],
+            "surfaces": [
+                {
+                    "kind": "coordination",
+                    "healthy": False,
+                    "url": "127.0.0.1:50551",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(ops, "activities", lambda **_k: {"ok": True, "activities": []})
+    monkeypatch.setattr(
+        ops,
+        "_probe_airflow",
+        lambda: {
+            "reachable": True,
+            "url": "http://127.0.0.1:30800/api/v2/monitor/health",
+            "detail": "http 200",
+        },
+    )
+    snap = ops.sitrep()
+    hub = snap["airflow_hub"][0]
+    assert hub["airflow_reachable"] is True
+    assert hub["url"] == "127.0.0.1:50551"
+    assert hub["guru"].startswith("#CO.0000000D")
+    assert "theta_cycle" in hub["missed_ticks"]
+    assert hub["theta_not_caught_up"] is True
+    assert hub["persistent_failures"] == ["theta_cycle not caught up"]
+    assert snap["persistent_failures"] == ["theta_cycle not caught up"]
+    assert ops.persistent_failures(snap) == ["theta_cycle not caught up"]
 
 
 def test_dispatch_sitrep_returns_json(monkeypatch):

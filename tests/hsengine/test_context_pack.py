@@ -93,9 +93,59 @@ def test_usable_spoken_drops_fetch_failures():
     )
 
 
+def test_pipeline_block_persistent_theta_failure_leads():
+    text = pipeline_block(
+        {
+            "workspace": "failed",
+            "workspace_note": "persistent failure: theta_cycle not caught up",
+            "persistent_failures": "theta_cycle not caught up",
+            "thoughts_spoken": "The Lilly 10-K is still the live thread on the board.",
+        }
+    )
+    assert text.startswith("PERSISTENT FAILURES")
+    assert "theta_cycle not caught up" in text
+    assert "not briefing" in text
+    assert "Lilly" in text
+
+
+def test_conversational_context_theta_miss_is_failed_not_fresh(monkeypatch):
+    from hsengine.engine import ops
+
+    monkeypatch.setattr(
+        ops,
+        "agenda",
+        lambda item_id="": {
+            "ok": True,
+            "briefs": [{"spoken": "Today is the AgentRTC retrospective.", "age_min": 20}],
+        },
+    )
+    monkeypatch.setattr(
+        ops,
+        "recent_thoughts",
+        lambda **k: {
+            "ok": True,
+            "briefs": [
+                {
+                    "spoken": "I keep thinking about verifiable cell state on the edge.",
+                    "age_min": 40,
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        ops, "persistent_failures", lambda snap=None: ["theta_cycle not caught up"]
+    )
+    pack = conversational_context()
+    assert pack["workspace"] == "failed"
+    assert "theta_cycle" in pack["persistent_failures"]
+    assert "persistent failure" in pack["workspace_note"]
+    assert pack["thoughts_spoken"].startswith("I keep thinking")
+
+
 def test_conversational_context_reads_spoken_briefs(monkeypatch):
     from hsengine.engine import ops
 
+    monkeypatch.setattr(ops, "persistent_failures", lambda snap=None: [])
     monkeypatch.setattr(
         ops,
         "agenda",
