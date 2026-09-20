@@ -120,6 +120,56 @@ def activities(*, kind: str = "", active_only: bool = True) -> dict[str, Any]:
         return {"ok": False, "error": str(e)[:240], "activities": []}
 
 
+def _probe_airflow() -> dict[str, Any]:
+    """Airflow 3 live health. ``/health`` is a 404 that is not unreachable."""
+    import urllib.error
+    import urllib.request
+
+    base = "http://127.0.0.1:30800"
+    for path in ("/api/v2/monitor/health", "/health"):
+        url = base + path
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                code = int(getattr(resp, "status", 0) or 0)
+                if code == 200:
+                    return {"reachable": True, "url": url, "detail": f"http {code}"}
+        except urllib.error.HTTPError as e:
+            if int(e.code) == 404 and path == "/health":
+                continue
+            return {"reachable": False, "url": url, "detail": f"http {e.code}"}
+        except Exception as e:
+            return {
+                "reachable": False,
+                "url": url,
+                "detail": f"{type(e).__name__}: {e}",
+            }
+    return {"reachable": False, "url": base, "detail": "no health path answered 200"}
+
+
+def _coordination_row(peer: str, surf: dict[str, Any]) -> dict[str, Any]:
+    raw = str(surf.get("url") or "")
+    guru = ""
+    missed: list[str] = []
+    url = raw
+    if raw.startswith("#"):
+        guru = raw.split()[0]
+        url = ""
+        if "miss:" in raw:
+            missed = [x.strip() for x in raw.split("miss:", 1)[1].split(",") if x.strip()]
+    af = _probe_airflow()
+    return {
+        "peer": peer,
+        "healthy": bool(surf.get("healthy")),
+        "url": url,
+        "guru": guru,
+        "missed_ticks": missed,
+        "airflow_reachable": bool(af.get("reachable")),
+        "airflow_health": af.get("url") or "",
+        "detail": raw,
+    }
+
+
 def sitrep() -> dict[str, Any]:
     """Single pane: local Hermes, federated Status, in-force activities."""
     peers = [_peer_row(t) for t in _status_targets()]
@@ -129,11 +179,7 @@ def sitrep() -> dict[str, Any]:
         for s in p.get("surfaces") or []:
             if s.get("kind") == "coordination":
                 airflow_hub.append(
-                    {
-                        "peer": p.get("project") or p.get("target"),
-                        "healthy": bool(s.get("healthy")),
-                        "detail": s.get("url") or "",
-                    }
+                    _coordination_row(str(p.get("project") or p.get("target") or ""), s)
                 )
     return {
         "when": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
@@ -675,7 +721,10 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "work). For a silent invent pass. Ripley must not read this "
                 "aloud as a briefing or operating-posture readout — one or "
                 "two spoken sentences only, and only if something is actually "
-                "wrong or they asked."
+                "wrong or they asked. airflow_hub.healthy False with MISSTICK "
+                "is missed scheduled kinds (not Airflow down); airflow_reachable "
+                "is the Airflow 3 probe. Empty thoughts/agenda is ServerQuery, "
+                "not cognition capability."
             ),
             "parameters": {
                 "type": "object",

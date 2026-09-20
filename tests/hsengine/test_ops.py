@@ -348,14 +348,26 @@ def test_sitrep_bundles_local_peers_and_activities(monkeypatch):
             ],
         },
     )
+    monkeypatch.setattr(
+        ops,
+        "_probe_airflow",
+        lambda: {
+            "reachable": True,
+            "url": "http://127.0.0.1:30800/api/v2/monitor/health",
+            "detail": "http 200",
+        },
+    )
     snap = ops.sitrep()
     assert snap["hermes"]["interactive"] is True
     assert snap["reachable_peers"] == 1
     assert snap["peers"][0]["project"] == "gaius"
     assert snap["activities"][0]["state"] == "running"
     assert snap["activities_ok"] is True
-    assert snap["airflow_hub"][0]["healthy"] is False
-    assert "STREAMDROP" in snap["airflow_hub"][0]["detail"]
+    hub = snap["airflow_hub"][0]
+    assert hub["healthy"] is False
+    assert hub["guru"].startswith("#CO.00000002")
+    assert hub["airflow_reachable"] is True
+    assert "STREAMDROP" in hub["detail"]
 
 
 def test_dispatch_sitrep_returns_json(monkeypatch):
