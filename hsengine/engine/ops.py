@@ -799,7 +799,8 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "False with MISSTICK is missed scheduled kinds (not Airflow "
                 "down); airflow_reachable is the Airflow 3 probe. Empty "
                 "thoughts/agenda is ServerQuery, not cognition capability. "
-                "Do not catch up Theta as a job."
+                "Theta miss remediates via Airflow backfill of Monday windows "
+                "(max_active_runs=1), not DAG catchup."
             ),
             "parameters": {
                 "type": "object",

@@ -353,7 +353,8 @@ def bishop_prompt(
             "there is no user zettel, have her say the workspace has gone "
             "quiet — do not invent today's news. If the glance has PERSISTENT "
             "FAILURES (Theta miss / not caught up), those are failures: say "
-            "so plainly. Do not treat them as briefing. Do not catch up Theta."
+            "so plainly. Do not treat them as briefing. Historical weeks are "
+            "Airflow backfill, one Monday window at a time."
         )
     elif move == "thought":
         lines.append("Call conversation, then recent_thoughts.")
