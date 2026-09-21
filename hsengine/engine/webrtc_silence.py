@@ -265,7 +265,13 @@ class SilenceDirector:
         idle = self._idle_s()
         move = pick_move(self._rng, self._last_move)
         glance = ""
-        if move == "world" and exploration_phase(idle) == "novel":
+        try:
+            from hsengine.engine.webrtc_kanban import blocked_glance
+
+            glance = blocked_glance(self._session_id)
+        except Exception:
+            log.debug("kanban blocked glance skipped", exc_info=True)
+        if not glance and move == "world" and exploration_phase(idle) == "novel":
             try:
                 from hsengine.engine import ops
 

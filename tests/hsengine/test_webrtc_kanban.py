@@ -107,3 +107,31 @@ def test_refresh_view_reloads_only_when_kanban_is_live(monkeypatch):
     )
     _REAL_REFRESH()
     assert seen and seen[0]["kind"] == "kanban"
+
+
+def test_blocked_glance_surfaces_spawn_failure_for_this_call():
+    from contextlib import closing
+
+    from hermes_cli import kanban_db
+    from hermes_cli import kanban_db_connect as kbc
+
+    kanban_db.init_db()
+    with closing(kbc.connect()) as conn:
+        tid = kanban_db.create_task(
+            conn,
+            title="Lane 1: Ultradian attention cycles",
+            assignee="bishop",
+            session_id="agent-rtc-cafe",
+        )
+        assert kanban_db.block_task(
+            conn,
+            tid,
+            reason=(
+                "cannot create restart-safe systemd scope for gateway child: "
+                "systemd-run --user --scope is unavailable"
+            ),
+        )
+    glance = kb.blocked_glance("cafe")
+    assert "Lane 1" in glance
+    assert "systemd" in glance
+    assert kb.blocked_glance("other") == ""

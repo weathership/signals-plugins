@@ -169,9 +169,10 @@ def run(
             except Exception:
                 log.warning("primary hermes agent close failed", exc_info=True)
     try:
-        from hsengine.engine.webrtc_kanban import refresh_view
+        from hsengine.engine.webrtc_kanban import refresh_view, surface_blocked_to_call
 
         refresh_view()
+        surface_blocked_to_call()
     except Exception:
         log.debug("kanban view refresh skipped", exc_info=True)
     outcome = parse_partner_reply(raw)

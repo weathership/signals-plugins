@@ -338,6 +338,82 @@ def board_html() -> str:
     )
 
 
+def blocked_for_session(hermes_session_id: str) -> list[dict[str, Any]]:
+    """Cards this AgentRTC session created that the dispatcher parked."""
+    sid = (hermes_session_id or "").strip()
+    if not sid:
+        return []
+    from hermes_cli import kanban_db
+
+    out: list[dict[str, Any]] = []
+    with closing(_conn()) as conn:
+        for t in kanban_db.list_tasks(conn, status="blocked", session_id=sid, limit=40):
+            err = str(getattr(t, "last_failure_error", None) or "").strip()
+            if not err:
+                row = conn.execute(
+                    "SELECT payload FROM task_events WHERE task_id = ? "
+                    "ORDER BY created_at DESC LIMIT 8",
+                    (t.id,),
+                ).fetchall()
+                for (payload,) in row:
+                    try:
+                        data = json.loads(payload) if isinstance(payload, str) else payload
+                    except Exception:
+                        data = None
+                    if isinstance(data, dict):
+                        err = str(
+                            data.get("error") or data.get("reason") or data.get("summary") or ""
+                        ).strip()
+                        if err:
+                            break
+            out.append(
+                {
+                    "id": t.id,
+                    "title": t.title or t.id,
+                    "assignee": t.assignee or "",
+                    "error": err,
+                }
+            )
+    return out
+
+
+def blocked_glance(webrtc_id: str) -> str:
+    """Spoken-loop glance: blocked lanes need dialog, not a silent park."""
+    from hsengine.engine import session_history
+
+    wid = (webrtc_id or "").strip() or session_history.live_webrtc_id()
+    if not wid:
+        return ""
+    cards = blocked_for_session(session_history.hermes_session_id(wid))
+    if not cards:
+        return ""
+    lines = [
+        "Kanban blocked — Hermes could not keep pursuing these lanes. "
+        "Investigate with the person on the call (retry, reassign, or fix spawn):"
+    ]
+    for c in cards[:6]:
+        err = c["error"].split(". On a system")[0].strip() or "blocked"
+        who = c["assignee"] or "unassigned"
+        lines.append(f"- {c['title']} ({who}): {err}")
+    return "\n".join(lines)
+
+
+def surface_blocked_to_call(*, webrtc_id: str = "") -> dict[str, Any]:
+    """STEER Ripley when this call's cards were auto-blocked."""
+    from hsengine.engine import session_history
+    from hsengine.engine.primary_hermes import offer_steer
+
+    glance = blocked_glance(webrtc_id)
+    if not glance:
+        return {"ok": True, "steered": 0}
+    # First line is the steer; details stay in glance for Bishop.
+    offer_steer(
+        "The research lanes are blocked — workers could not start. "
+        "Ask what they want: retry, reassign, or look at the spawn error."
+    )
+    return {"ok": True, "steered": 1, "glance": glance}
+
+
 def refresh_view() -> None:
     try:
         from hsengine.engine import webrtc_program
