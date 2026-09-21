@@ -13,6 +13,9 @@ def test_spoken_system_treats_casual_checkin_as_ops():
     assert "special words" in text
     assert " fmp" in text or "call fmp" in text
     assert "viz_show" in text
+    assert "kind=kanban" in text
+    assert "kanban_create" in text
+    assert "kanban_move" in text
 
 
 def test_sitrep_tool_description_does_not_require_jargon():
@@ -169,6 +172,11 @@ def test_session_search_is_a_cerebras_tool():
     assert "hermes" in names
     assert "grok_consult" in names
     assert "agenda_create" in names
+    assert "kanban_list" in names
+    assert "kanban_create" in names
+    assert "kanban_move" in names
+    viz = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "viz_show")
+    assert "kind=kanban" in viz["function"]["description"]
 
 
 def test_dispatch_grok_consult(monkeypatch):

@@ -90,6 +90,9 @@ def test_viz_show_without_chromium_is_an_error():
     assert "chromium" in (data.get("error") or "").lower()
     names = [t["function"]["name"] for t in ops.CEREBRAS_TOOLS]
     assert "viz_show" in names
+    kanban = json.loads(ops.dispatch("viz_show", {"kind": "kanban", "title": "Kanban"}))
+    assert kanban["ok"] is False
+    assert "chromium" in (kanban.get("error") or "").lower()
 
 
 def test_viz_clear_is_ok_when_idle():

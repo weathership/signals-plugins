@@ -48,12 +48,30 @@ def test_pick_cdp_page_skips_extension_background():
     assert webrtc_cdp.pick_cdp_page(pages).endswith("/page/hv")
 
 
+def test_pick_cdp_page_accepts_kanban():
+    pages = [
+        {
+            "type": "background_page",
+            "url": "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaome/background.html",
+            "webSocketDebuggerUrl": "ws://127.0.0.1:56119/devtools/page/ext",
+        },
+        {
+            "type": "page",
+            "url": "http://127.0.0.1:51131/kanban",
+            "webSocketDebuggerUrl": "ws://127.0.0.1:56119/devtools/page/kanban",
+        },
+    ]
+    assert webrtc_cdp.pick_cdp_page(pages).endswith("/page/kanban")
+
+
 def test_bokeh_origins_are_loopback_only():
     hosts = webrtc_bokeh.origin_hosts(5006)
     assert hosts == ["127.0.0.1:5006", "localhost:5006"]
     url = webrtc_bokeh.document_url(5006, "abc123", nonce="n1")
     assert url.startswith("http://127.0.0.1:5006/hv?")
     assert "session=abc123" in url
+    kanban = webrtc_bokeh.kanban_url(5006)
+    assert kanban == "http://127.0.0.1:5006/kanban"
 
 
 @pytest.mark.asyncio

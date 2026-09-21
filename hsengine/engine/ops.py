@@ -1095,12 +1095,163 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "kanban_list",
+            "description": (
+                "List Hermes kanban tasks (multi-track work). Use before "
+                "creating cards. status is optional: triage|todo|ready|"
+                "running|blocked|review|done."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                    "limit": {"type": "number"},
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_show",
+            "description": "Show one kanban task and its recent comments.",
+            "parameters": {
+                "type": "object",
+                "properties": {"task_id": {"type": "string"}},
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_create",
+            "description": (
+                "Create a kanban card (starts in triage). Then viz_show "
+                "kind=kanban so the board is on the video."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "assignee": {"type": "string"},
+                },
+                "required": ["title"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_comment",
+            "description": "Comment on a kanban task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "body": {"type": "string"},
+                },
+                "required": ["task_id", "body"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_complete",
+            "description": (
+                "Mark a kanban task done. Promotes from triage/todo if needed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "result": {"type": "string"},
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_block",
+            "description": "Block a kanban task (external wait or human decision).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_unblock",
+            "description": "Unblock a kanban task.",
+            "parameters": {
+                "type": "object",
+                "properties": {"task_id": {"type": "string"}},
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_link",
+            "description": "Link a child kanban task under a parent.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "parent_id": {"type": "string"},
+                    "child_id": {"type": "string"},
+                },
+                "required": ["parent_id", "child_id"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kanban_move",
+            "description": (
+                "Move a kanban card to a column: triage|todo|ready|blocked|"
+                "review|done. Not running (dispatcher claims that)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "status": {"type": "string"},
+                },
+                "required": ["task_id", "status"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "viz_show",
             "description": (
-                "Put a live HoloViews/Bokeh page on the AgentRTC video "
-                "(headless Chromium compositor + CDP screencast). Humans "
-                "spectate; you drive. kind=chord|timeline|scatter|curve|"
-                "heatmap|aperture|density. timeline: event dots. "
+                "Put a live page on the AgentRTC video (headless Chromium "
+                "compositor + CDP screencast). Humans spectate; you drive. "
+                "kind=kanban shows the Hermes kanban board (multi-track "
+                "tasks). Other kinds are HoloViews: chord|timeline|scatter|"
+                "curve|heatmap|aperture|density. timeline: event dots. "
                 "density: week×ticker heatmap of filing counts. "
                 "data JSON {tickers:['SLB','HAL']} pulls FMP filings; "
                 "or {events:[{at,lane,label}]}. Prefer in-place updates. "
@@ -1341,6 +1492,102 @@ def _dispatch_hermes(args: dict[str, Any]) -> str:
     return json.dumps(hermes(prompt=str(args.get("prompt") or "")), default=str)
 
 
+def _dispatch_kanban_list(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    limit = args.get("limit")
+    try:
+        n = int(limit) if limit not in (None, "") else 80
+    except (TypeError, ValueError):
+        n = 80
+    return json.dumps(
+        webrtc_kanban.list_tasks(status=str(args.get("status") or ""), limit=n),
+        default=str,
+    )
+
+
+def _dispatch_kanban_show(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(webrtc_kanban.show_task(str(args.get("task_id") or "")), default=str)
+
+
+def _dispatch_kanban_create(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.create_task(
+            title=str(args.get("title") or ""),
+            body=str(args.get("body") or ""),
+            assignee=str(args.get("assignee") or ""),
+        ),
+        default=str,
+    )
+
+
+def _dispatch_kanban_comment(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.comment_task(
+            str(args.get("task_id") or ""), str(args.get("body") or "")
+        ),
+        default=str,
+    )
+
+
+def _dispatch_kanban_complete(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.complete_task(
+            str(args.get("task_id") or ""), result=str(args.get("result") or "")
+        ),
+        default=str,
+    )
+
+
+def _dispatch_kanban_block(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.block_task(
+            str(args.get("task_id") or ""), reason=str(args.get("reason") or "")
+        ),
+        default=str,
+    )
+
+
+def _dispatch_kanban_unblock(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.unblock_task(str(args.get("task_id") or "")), default=str
+    )
+
+
+def _dispatch_kanban_link(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.link_tasks(
+            str(args.get("parent_id") or ""), str(args.get("child_id") or "")
+        ),
+        default=str,
+    )
+
+
+def _dispatch_kanban_move(args: dict[str, Any]) -> str:
+    from hsengine.engine import webrtc_kanban
+
+    return json.dumps(
+        webrtc_kanban.move_task(
+            str(args.get("task_id") or ""), str(args.get("status") or "")
+        ),
+        default=str,
+    )
+
+
 def _dispatch_viz_show(args: dict[str, Any]) -> str:
     from hsengine.engine import webrtc_program
 
@@ -1465,6 +1712,15 @@ _DISPATCH = {
     "fmp": _dispatch_fmp,
     "grok_consult": _dispatch_grok_consult,
     "hermes": _dispatch_hermes,
+    "kanban_list": _dispatch_kanban_list,
+    "kanban_show": _dispatch_kanban_show,
+    "kanban_create": _dispatch_kanban_create,
+    "kanban_comment": _dispatch_kanban_comment,
+    "kanban_complete": _dispatch_kanban_complete,
+    "kanban_block": _dispatch_kanban_block,
+    "kanban_unblock": _dispatch_kanban_unblock,
+    "kanban_link": _dispatch_kanban_link,
+    "kanban_move": _dispatch_kanban_move,
     "viz_show": _dispatch_viz_show,
     "viz_select": _dispatch_viz_select,
     "viz_clear": _dispatch_viz_clear,

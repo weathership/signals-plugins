@@ -93,6 +93,53 @@ def try_live(
         return {"ok": False, "error": str(e)[:240]}
 
 
+async def _show_kanban(
+    session_id: str,
+    *,
+    title: str,
+    fade_s: float,
+    port: int,
+) -> dict[str, Any]:
+    from hsengine.engine import webrtc_bokeh, webrtc_program
+    from hsengine.engine.webrtc_cdp import CdpCamera
+
+    url = webrtc_bokeh.kanban_url(port)
+
+    def _push(image: Any) -> None:
+        webrtc_program.PROGRAM.replace_image(image)
+
+    cam = _cameras.get(session_id)
+    if cam is None:
+        cam = CdpCamera(session_id)
+        _cameras[session_id] = cam
+        await cam.start(url, on_image=_push, wait="kanban")
+    else:
+        await cam.navigate(url, wait="kanban")
+        if not cam._screencast:
+            await cam.start_screencast()
+            await cam._wait_first_frame()
+    frame = cam.latest_image
+    if frame is None:
+        raise RuntimeError("Kanban compositor produced no frame")
+    if _blank_frame(frame):
+        raise RuntimeError("Kanban compositor frame is blank")
+    heading = (title or "").strip() or "Kanban"
+    webrtc_program.PROGRAM.set(
+        frame,
+        title=heading,
+        kind="kanban",
+        fade_s=fade_s,
+        meta={
+            "kind": "kanban",
+            "backend": "kanban-cdp",
+            "url": url,
+            "capture": "Page.startScreencast",
+            "frames": cam.frames,
+        },
+    )
+    return {"ok": True, **webrtc_program.PROGRAM.status()}
+
+
 async def _show_live(
     session_id: str,
     *,
@@ -106,6 +153,11 @@ async def _show_live(
     from hsengine.engine import webrtc_bokeh, webrtc_program, webrtc_viz_apps
     from hsengine.engine.webrtc_cdp import CdpCamera
 
+    port = webrtc_bokeh.ensure_server()
+    if (kind or "").strip().lower() == "kanban":
+        return await _show_kanban(
+            session_id, title=title, fade_s=fade_s, port=port
+        )
     scene = webrtc_viz_apps.put_scene(
         session_id,
         kind=kind,
@@ -114,7 +166,6 @@ async def _show_live(
         source=source,
         data=data,
     )
-    port = webrtc_bokeh.ensure_server()
 
     def _push(image: Any) -> None:
         webrtc_program.PROGRAM.replace_image(image)

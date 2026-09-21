@@ -37,6 +37,10 @@ def document_url(port: int, session_id: str, nonce: str = "") -> str:
     return f"http://127.0.0.1:{port}/hv?{q}"
 
 
+def kanban_url(port: int) -> str:
+    return f"http://127.0.0.1:{port}/kanban"
+
+
 def ensure_server() -> int:
     """Start the loopback Bokeh server if needed. Returns the bound port."""
     global _server, _port
@@ -50,12 +54,23 @@ def ensure_server() -> int:
 
         from hsengine.engine.webrtc_viz_apps import modify_doc
 
+        from tornado.web import RequestHandler
+
+        class KanbanHandler(RequestHandler):
+            def get(self) -> None:
+                from hsengine.engine.webrtc_kanban import board_html
+
+                self.set_header("Content-Type", "text/html; charset=utf-8")
+                self.set_header("Cache-Control", "no-store")
+                self.write(board_html())
+
         apps = {"/hv": Application(FunctionHandler(modify_doc))}
         server = Server(
             apps,
             address="127.0.0.1",
             port=port,
             allow_websocket_origin=origin_hosts(port),
+            extra_patterns=[(r"/kanban", KanbanHandler)],
             num_procs=1,
         )
         server.start()

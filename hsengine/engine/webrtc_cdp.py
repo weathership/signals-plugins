@@ -111,7 +111,7 @@ def pick_cdp_page(pages: list) -> str:
         url = str(page.get("url") or "")
         kind = str(page.get("type") or "")
         ws = page.get("webSocketDebuggerUrl")
-        if kind == "page" and "/hv" in url and ws:
+        if kind == "page" and ("/hv" in url or "/kanban" in url) and ws:
             return str(ws)
     for page in rows:
         if str(page.get("type") or "") == "page" and page.get("webSocketDebuggerUrl"):
@@ -162,7 +162,9 @@ class CdpCamera:
         self._last_frame_at = 0.0
         self._pump_task: asyncio.Task | None = None
 
-    async def start(self, url: str, *, on_image: Callable[[Any], None] | None = None) -> None:
+    async def start(
+        self, url: str, *, on_image: Callable[[Any], None] | None = None, wait: str = "plot"
+    ) -> None:
         binary = chromium_executable()
         if not binary:
             raise FileNotFoundError(
@@ -200,7 +202,7 @@ class CdpCamera:
                 "mobile": False,
             },
         )
-        await self._wait_plot()
+        await self._wait_ready(wait)
         await self.start_screencast()
         await self._wait_first_frame()
 
@@ -302,10 +304,13 @@ class CdpCamera:
         if self._on_image is not None:
             self._on_image(image)
 
-    async def _wait_plot(self, timeout: float = 20.0) -> None:
-        """Wait until HoloViews has painted a canvas (Bokeh 3 uses shadow DOM)."""
+    async def _wait_ready(self, wait: str = "plot", timeout: float = 20.0) -> None:
+        """Wait until the page has painted (HoloViews canvas or kanban board)."""
         deadline = time.monotonic() + timeout
-        expr = """
+        if wait == "kanban":
+            expr = "!!document.querySelector('[data-kanban-board]')"
+        else:
+            expr = """
         (() => {
           const walk = (root) => {
             if (!root) return 0;
@@ -327,12 +332,12 @@ class CdpCamera:
                     {"expression": expr, "returnByValue": True},
                 )
                 if (result.get("result") or {}).get("value"):
-                    log.info("holoviews canvas present session=%s", self.session_id)
+                    log.info("compositor ready wait=%s session=%s", wait, self.session_id)
                     return
             except Exception:
                 pass
             await asyncio.sleep(0.2)
-        raise TimeoutError("HoloViews canvas never painted in Chromium")
+        raise TimeoutError(f"compositor wait={wait} never painted in Chromium")
 
     async def _wait_first_frame(self, timeout: float = 8.0) -> None:
         deadline = time.monotonic() + timeout
@@ -352,9 +357,9 @@ class CdpCamera:
         if self.latest_image is None:
             raise TimeoutError("CDP screencast produced no usable frames")
 
-    async def navigate(self, url: str) -> None:
+    async def navigate(self, url: str, *, wait: str = "plot") -> None:
         await self.send("Page.navigate", {"url": url})
-        await self._wait_plot()
+        await self._wait_ready(wait)
 
     async def start_screencast(self) -> None:
         await self.send(
