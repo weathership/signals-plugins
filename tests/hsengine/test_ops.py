@@ -128,6 +128,10 @@ def test_hermes_tool_keeps_files_in_hermes_home():
     assert "write_file" in desc
     assert "kanban" in desc
     assert "grok" in desc
+    assert "silent" in desc
+    assert "steer" in desc
+    assert "skill_manage" in desc
+    assert "cronjob_manage" in desc
 
 
 def test_spoken_system_wiki_write_must_call_hermes():
@@ -178,6 +182,8 @@ def test_session_search_is_a_cerebras_tool():
     hdesc = hermes["function"]["description"].lower()
     assert "kanban" in hdesc
     assert "grok" in hdesc
+    assert "silent" in hdesc
+    assert "steer" in hdesc
     assert "skill_manage" in hdesc
     assert "cronjob_manage" in hdesc
     viz = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "viz_show")
@@ -271,7 +277,12 @@ def test_hermes_binds_live_agent_rtc_session(monkeypatch):
         def run_conversation(self, prompt, conversation_history=None):
             seen["prompt"] = prompt
             seen["history"] = conversation_history
-            return {"final_response": "done"}
+            return {
+                "final_response": (
+                    "STEER: pick up the lattice thread\n"
+                    "MONOLOGUE: The board has the Theta card."
+                )
+            }
 
         def close(self):
             seen["ended"] = self._end_session_on_close
@@ -298,7 +309,11 @@ def test_hermes_binds_live_agent_rtc_session(monkeypatch):
     monkeypatch.setattr("hsengine.engine.webrtc_kanban.refresh_view", lambda: None)
     data = json.loads(ops.dispatch("hermes", {"prompt": "what did we just say"}))
     assert data["ok"] is True
-    assert data["text"] == "done"
+    assert data["steer"] == "pick up the lattice thread"
+    assert data["monologue"] == "The board has the Theta card."
+    assert data["text"] == "The board has the Theta card."
+    assert "STEER" in seen["prompt"]
+    assert seen["init"]["ephemeral_system_prompt"]
     assert data["session_id"] == "agent-rtc-cafe"
     assert data["provider"] == "xai-oauth"
     assert seen["init"]["session_id"] == "agent-rtc-cafe"

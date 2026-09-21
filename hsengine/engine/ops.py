@@ -1050,20 +1050,17 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "hermes",
             "description": (
-                "Primary Hermes agent (configured Grok / xai-oauth, full "
-                "CLI tools including kanban, skill_manage, cronjob_manage, "
-                "terminal, files, browser, memory, delegate_task). Spoken "
-                "turns stay Cerebras; this is not a voice swap. Shares this "
-                "AgentRTC session — the live transcript and memories are "
-                "already the conversation. "
-                "Files it creates belong under HERMES_HOME (named profile "
-                "or common Hermes storage), never the operator home. "
-                "wiki/... and $WIKI_PATH/... are the Hermes wiki vault. "
-                "For a wiki write, tell Hermes to write_file (and patch "
-                "index.md / log.md); do not claim the page is on disk from "
-                "a plan. Our session notes are recall/session_search; "
-                "lattice KB is kb_search (Gaius). Use for kanban and when "
-                "the voice tools are not enough. Speak the result."
+                "Silent Hermes partner (configured Grok / xai-oauth, full "
+                "CLI tools: kanban, skill_manage, cronjob_manage, terminal, "
+                "files, browser, memory, delegate_task). You stay on Cerebras; "
+                "this is not a voice swap. Shares this AgentRTC session. "
+                "Returns steer and monologue — speak the monologue (or one "
+                "sentence from steer); do not dump the JSON or name Grok. "
+                "Files it creates belong under HERMES_HOME, never the "
+                "operator home. wiki/... is the Hermes wiki vault. For a "
+                "wiki write, tell it to write_file; do not claim a path "
+                "from a plan. Use for kanban, skills, cron, and when the "
+                "voice tools are not enough."
             ),
             "parameters": {
                 "type": "object",

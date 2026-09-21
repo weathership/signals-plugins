@@ -41,12 +41,14 @@ def test_templates_exist():
     assert "recall" in bishop.lower()
     assert "user-provided" in bishop.lower() or "their paste" in bishop.lower()
     assert "kanban_create" not in bishop
-    assert "primary Grok" in bishop
+    assert "silent Grok partner" in bishop
+    assert "STEER/MONOLOGUE" in bishop
     assert "skill_manage" in bishop
     assert "cronjob_manage" in bishop
     assert "kind=kanban" in bishop
     assert "kind=kanban" in template_soul(VASQUEZ)
     assert "call hermes" in template_soul(RIPLEY)
+    assert "silent Grok partner" in template_soul(RIPLEY)
     assert "kanban_create" not in template_soul(RIPLEY)
 
 
@@ -175,7 +177,7 @@ def test_ensure_bots_refreshes_soul_missing_kanban(tmp_path, monkeypatch):
     text = soul.read_text(encoding="utf-8")
     assert "kanban_create" not in text
     assert "call hermes" in text
-    assert "skill_manage" in text
+    assert "silent Grok partner" in text
     assert "kind=kanban" in text
 
 

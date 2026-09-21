@@ -64,6 +64,51 @@ def _cli_toolsets() -> list[str]:
     return sorted(names)
 
 
+PARTNER_RAILS = (
+    "You are a silent Hermes partner on a live AgentRTC call. "
+    "Ripley speaks; you are not heard. Do the work with tools "
+    "(kanban, skills, cron, files, terminal, browser). "
+    "Never mention Grok, Hermes, Bishop, Cerebras, tools, or the machinery. "
+    "When you are done, output exactly:\n"
+    "STEER: <one or two sentences Ripley can follow on the next spoken turn, or NONE>\n"
+    "MONOLOGUE: <first-person in her voice she can speak now, or NONE>"
+)
+
+
+def parse_partner_reply(text: str):
+    """Bishop-shaped STEER/MONOLOGUE. Do not dump unstructured operational prose."""
+    from hsengine.engine.named_bots import BishopOutcome, parse_bishop_reply, _STEER_LINE, _MONO_LINE
+
+    raw = (text or "").strip()
+    if not raw:
+        return BishopOutcome()
+    if raw.startswith("{") or _STEER_LINE.search(raw) or _MONO_LINE.search(raw):
+        return parse_bishop_reply(raw)
+    return BishopOutcome()
+
+
+def offer_steer(steer: str) -> None:
+    """Same affordance as Bishop: color the next spoken Ripley turn."""
+    text = " ".join((steer or "").split())
+    if not text:
+        return
+    try:
+        from hsengine.engine.webrtc_session import HUB
+
+        turns = getattr(HUB, "_turns", None) or {}
+        for taker in list(turns.values()):
+            if hasattr(taker, "pending_steer"):
+                taker.pending_steer = text
+                return
+    except Exception:
+        log.debug("hermes partner steer not offered", exc_info=True)
+
+
+def _partner_prompt(prompt: str) -> str:
+    body = (prompt or "").strip()
+    return body + "\n\nWhen you are done with tools, output STEER and MONOLOGUE as specified."
+
+
 def _primary_runtime() -> tuple[str, dict[str, Any]]:
     from hermes_cli.config import load_config
     from hermes_cli.runtime_provider import resolve_runtime_provider
@@ -104,6 +149,7 @@ def run(
             model=model,
             credential_pool=runtime.get("credential_pool"),
             enabled_toolsets=_cli_toolsets(),
+            ephemeral_system_prompt=PARTNER_RAILS,
             quiet_mode=True,
             skip_background_review=True,
             session_id=session_id,
@@ -113,8 +159,10 @@ def run(
         )
         agent._end_session_on_close = False
         try:
-            result = agent.run_conversation(prompt, conversation_history=history)
-            text = str((result or {}).get("final_response") or "")
+            result = agent.run_conversation(
+                _partner_prompt(prompt), conversation_history=history
+            )
+            raw = str((result or {}).get("final_response") or "")
         finally:
             try:
                 agent.close()
@@ -126,9 +174,14 @@ def run(
         refresh_view()
     except Exception:
         log.debug("kanban view refresh skipped", exc_info=True)
+    outcome = parse_partner_reply(raw)
+    offer_steer(outcome.steer)
+    speak = outcome.monologue or outcome.steer
     return {
         "ok": True,
-        "text": text,
+        "steer": outcome.steer,
+        "monologue": outcome.monologue,
+        "text": speak,
         "model": model or runtime.get("model") or "",
         "provider": runtime.get("provider") or "",
         "session_id": session_id or "",

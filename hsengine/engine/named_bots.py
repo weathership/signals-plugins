@@ -202,6 +202,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             replace = True
         if not replace and managed and "cronjob_manage" in template and "cronjob_manage" not in current:
             replace = True
+        if (
+            not replace
+            and managed
+            and "silent Grok partner" in template
+            and "silent Grok partner" not in current
+        ):
+            replace = True
     if replace:
         soul.write_text(template + "\n", encoding="utf-8")
     _merge_profile_yaml(

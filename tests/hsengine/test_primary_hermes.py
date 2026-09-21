@@ -6,6 +6,33 @@ import os
 from hsengine.engine import primary_hermes
 
 
+def test_partner_reply_is_steer_monologue_not_a_dump():
+    out = primary_hermes.parse_partner_reply(
+        "STEER: keep the Theta card in view\nMONOLOGUE: W38 is on the board."
+    )
+    assert out.steer == "keep the Theta card in view"
+    assert out.monologue == "W38 is on the board."
+    dump = primary_hermes.parse_partner_reply(
+        "I created skill foo and scheduled a cron at 6am. Here is the JSON..."
+    )
+    assert dump.steer == ""
+    assert dump.monologue == ""
+
+
+def test_offer_steer_colors_the_next_spoken_turn(monkeypatch):
+    class Taker:
+        pending_steer = ""
+
+    taker = Taker()
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_session.HUB._turns",
+        {"cafe": taker},
+        raising=False,
+    )
+    primary_hermes.offer_steer("pick up the lattice thread")
+    assert taker.pending_steer == "pick up the lattice thread"
+
+
 def test_cli_toolsets_include_kanban(monkeypatch):
     monkeypatch.setattr(
         "hermes_cli.tools_config._get_platform_tools",
