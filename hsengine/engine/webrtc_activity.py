@@ -181,6 +181,7 @@ def begin(who: str, verb: str = "") -> None:
     with _mu:
         board = _board
     if board is None:
+        log.warning("activity chip dropped; video overlay not bound (%s %s)", who, verb)
         return
     board.begin(who, verb)
 
@@ -212,7 +213,8 @@ def paint_activity(image: Any, text: str) -> Any:
     draw = ImageDraw.Draw(image)
     pad = max(6, size // 3)
     line_h = size + pad
-    y = pad
+    # Sit below the compositor title bar (36px), not under it.
+    y = 40 if height >= 90 else pad
     for line in lines:
         who = "ripley"
         low = line.lower()
@@ -230,6 +232,10 @@ def paint_activity(image: Any, text: str) -> Any:
         box_h = th + pad
         x0 = max(pad, width - box_w - pad)
         draw.rectangle((x0, y, x0 + box_w, y + box_h), fill=(0, 0, 0))
+        try:
+            draw.rectangle((x0, y, x0 + box_w, y + box_h), outline=fill, width=2)
+        except TypeError:
+            pass
         try:
             draw.text(
                 (x0 + pad, y + pad // 3),

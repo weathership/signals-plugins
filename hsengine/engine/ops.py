@@ -1323,6 +1323,12 @@ def _dispatch_web(args: dict[str, Any]) -> str:
 
 
 def _dispatch_fmp(args: dict[str, Any]) -> str:
+    try:
+        from hsengine.engine.webrtc_activity import pulse
+
+        pulse("fmp")
+    except Exception:
+        pass
     return json.dumps(
         fmp(query=str(args.get("query") or ""), stream=str(args.get("stream") or "search")),
         default=str,

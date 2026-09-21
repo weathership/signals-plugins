@@ -82,5 +82,6 @@ def test_paint_activity_is_top_not_full_frame():
     paint_activity(image, "Ripley · thinking 4s")
     bottom = image.crop((0, 140, 320, 180))
     assert bottom.getpixel((0, 0)) == (10, 10, 10)
-    top = image.crop((0, 0, 320, 50))
-    assert top.getbbox() is not None
+    # Below the 36px compositor title, not in the bottom caption band.
+    band = image.crop((0, 36, 320, 90))
+    assert band.getbbox() is not None
