@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -502,6 +503,47 @@ def search(*, query: str, stream: str = "all", limit: int = 6) -> dict[str, Any]
     }
 
 
+_FMP_KV = re.compile(
+    r"\b(px|chg|vol|o|h|l|c)=([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"
+)
+_FMP_PCT = re.compile(r"([+-]?\d+(?:\.\d+)?)%")
+
+
+def enrich_fmp_hit(hit: dict[str, Any]) -> dict[str, Any]:
+    """Lift px=/c=/chg=/vol= out of the Gaius snippet into numeric fields."""
+    if not isinstance(hit, dict):
+        return hit
+    sn = str(hit.get("snippet") or "")
+    dest = {
+        "px": "price",
+        "chg": "change",
+        "vol": "volume",
+        "o": "open",
+        "h": "high",
+        "l": "low",
+        "c": "close",
+    }
+    for key, val in _FMP_KV.findall(sn):
+        name = dest.get(key)
+        if not name or hit.get(name) not in (None, ""):
+            continue
+        try:
+            num = float(val)
+        except ValueError:
+            continue
+        hit[name] = int(num) if name == "volume" else num
+    if hit.get("change_percent") in (None, ""):
+        found = _FMP_PCT.search(sn)
+        if found:
+            try:
+                hit["change_percent"] = float(found.group(1))
+            except ValueError:
+                pass
+    if hit.get("price") in (None, "") and hit.get("close") not in (None, ""):
+        hit["price"] = hit["close"]
+    return hit
+
+
 def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]:
     """Live FMP via ServerQuery FMP (Gaius holds the key).
 
@@ -538,7 +580,8 @@ def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]
     if kind not in _streams:
         kind = "search"
     try:
-        n = max(1, min(int(limit or 6), 8))
+        cap = 90 if kind in ("eod", "price") else 8
+        n = max(1, min(int(limit or 6), cap))
     except (TypeError, ValueError):
         n = 6
     if kind != "news" and not q:
@@ -564,16 +607,18 @@ def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]
             spoken = h.spoken
         for hit in h.hits:
             hits.append(
-                {
-                    "symbol": hit.symbol or "",
-                    "title": hit.title or "",
-                    "snippet": hit.snippet or "",
-                    "url": hit.url or "",
-                    "exchange": hit.exchange or "",
-                    "as_of": hit.as_of or "",
-                    "source": hit.source or kind,
-                    "project": h.project or resp.project,
-                }
+                enrich_fmp_hit(
+                    {
+                        "symbol": hit.symbol or "",
+                        "title": hit.title or "",
+                        "snippet": hit.snippet or "",
+                        "url": hit.url or "",
+                        "exchange": hit.exchange or "",
+                        "as_of": hit.as_of or "",
+                        "source": hit.source or kind,
+                        "project": h.project or resp.project,
+                    }
+                )
             )
     return {
         "ok": True,
@@ -1094,8 +1139,10 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "tasks). Other kinds are HoloViews: chord|timeline|scatter|"
                 "curve|heatmap|aperture|density. timeline: event dots. "
                 "density: week×ticker heatmap of filing counts. "
-                "data JSON {tickers:['SLB','HAL']} pulls FMP filings; "
-                "or {events:[{at,lane,label}]}. Prefer in-place updates. "
+                "data JSON {tickers:['SLB','HAL']} pulls FMP filings for "
+                "timeline/density, and FMP eod closes for kind=curve; "
+                "or {events:[{at,lane,label}]} / {series:[{name,x,y}]}. "
+                "Prefer in-place updates. "
                 "Call this instead of describing a figure."
             ),
             "parameters": {
@@ -1195,9 +1242,10 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                 "(the engine holds the API key). Streams: search, quote, "
                 "news, filings, statement, metrics, calendar, employees, "
                 "eight_k, insider, profile, eod. quote is a live price; "
-                "eight_k/news/insider are per-ticker. Use this instead of "
-                "web_search for tickers, filings, and listed companies. "
-                "Speak from hits."
+                "eight_k/news/insider are per-ticker. quote hits include "
+                "numeric price, change, change_percent, volume. eod is "
+                "daily OHLC (use limit=90) for viz_show kind=curve. "
+                "Use this instead of web_search for tickers. Speak from hits."
             ),
             "parameters": {
                 "type": "object",

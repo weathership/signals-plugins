@@ -5,6 +5,7 @@ import json
 
 from hsengine.engine import ops
 from hsengine.engine.webrtc_moshi import SPOKEN_SYSTEM
+from hsengine.engine.webrtc_viz_apps import eod_points_from_hits
 
 
 def test_spoken_system_treats_casual_checkin_as_ops():
@@ -16,6 +17,31 @@ def test_spoken_system_treats_casual_checkin_as_ops():
     assert "kind=kanban" in text
     assert "call hermes" in text
     assert "kanban_create" not in text
+
+
+def test_enrich_fmp_hit_lifts_quote_and_eod_numbers():
+    quote = ops.enrich_fmp_hit(
+        {
+            "symbol": "SPY",
+            "snippet": "px=769.33 · chg=7.64 · 1.00303% · vol=13134003",
+        }
+    )
+    assert quote["price"] == 769.33
+    assert quote["change"] == 7.64
+    assert quote["change_percent"] == 1.00303
+    assert quote["volume"] == 13134003
+    bar = ops.enrich_fmp_hit(
+        {"as_of": "2026-09-21", "snippet": "o=1 h=2 l=0.5 c=1.5"}
+    )
+    assert bar["close"] == 1.5
+    assert bar["price"] == 1.5
+    pts = eod_points_from_hits(
+        [
+            {"as_of": "2026-09-20", "snippet": "c=10"},
+            {"as_of": "2026-09-21", "snippet": "c=11"},
+        ]
+    )
+    assert pts == [("2026-09-20", 10.0), ("2026-09-21", 11.0)]
 
 
 def test_sitrep_tool_description_does_not_require_jargon():

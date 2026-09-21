@@ -362,6 +362,8 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
                 traces.append(hv.Scatter(data, "x", "y", label=name))
             else:
                 traces.append(hv.Curve(data, "x", "y", label=name))
+    if not traces:
+        traces = _curves_from_fmp_eod(scene, scatter=scatter)
     if traces:
         opts = dict(
             title=title or "",
@@ -374,8 +376,50 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
         return hv.Overlay(traces).opts(**opts, legend_position="top_left")
     return _empty_plot(
         title,
-        "No numeric series in the payload\nFMP quote is name/exchange only",
+        "No numeric series — pass payload.series or tickers for FMP eod",
     )
+
+
+def eod_points_from_hits(hits: list[Any]) -> list[tuple[str, float]]:
+    from hsengine.engine.ops import enrich_fmp_hit
+
+    pts: list[tuple[str, float]] = []
+    for hit in hits or []:
+        if not isinstance(hit, dict):
+            continue
+        hit = enrich_fmp_hit(dict(hit))
+        at = str(hit.get("as_of") or hit.get("title") or "").strip()
+        raw = hit.get("close", hit.get("price"))
+        if not at or raw in (None, ""):
+            continue
+        try:
+            pts.append((at, float(raw)))
+        except (TypeError, ValueError):
+            continue
+    return pts
+
+
+def _curves_from_fmp_eod(scene: dict[str, Any], *, scatter: bool = False) -> list[Any]:
+    """Pull daily closes when viz_show got tickers but no series."""
+    import holoviews as hv
+
+    from hsengine.engine import ops
+
+    traces: list[Any] = []
+    for ticker in _tickers_from_scene(scene)[:6]:
+        try:
+            out = ops.fmp(query=ticker, stream="eod", limit=90)
+        except Exception:
+            log.debug("fmp eod %s failed", ticker, exc_info=True)
+            continue
+        pts = eod_points_from_hits(out.get("hits") or [])
+        if len(pts) < 2:
+            continue
+        if scatter:
+            traces.append(hv.Scatter(pts, "x", "y", label=ticker))
+        else:
+            traces.append(hv.Curve(pts, "x", "y", label=ticker))
+    return traces
 
 
 def _timeline(scene: dict[str, Any], title: str) -> Any:
