@@ -510,6 +510,13 @@ def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]
     from hsengine.engine import federation
     from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
 
+    fmp_kind = getattr(zpb, "SERVER_QUERY_KIND_FMP", None)
+    if fmp_kind is None:
+        return {
+            "ok": False,
+            "error": "FMP is not on this engine's wire (regenerate zndx.engine.v1 stubs)",
+            "hits": [],
+        }
     q = " ".join((query or "").split())
     kind = (stream or "search").strip().lower() or "search"
     _streams = (
@@ -542,7 +549,7 @@ def fmp(*, query: str, stream: str = "search", limit: int = 6) -> dict[str, Any]
     spoken = ""
     for target in _status_targets():
         resp = federation.query_peer(
-            target, zpb.SERVER_QUERY_KIND_FMP, query=q, stream=kind, limit=n
+            target, fmp_kind, query=q, stream=kind, limit=n
         )
         if resp is None:
             peers.append({"target": target, "reachable": False})

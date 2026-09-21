@@ -10,8 +10,8 @@ from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
 
 
 def test_fmp_and_agents_kinds_do_not_collide():
-    assert zpb.SERVER_QUERY_KIND_FMP == 16
-    assert zpb.SERVER_QUERY_KIND_AGENTS == 17
+    assert zpb.SERVER_QUERY_KIND_FMP == 17
+    assert zpb.SERVER_QUERY_KIND_AGENTS == 16
     assert zpb.SERVER_QUERY_KIND_FMP != zpb.SERVER_QUERY_KIND_AGENTS
 
 

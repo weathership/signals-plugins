@@ -10,6 +10,7 @@ NATIVE="$ROOT/hsengine/engine/proto"
 ZNDX="${SIGNALS_PROTOCOL_PROTO:-}"
 if [[ -z "$ZNDX" ]]; then
   for cand in \
+    "$ROOT/../signals/components/signals-protocol/proto" \
     "$ROOT/../signals/external/signals-protocol/proto" \
     "$ROOT/../oss/hermes-agent/components/signals-protocol/proto" \
     "${HOME}/local/src/oss/hermes-agent/components/signals-protocol/proto"; do
