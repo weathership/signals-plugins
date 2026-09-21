@@ -42,6 +42,7 @@ def test_templates_exist():
     assert "user-provided" in bishop.lower() or "their paste" in bishop.lower()
     assert "kanban_create" not in bishop
     assert "silent Grok partner" in bishop
+    assert "Kanban assignee is grok" in bishop
     assert "STEER/MONOLOGUE" in bishop
     assert "skill_manage" in bishop
     assert "cronjob_manage" in bishop
@@ -49,6 +50,7 @@ def test_templates_exist():
     assert "kind=kanban" in template_soul(VASQUEZ)
     assert "call hermes" in template_soul(RIPLEY)
     assert "silent Grok partner" in template_soul(RIPLEY)
+    assert "belong to grok" in template_soul(RIPLEY)
     assert "kanban_create" not in template_soul(RIPLEY)
 
 

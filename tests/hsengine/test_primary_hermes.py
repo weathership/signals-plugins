@@ -6,6 +6,13 @@ import os
 from hsengine.engine import primary_hermes
 
 
+def test_partner_rails_assign_kanban_to_grok_not_voice_personas():
+    text = primary_hermes.PARTNER_RAILS.lower()
+    assert "assignee=grok" in text
+    assert "ripley" in text and "bishop" in text
+    assert "cerebras voice" in text
+
+
 def test_partner_reply_is_steer_monologue_not_a_dump():
     out = primary_hermes.parse_partner_reply(
         "STEER: keep the Theta card in view\nMONOLOGUE: W38 is on the board."

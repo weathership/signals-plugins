@@ -209,6 +209,15 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             and "silent Grok partner" not in current
         ):
             replace = True
+        if not replace and managed and "assignee=grok" in template and "assignee=grok" not in current:
+            replace = True
+        if (
+            not replace
+            and managed
+            and "Kanban assignee is grok" in template
+            and "Kanban assignee is grok" not in current
+        ):
+            replace = True
     if replace:
         soul.write_text(template + "\n", encoding="utf-8")
     _merge_profile_yaml(
@@ -402,8 +411,8 @@ def bishop_prompt(
             "Call conversation. Deepen the last live thread. Do not web-search. "
             "If a figure would help (ontology chord, Aegir aperture, a plot), "
             "call viz_show. For multi-track work, skills, or cron automations, "
-            "call hermes then viz_show kind=kanban if a board should be on "
-            "the video. If the live thread is circling the same complex "
+            "call hermes (kanban assignee=grok, never voice personas) then "
+            "viz_show kind=kanban if a board should be on the video. If the live thread is circling the same complex "
             "idea, grok_consult once then STEER/MONOLOGUE from that."
         )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")
