@@ -110,6 +110,7 @@ def test_refresh_view_reloads_only_when_kanban_is_live(monkeypatch):
 
 
 def test_blocked_glance_surfaces_spawn_failure_for_this_call():
+    kb._BLOCKED_SIG.clear()
     from contextlib import closing
 
     from hermes_cli import kanban_db

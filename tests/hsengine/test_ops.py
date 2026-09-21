@@ -129,7 +129,7 @@ def test_hermes_tool_keeps_files_in_hermes_home():
     assert "kanban" in desc
     assert "grok" in desc
     assert "silent" in desc
-    assert "steer" in desc
+    assert "never say the word steer" in desc
     assert "skill_manage" in desc
     assert "cronjob_manage" in desc
 
@@ -307,11 +307,16 @@ def test_hermes_binds_live_agent_rtc_session(monkeypatch):
     )
     monkeypatch.setattr("hsengine.engine.session_history._store", lambda: "db")
     monkeypatch.setattr("hsengine.engine.webrtc_kanban.refresh_view", lambda: None)
+    offered: list[str] = []
+    monkeypatch.setattr(
+        "hsengine.engine.primary_hermes.offer_steer",
+        lambda s: offered.append(s),
+    )
     data = json.loads(ops.dispatch("hermes", {"prompt": "what did we just say"}))
     assert data["ok"] is True
-    assert data["steer"] == "pick up the lattice thread"
-    assert data["monologue"] == "The board has the Theta card."
+    assert "steer" not in data
     assert data["text"] == "The board has the Theta card."
+    assert offered == ["pick up the lattice thread"]
     assert "STEER" in seen["prompt"]
     assert seen["init"]["ephemeral_system_prompt"]
     assert data["session_id"] == "agent-rtc-cafe"

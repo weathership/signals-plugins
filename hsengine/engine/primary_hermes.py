@@ -100,6 +100,8 @@ def offer_steer(steer: str) -> None:
         turns = getattr(HUB, "_turns", None) or {}
         for taker in list(turns.values()):
             if hasattr(taker, "pending_steer"):
+                if str(getattr(taker, "pending_steer", "") or "").strip() == text:
+                    return
                 taker.pending_steer = text
                 return
     except Exception:
@@ -179,12 +181,10 @@ def run(
         log.debug("kanban view refresh skipped", exc_info=True)
     outcome = parse_partner_reply(raw)
     offer_steer(outcome.steer)
-    speak = outcome.monologue or outcome.steer
+    # Never put STEER in the tool JSON — Ripley copies it into TTS.
     return {
         "ok": True,
-        "steer": outcome.steer,
-        "monologue": outcome.monologue,
-        "text": speak,
+        "text": outcome.monologue,
         "model": model or runtime.get("model") or "",
         "provider": runtime.get("provider") or "",
         "session_id": session_id or "",

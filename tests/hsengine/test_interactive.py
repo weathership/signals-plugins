@@ -13,6 +13,18 @@ def test_spoken_text_strips_markdown_and_urls():
     assert interactive.spoken_text("```code``` hi") == "hi"
 
 
+def test_spoken_text_never_speaks_steer_protocol():
+    assert interactive.spoken_text(
+        "STEER: Stay on the Nautilus mapping — next is the probe."
+    ) == ""
+    spoken = interactive.spoken_text(
+        "STEER: NONE MONOLOGUE: Good. We can pick this up from the systems side."
+    )
+    assert spoken.startswith("Good.")
+    assert "STEER" not in spoken
+    assert "MONOLOGUE" not in spoken
+
+
 @pytest.fixture(autouse=True)
 def _reset_interactive():
     with interactive._mu:

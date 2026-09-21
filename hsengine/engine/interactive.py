@@ -297,10 +297,19 @@ def complete_cerebras(
 
 
 def spoken_text(text: str) -> str:
-    """Plain words for Kyutai TTS — no markdown or URLs."""
+    """Plain words for Kyutai TTS — no markdown, URLs, or silent STEER notes."""
     import re
 
-    t = " ".join((text or "").split())
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    if re.search(r"(?i)\bSTEER\s*:", raw) or re.search(r"(?i)\bMONOLOGUE\s*:", raw):
+        from hsengine.engine.named_bots import parse_bishop_reply
+
+        raw = parse_bishop_reply(raw).monologue
+        if not raw:
+            return ""
+    t = " ".join(raw.split())
     t = re.sub(r"```[\s\S]*?```", " ", t)
     t = re.sub(r"`+", "", t)
     t = re.sub(r"https?://\S+", "", t)
@@ -322,7 +331,13 @@ def _speech_epoch(session_id: str) -> int | None:
     return int(getattr(board, "epoch", 0) or 0)
 
 
+_TTS_GATE = threading.Lock()
+
+
 def _speak_cerebras(text: str, epoch: int | None = None) -> None:
+    if not _TTS_GATE.acquire(blocking=False):
+        log.info("tts skipped, already speaking")
+        return
     try:
         from hsengine.engine.webrtc_activity import begin, end
 
@@ -338,6 +353,7 @@ def _speak_cerebras(text: str, epoch: int | None = None) -> None:
         log.exception("Kyutai TTS failed for Cerebras text")
     finally:
         end("ripley")
+        _TTS_GATE.release()
 
 
 def _moshi_on() -> None:

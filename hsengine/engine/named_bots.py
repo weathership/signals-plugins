@@ -274,6 +274,8 @@ def parse_bishop_reply(text: str) -> BishopOutcome:
     raw = (text or "").strip()
     if not raw:
         return BishopOutcome()
+    raw = re.sub(r"(?i)(?<!\n)\s*\bMONOLOGUE:\s*", "\nMONOLOGUE: ", raw)
+    raw = re.sub(r"(?i)(?<!\n)\s*\bSTEER:\s*", "\nSTEER: ", raw)
     if raw.startswith("{"):
         try:
             data = json.loads(raw)

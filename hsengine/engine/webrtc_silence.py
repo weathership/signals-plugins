@@ -310,6 +310,10 @@ class SilenceDirector:
                 )
             if outcome.monologue:
                 spoken = interactive.spoken_text(outcome.monologue)
+                if spoken and spoken.strip() == str(outcome.steer or "").strip():
+                    spoken = ""
+                if spoken and self._speaking():
+                    spoken = ""
                 if spoken:
                     threading.Thread(
                         target=interactive._speak_cerebras,

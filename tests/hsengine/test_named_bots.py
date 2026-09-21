@@ -76,6 +76,11 @@ def test_parse_bishop_reply_labels_and_json():
     loose = parse_bishop_reply("Steer: keep going on the book.")
     assert "book" in loose.steer
     assert parse_bishop_reply("") == BishopOutcome()
+    inline = parse_bishop_reply(
+        "STEER: NONE MONOLOGUE: Good. We can pick this up from the systems side."
+    )
+    assert inline.steer == ""
+    assert inline.monologue.startswith("Good.")
 
 
 def test_bishop_prompt_varies_the_move():

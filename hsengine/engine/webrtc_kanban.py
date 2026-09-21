@@ -377,8 +377,14 @@ def blocked_for_session(hermes_session_id: str) -> list[dict[str, Any]]:
     return out
 
 
-def blocked_glance(webrtc_id: str) -> str:
-    """Spoken-loop glance: blocked lanes need dialog, not a silent park."""
+_BLOCKED_SIG: dict[str, str] = {}
+
+
+def blocked_glance(webrtc_id: str, *, force: bool = False) -> str:
+    """Spoken-loop glance: blocked lanes need dialog, not a silent park.
+
+    The same blocked set is offered once until the signature changes.
+    """
     from hsengine.engine import session_history
 
     wid = (webrtc_id or "").strip() or session_history.live_webrtc_id()
@@ -386,7 +392,12 @@ def blocked_glance(webrtc_id: str) -> str:
         return ""
     cards = blocked_for_session(session_history.hermes_session_id(wid))
     if not cards:
+        _BLOCKED_SIG.pop(wid, None)
         return ""
+    sig = "|".join(f"{c['id']}:{c['error'][:80]}" for c in cards)
+    if not force and _BLOCKED_SIG.get(wid) == sig:
+        return ""
+    _BLOCKED_SIG[wid] = sig
     lines = [
         "Kanban blocked — Hermes could not keep pursuing these lanes. "
         "Investigate with the person on the call (retry, reassign, or fix spawn):"
