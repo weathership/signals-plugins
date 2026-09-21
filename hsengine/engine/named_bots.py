@@ -187,11 +187,16 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             or "You are Bishop, the silent session" in current
             or "the silent visual gunner" in current
         )
-        if not replace and managed and "kanban_create" in template and "kanban_create" not in current:
-            replace = True
-        if not replace and managed and "kanban_move" in template and "kanban_move" not in current:
+        if not replace and managed and "kanban_create" in current and "kanban_create" not in template:
             replace = True
         if not replace and managed and "kind=kanban" in template and "kind=kanban" not in current:
+            replace = True
+        if (
+            not replace
+            and managed
+            and "primary Grok" in template
+            and "primary Grok" not in current
+        ):
             replace = True
     if replace:
         soul.write_text(template + "\n", encoding="utf-8")
@@ -385,8 +390,8 @@ def bishop_prompt(
         lines.append(
             "Call conversation. Deepen the last live thread. Do not web-search. "
             "If a figure would help (ontology chord, Aegir aperture, a plot), "
-            "call viz_show. For multi-track work, viz_show kind=kanban then "
-            "kanban_create/list/move. If the live thread is circling the same complex "
+            "call viz_show. For multi-track work, call hermes (kanban tools) "
+            "then viz_show kind=kanban. If the live thread is circling the same complex "
             "idea, grok_consult once then STEER/MONOLOGUE from that."
         )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")

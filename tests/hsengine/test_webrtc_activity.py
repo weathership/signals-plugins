@@ -22,8 +22,7 @@ def test_format_line_names_the_persona():
     assert format_line("fmp").startswith("Ripley")
     assert format_line("grok_consult").startswith("Bishop")
     assert "consult" in format_line("grok_consult")
-    assert format_line("kanban_create").startswith("Ripley")
-    assert "kanban" in format_line("kanban_move")
+    assert format_line("hermes").startswith("Ripley")
 
 
 def test_pulse_viz_and_fmp_show_on_the_board():

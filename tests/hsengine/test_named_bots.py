@@ -40,12 +40,12 @@ def test_templates_exist():
     assert "session_search" in bishop
     assert "recall" in bishop.lower()
     assert "user-provided" in bishop.lower() or "their paste" in bishop.lower()
-    assert "kanban_create" in bishop
-    assert "kanban_move" in bishop
+    assert "kanban_create" not in bishop
+    assert "primary Grok" in bishop
     assert "kind=kanban" in bishop
     assert "kind=kanban" in template_soul(VASQUEZ)
-    assert "kanban_create" in template_soul(RIPLEY)
-    assert "kanban_move" in template_soul(RIPLEY)
+    assert "call hermes" in template_soul(RIPLEY)
+    assert "kanban_create" not in template_soul(RIPLEY)
 
 
 def test_bishop_open_prompt_treats_zettel_as_user_material():
@@ -93,7 +93,7 @@ def test_bishop_prompt_varies_the_move():
     _, deepen, _ = bishop_prompt(move="deepen")
     assert "grok_consult" in deepen
     assert "kind=kanban" in deepen
-    assert "kanban_create" in deepen
+    assert "hermes" in deepen
 
 
 def test_ripley_opening_prompts_prefer_monologue():
@@ -166,12 +166,13 @@ def test_ensure_bots_refreshes_soul_missing_kanban(tmp_path, monkeypatch):
     soul = tmp_path / ".hermes" / "profiles" / "ripley" / "SOUL.md"
     soul.write_text(
         "You are Ripley, the spoken voice on this AgentRTC call.\n"
-        "If they want a board, talk about tracks.\n",
+        "If they want a board, kanban_create / kanban_list.\n",
         encoding="utf-8",
     )
     ensure_bots()
     text = soul.read_text(encoding="utf-8")
-    assert "kanban_create" in text
+    assert "kanban_create" not in text
+    assert "call hermes" in text
     assert "kind=kanban" in text
 
 

@@ -4,10 +4,28 @@ Session-scoped: in-process interactive posture, or a Signals
 ``interactive_session`` Activity. Not an env var. Registered on the
 generic ``hermes_agent.session_runtime`` overlay seam so Hermes core
 does not import this package by name.
+
+Spoken Ripley/Bishop stay on that overlay. The nested ``hermes`` tool
+opts out via :func:`primary_runtime` so it is the configured primary
+agent (Grok / xai-oauth), not a Cerebras clone.
 """
 from __future__ import annotations
 
-from typing import Any
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any, Iterator
+
+_PRIMARY = ContextVar("hsengine_primary_runtime", default=False)
+
+
+@contextmanager
+def primary_runtime() -> Iterator[None]:
+    """Skip the Cerebras overlay for this stack (primary Hermes agent)."""
+    token = _PRIMARY.set(True)
+    try:
+        yield
+    finally:
+        _PRIMARY.reset(token)
 
 
 def session_wants_cerebras() -> bool:
@@ -27,6 +45,8 @@ def session_wants_cerebras() -> bool:
 
 def overlay_runtime() -> dict[str, Any] | None:
     """Cerebras OpenAI-compatible kwargs, or None if interactive is not in force."""
+    if _PRIMARY.get():
+        return None
     if not session_wants_cerebras():
         return None
     try:

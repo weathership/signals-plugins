@@ -14,8 +14,8 @@ def test_spoken_system_treats_casual_checkin_as_ops():
     assert " fmp" in text or "call fmp" in text
     assert "viz_show" in text
     assert "kind=kanban" in text
-    assert "kanban_create" in text
-    assert "kanban_move" in text
+    assert "call hermes" in text
+    assert "kanban_create" not in text
 
 
 def test_sitrep_tool_description_does_not_require_jargon():
@@ -85,9 +85,7 @@ def test_dispatch_fmp(monkeypatch):
 
 
 def test_dispatch_hermes_requires_interactive(monkeypatch):
-    monkeypatch.setattr(
-        "agent.interactive_cerebras.overlay_runtime", lambda: None
-    )
+    monkeypatch.setattr("hsengine.engine.interactive.is_active", lambda: False)
     data = json.loads(ops.dispatch("hermes", {"prompt": "list skills"}))
     assert data["ok"] is False
     assert "not in force" in data["error"]
@@ -128,6 +126,8 @@ def test_hermes_tool_keeps_files_in_hermes_home():
     assert "operator home" in desc
     assert "wiki/" in desc or "$wiki_path" in desc
     assert "write_file" in desc
+    assert "kanban" in desc
+    assert "grok" in desc
 
 
 def test_spoken_system_wiki_write_must_call_hermes():
@@ -172,9 +172,12 @@ def test_session_search_is_a_cerebras_tool():
     assert "hermes" in names
     assert "grok_consult" in names
     assert "agenda_create" in names
-    assert "kanban_list" in names
-    assert "kanban_create" in names
-    assert "kanban_move" in names
+    assert "kanban_list" not in names
+    assert "kanban_create" not in names
+    hermes = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "hermes")
+    hdesc = hermes["function"]["description"].lower()
+    assert "kanban" in hdesc
+    assert "grok" in hdesc
     viz = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "viz_show")
     assert "kind=kanban" in viz["function"]["description"]
 
@@ -271,13 +274,13 @@ def test_hermes_binds_live_agent_rtc_session(monkeypatch):
         def close(self):
             seen["ended"] = self._end_session_on_close
 
+    monkeypatch.setattr("hsengine.engine.interactive.is_active", lambda: True)
     monkeypatch.setattr(
-        "agent.interactive_cerebras.overlay_runtime",
-        lambda: {
-            "base_url": "https://api.cerebras.ai/v1",
-            "api_key": "k",
-            "provider": "cerebras",
-            "model": "qwen-3.8-27b",
+        "hermes_cli.runtime_provider.resolve_runtime_provider",
+        lambda **k: {
+            "api_key": "xai",
+            "base_url": "https://api.x.ai/v1",
+            "provider": "xai-oauth",
             "api_mode": "chat_completions",
         },
     )
@@ -290,13 +293,17 @@ def test_hermes_binds_live_agent_rtc_session(monkeypatch):
         lambda _wid: [{"role": "user", "content": "we talked about the lattice"}],
     )
     monkeypatch.setattr("hsengine.engine.session_history._store", lambda: "db")
+    monkeypatch.setattr("hsengine.engine.webrtc_kanban.refresh_view", lambda: None)
     data = json.loads(ops.dispatch("hermes", {"prompt": "what did we just say"}))
     assert data["ok"] is True
     assert data["text"] == "done"
     assert data["session_id"] == "agent-rtc-cafe"
+    assert data["provider"] == "xai-oauth"
     assert seen["init"]["session_id"] == "agent-rtc-cafe"
     assert seen["init"]["session_db"] == "db"
     assert seen["init"]["platform"] == "agent-rtc"
+    assert seen["init"]["provider"] == "xai-oauth"
+    assert "kanban" in (seen["init"].get("enabled_toolsets") or [])
     assert seen["history"][0]["content"] == "we talked about the lattice"
     assert seen["ended"] is False
 

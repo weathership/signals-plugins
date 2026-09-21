@@ -20,6 +20,23 @@ def test_overlay_runtime_none_when_not_interactive(monkeypatch):
     assert overlay_runtime() is None
 
 
+def test_primary_runtime_skips_cerebras_overlay(monkeypatch):
+    from hsengine.overlay import overlay_runtime, primary_runtime
+
+    monkeypatch.setattr("hsengine.overlay.session_wants_cerebras", lambda: True)
+    monkeypatch.setattr(
+        "hsengine.engine.interactive._cerebras_key", lambda: "sk-test"
+    )
+    monkeypatch.setattr(
+        "hsengine.engine.interactive._cfg",
+        lambda path, default: default,
+    )
+    assert overlay_runtime() is not None
+    with primary_runtime():
+        assert overlay_runtime() is None
+    assert overlay_runtime()["provider"] == "cerebras"
+
+
 def test_overlay_runtime_pins_cerebras(monkeypatch):
     monkeypatch.setattr("hsengine.overlay.session_wants_cerebras", lambda: True)
     monkeypatch.setattr(

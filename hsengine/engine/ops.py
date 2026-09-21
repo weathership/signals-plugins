@@ -588,49 +588,33 @@ def cognition_glance(*, stream: str = "buffer", limit: int = 6) -> dict[str, Any
 
 
 def hermes(*, prompt: str) -> dict[str, Any]:
-    """Run Hermes proper (full tools + subagents) on Cerebras while AgentRTC is on.
+    """Run the primary Hermes agent (configured Grok / xai-oauth, full tools).
 
-    Binds the live AgentRTC SessionDB session so the voice transcript is the
-    conversation Hermes sees, and memories it writes are the same session's.
+    Spoken Ripley stays on Cerebras. This hop is the CLI surface — kanban,
+    files, terminal, browser, delegate_task — bound to the live AgentRTC
+    SessionDB so the voice transcript is the conversation Hermes sees.
     """
     q = " ".join((prompt or "").split())
     if not q:
         return {"ok": False, "error": "empty prompt"}
     try:
-        from agent.interactive_cerebras import overlay_runtime
-        from hsengine.engine import session_history
-        from run_agent import AIAgent
+        from hsengine.engine.interactive import is_active
+        from hsengine.engine import primary_hermes, session_history
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    ov = overlay_runtime()
-    if not ov:
+    if not is_active():
         return {"ok": False, "error": "interactive AgentRTC is not in force"}
     webrtc_id = session_history.live_webrtc_id()
     sid = session_history.hermes_session_id(webrtc_id) if webrtc_id else None
     history = session_history.transcript_messages(webrtc_id) if webrtc_id else []
     db = session_history._store() if webrtc_id else None
-    agent = AIAgent(
-        base_url=ov["base_url"],
-        api_key=ov["api_key"],
-        provider=ov["provider"],
-        model=ov["model"],
-        api_mode=ov.get("api_mode") or "chat_completions",
-        quiet_mode=True,
-        skip_background_review=True,
-        session_id=sid,
-        session_db=db,
-        platform="agent-rtc",
-    )
-    agent._end_session_on_close = False
     try:
-        result = agent.run_conversation(q, conversation_history=history)
-        text = str((result or {}).get("final_response") or "")
-    finally:
-        try:
-            agent.close()
-        except Exception:
-            log.warning("hermes agent close failed", exc_info=True)
-    return {"ok": True, "text": text, "model": ov["model"], "session_id": sid or ""}
+        return primary_hermes.run(
+            prompt=q, session_id=sid, session_db=db, history=history
+        )
+    except Exception as e:
+        log.warning("primary hermes failed", exc_info=True)
+        return {"ok": False, "error": str(e)[:240]}
 
 
 def glance_spoken(d: dict[str, Any] | None) -> str:
@@ -1066,18 +1050,19 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "hermes",
             "description": (
-                "Hermes proper: the full agent (skills, terminal, files, "
-                "browser, memory, delegate_task / subagents). Shares this "
-                "AgentRTC session — the live transcript and memories are "
-                "already the conversation. Files it creates belong under "
-                "HERMES_HOME (named profile or common Hermes storage), never "
-                "the operator home. wiki/... and $WIKI_PATH/... are the Hermes "
-                "wiki vault. For a wiki write, tell Hermes to write_file (and "
-                "patch index.md / log.md); do not claim the page is on disk "
-                "from a plan. Our session notes are recall/session_search; "
-                "lattice KB is kb_search (Gaius). Use when the voice tools "
-                "are not enough. Subagents also run on Cerebras while this "
-                "session is in force. Speak the result."
+                "Primary Hermes agent (configured Grok / xai-oauth, full "
+                "CLI tools including kanban, terminal, files, browser, "
+                "memory, delegate_task). Spoken turns stay Cerebras; this "
+                "is not a voice swap. Shares this AgentRTC session — the "
+                "live transcript and memories are already the conversation. "
+                "Files it creates belong under HERMES_HOME (named profile "
+                "or common Hermes storage), never the operator home. "
+                "wiki/... and $WIKI_PATH/... are the Hermes wiki vault. "
+                "For a wiki write, tell Hermes to write_file (and patch "
+                "index.md / log.md); do not claim the page is on disk from "
+                "a plan. Our session notes are recall/session_search; "
+                "lattice KB is kb_search (Gaius). Use for kanban and when "
+                "the voice tools are not enough. Speak the result."
             ),
             "parameters": {
                 "type": "object",
@@ -1088,156 +1073,6 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                     }
                 },
                 "required": ["prompt"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_list",
-            "description": (
-                "List Hermes kanban tasks (multi-track work). Use before "
-                "creating cards. status is optional: triage|todo|ready|"
-                "running|blocked|review|done."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {"type": "string"},
-                    "limit": {"type": "number"},
-                },
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_show",
-            "description": "Show one kanban task and its recent comments.",
-            "parameters": {
-                "type": "object",
-                "properties": {"task_id": {"type": "string"}},
-                "required": ["task_id"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_create",
-            "description": (
-                "Create a kanban card (starts in triage). Then viz_show "
-                "kind=kanban so the board is on the video."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "body": {"type": "string"},
-                    "assignee": {"type": "string"},
-                },
-                "required": ["title"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_comment",
-            "description": "Comment on a kanban task.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "body": {"type": "string"},
-                },
-                "required": ["task_id", "body"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_complete",
-            "description": (
-                "Mark a kanban task done. Promotes from triage/todo if needed."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "result": {"type": "string"},
-                },
-                "required": ["task_id"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_block",
-            "description": "Block a kanban task (external wait or human decision).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "reason": {"type": "string"},
-                },
-                "required": ["task_id"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_unblock",
-            "description": "Unblock a kanban task.",
-            "parameters": {
-                "type": "object",
-                "properties": {"task_id": {"type": "string"}},
-                "required": ["task_id"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_link",
-            "description": "Link a child kanban task under a parent.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "parent_id": {"type": "string"},
-                    "child_id": {"type": "string"},
-                },
-                "required": ["parent_id", "child_id"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "kanban_move",
-            "description": (
-                "Move a kanban card to a column: triage|todo|ready|blocked|"
-                "review|done. Not running (dispatcher claims that)."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "status": {"type": "string"},
-                },
-                "required": ["task_id", "status"],
                 "additionalProperties": False,
             },
         },
@@ -1492,102 +1327,6 @@ def _dispatch_hermes(args: dict[str, Any]) -> str:
     return json.dumps(hermes(prompt=str(args.get("prompt") or "")), default=str)
 
 
-def _dispatch_kanban_list(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    limit = args.get("limit")
-    try:
-        n = int(limit) if limit not in (None, "") else 80
-    except (TypeError, ValueError):
-        n = 80
-    return json.dumps(
-        webrtc_kanban.list_tasks(status=str(args.get("status") or ""), limit=n),
-        default=str,
-    )
-
-
-def _dispatch_kanban_show(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(webrtc_kanban.show_task(str(args.get("task_id") or "")), default=str)
-
-
-def _dispatch_kanban_create(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.create_task(
-            title=str(args.get("title") or ""),
-            body=str(args.get("body") or ""),
-            assignee=str(args.get("assignee") or ""),
-        ),
-        default=str,
-    )
-
-
-def _dispatch_kanban_comment(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.comment_task(
-            str(args.get("task_id") or ""), str(args.get("body") or "")
-        ),
-        default=str,
-    )
-
-
-def _dispatch_kanban_complete(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.complete_task(
-            str(args.get("task_id") or ""), result=str(args.get("result") or "")
-        ),
-        default=str,
-    )
-
-
-def _dispatch_kanban_block(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.block_task(
-            str(args.get("task_id") or ""), reason=str(args.get("reason") or "")
-        ),
-        default=str,
-    )
-
-
-def _dispatch_kanban_unblock(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.unblock_task(str(args.get("task_id") or "")), default=str
-    )
-
-
-def _dispatch_kanban_link(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.link_tasks(
-            str(args.get("parent_id") or ""), str(args.get("child_id") or "")
-        ),
-        default=str,
-    )
-
-
-def _dispatch_kanban_move(args: dict[str, Any]) -> str:
-    from hsengine.engine import webrtc_kanban
-
-    return json.dumps(
-        webrtc_kanban.move_task(
-            str(args.get("task_id") or ""), str(args.get("status") or "")
-        ),
-        default=str,
-    )
-
-
 def _dispatch_viz_show(args: dict[str, Any]) -> str:
     from hsengine.engine import webrtc_program
 
@@ -1712,15 +1451,6 @@ _DISPATCH = {
     "fmp": _dispatch_fmp,
     "grok_consult": _dispatch_grok_consult,
     "hermes": _dispatch_hermes,
-    "kanban_list": _dispatch_kanban_list,
-    "kanban_show": _dispatch_kanban_show,
-    "kanban_create": _dispatch_kanban_create,
-    "kanban_comment": _dispatch_kanban_comment,
-    "kanban_complete": _dispatch_kanban_complete,
-    "kanban_block": _dispatch_kanban_block,
-    "kanban_unblock": _dispatch_kanban_unblock,
-    "kanban_link": _dispatch_kanban_link,
-    "kanban_move": _dispatch_kanban_move,
     "viz_show": _dispatch_viz_show,
     "viz_select": _dispatch_viz_select,
     "viz_clear": _dispatch_viz_clear,

@@ -1,8 +1,6 @@
 """AgentRTC kanban board: same SQLite as the dashboard, loopback HTML view."""
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from hsengine.engine import ops
@@ -82,30 +80,12 @@ def test_create_and_show_require_ids():
     assert kb.move_task("t_x", "running")["ok"] is False
 
 
-def test_dispatch_kanban_tools_round_trip():
-    created = json.loads(ops.dispatch("kanban_create", {"title": "Track Theta"}))
-    assert created["ok"] is True
-    listed = json.loads(ops.dispatch("kanban_list", {}))
-    assert listed["count"] >= 1
-    tid = created["id"]
-    shown = json.loads(ops.dispatch("kanban_show", {"task_id": tid}))
-    assert shown["task"]["title"] == "Track Theta"
-    moved = json.loads(ops.dispatch("kanban_move", {"task_id": tid, "status": "todo"}))
-    assert moved["ok"] is True
+def test_voice_loop_does_not_duplicate_kanban_tools():
     names = [t["function"]["name"] for t in ops.CEREBRAS_TOOLS]
-    for name in (
-        "kanban_list",
-        "kanban_show",
-        "kanban_create",
-        "kanban_comment",
-        "kanban_complete",
-        "kanban_block",
-        "kanban_unblock",
-        "kanban_link",
-        "kanban_move",
-    ):
-        assert name in names
-        assert name in ops._DISPATCH
+    assert "kanban_create" not in names
+    assert "kanban_list" not in names
+    assert "hermes" in names
+    assert "kanban_create" not in ops._DISPATCH
 
 
 def test_refresh_view_reloads_only_when_kanban_is_live(monkeypatch):
