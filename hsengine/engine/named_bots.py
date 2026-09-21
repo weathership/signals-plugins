@@ -198,6 +198,10 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             and "primary Grok" not in current
         ):
             replace = True
+        if not replace and managed and "skill_manage" in template and "skill_manage" not in current:
+            replace = True
+        if not replace and managed and "cronjob_manage" in template and "cronjob_manage" not in current:
+            replace = True
     if replace:
         soul.write_text(template + "\n", encoding="utf-8")
     _merge_profile_yaml(
@@ -390,8 +394,9 @@ def bishop_prompt(
         lines.append(
             "Call conversation. Deepen the last live thread. Do not web-search. "
             "If a figure would help (ontology chord, Aegir aperture, a plot), "
-            "call viz_show. For multi-track work, call hermes (kanban tools) "
-            "then viz_show kind=kanban. If the live thread is circling the same complex "
+            "call viz_show. For multi-track work, skills, or cron automations, "
+            "call hermes then viz_show kind=kanban if a board should be on "
+            "the video. If the live thread is circling the same complex "
             "idea, grok_consult once then STEER/MONOLOGUE from that."
         )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")

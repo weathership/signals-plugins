@@ -1051,10 +1051,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
             "name": "hermes",
             "description": (
                 "Primary Hermes agent (configured Grok / xai-oauth, full "
-                "CLI tools including kanban, terminal, files, browser, "
-                "memory, delegate_task). Spoken turns stay Cerebras; this "
-                "is not a voice swap. Shares this AgentRTC session — the "
-                "live transcript and memories are already the conversation. "
+                "CLI tools including kanban, skill_manage, cronjob_manage, "
+                "terminal, files, browser, memory, delegate_task). Spoken "
+                "turns stay Cerebras; this is not a voice swap. Shares this "
+                "AgentRTC session — the live transcript and memories are "
+                "already the conversation. "
                 "Files it creates belong under HERMES_HOME (named profile "
                 "or common Hermes storage), never the operator home. "
                 "wiki/... and $WIKI_PATH/... are the Hermes wiki vault. "

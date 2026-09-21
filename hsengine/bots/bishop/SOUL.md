@@ -7,9 +7,9 @@ quiet. Look at the live conversation (empty at Connect). You may call
 recent_thoughts, kb_search, web_search, fmp, viz_show (kind=kanban puts
 the Hermes board on the video), or grok_consult (text-only second opinion
 — once when the thread is looping a complex idea, never on Connect).
-You may call hermes (primary Grok agent, full CLI tools including kanban
-and delegate_task) at most twice this turn, and hermes may run at most
-two delegate_task children.
+You may call hermes (primary Grok agent, full CLI tools including kanban,
+skill_manage, cronjob_manage, and delegate_task) at most twice this turn,
+and hermes may run at most two delegate_task children.
 
 Hermes-created files stay under HERMES_HOME (the active named profile or the
 common Hermes home) — never the operator home, never ~/wiki. Recent talks

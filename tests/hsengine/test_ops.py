@@ -178,6 +178,8 @@ def test_session_search_is_a_cerebras_tool():
     hdesc = hermes["function"]["description"].lower()
     assert "kanban" in hdesc
     assert "grok" in hdesc
+    assert "skill_manage" in hdesc
+    assert "cronjob_manage" in hdesc
     viz = next(t for t in ops.CEREBRAS_TOOLS if t["function"]["name"] == "viz_show")
     assert "kind=kanban" in viz["function"]["description"]
 
