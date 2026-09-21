@@ -225,13 +225,14 @@ def complete_cerebras(
     elif not speak:
         who = "bishop"
     try:
-        from hsengine.engine.webrtc_activity import begin, end, pulse
+        from hsengine.engine.webrtc_activity import begin, end, heartbeat, pulse
     except Exception:
-        begin = end = pulse = lambda *_a, **_k: None  # type: ignore[misc,assignment]
+        begin = end = heartbeat = pulse = lambda *_a, **_k: None  # type: ignore[misc,assignment]
     begin(who, "thinking")
     try:
         with httpx.Client(timeout=120.0) as client:
             for _round in range(_TOOL_ROUNDS if tools else 1):
+                heartbeat(who)
                 body: dict = {
                     "model": model,
                     "messages": messages,

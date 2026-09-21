@@ -9,6 +9,7 @@ from hsengine.engine.webrtc_activity import (
     ActivityBoard,
     bind,
     format_line,
+    heartbeat,
     paint_activity,
     pulse,
     unbind,
@@ -63,6 +64,31 @@ def test_stale_in_flight_reads_as_still():
     line = board.get()
     assert "still" in line
     assert "Ripley" in line
+
+
+def test_in_flight_chip_survives_two_minutes():
+    board = ActivityBoard()
+    board.begin("ripley", "fmp")
+    board._slots["ripley"].t0 = time.monotonic() - 120
+    board._slots["ripley"].last = time.monotonic() - 8
+    line = board.get()
+    assert "Ripley" in line
+    assert "fmp" in line
+    assert "still" in line
+
+
+def test_heartbeat_keeps_verb_and_clock():
+    board = ActivityBoard()
+    bind(board)
+    try:
+        pulse("fmp")
+        board._slots["ripley"].t0 = time.monotonic() - 20
+        heartbeat("ripley")
+        line = board.get()
+        assert "fmp" in line
+        assert "still" not in line
+    finally:
+        unbind(board)
 
 
 def test_end_clears_after_a_short_hold():

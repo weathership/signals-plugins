@@ -110,6 +110,17 @@ class ActivityBoard:
                 done=False,
             )
 
+    def heartbeat(self, who: str) -> None:
+        """Keep an in-flight chip alive without resetting its verb or clock."""
+        now = time.monotonic()
+        key = (who or "ripley").strip().lower()
+        with self._lock:
+            slot = self._slots.get(key)
+            if slot is not None and not slot.done:
+                slot.last = now
+                return
+        self.begin(who, "thinking")
+
     def end(self, who: str) -> None:
         key = (who or "").strip().lower()
         with self._lock:
@@ -128,7 +139,9 @@ class ActivityBoard:
                 if slot.done and now - slot.last > _END_HOLD_S:
                     dead.append(key)
                     continue
-                if now - slot.t0 > _MAX_AGE_S:
+                # In-flight work (FMP, Cerebras HTTP) must stay on the video.
+                # Only finished chips age out.
+                if slot.done and now - slot.t0 > _MAX_AGE_S:
                     dead.append(key)
                     continue
                 elapsed = int(now - slot.t0)
@@ -184,6 +197,14 @@ def begin(who: str, verb: str = "") -> None:
         log.warning("activity chip dropped; video overlay not bound (%s %s)", who, verb)
         return
     board.begin(who, verb)
+
+
+def heartbeat(who: str) -> None:
+    with _mu:
+        board = _board
+    if board is None:
+        return
+    board.heartbeat(who)
 
 
 def end(who: str) -> None:
