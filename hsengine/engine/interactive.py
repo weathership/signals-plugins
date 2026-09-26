@@ -219,6 +219,7 @@ def complete_cerebras(
     finish = "stop"
     reasoning = ""
     data: dict = {}
+    used_tools = False
     who = "ripley"
     if tool_defs is not None:
         who = "vasquez"
@@ -257,6 +258,7 @@ def complete_cerebras(
                 reasoning = (msg.get("reasoning") or reasoning or "").strip()
                 calls = _tool_calls_from(msg) if tools else []
                 if calls:
+                    used_tools = True
                     pulse(who)
                     for c in calls:
                         name = ""
@@ -269,6 +271,36 @@ def complete_cerebras(
                     continue
                 text = (msg.get("content") or "").strip()
                 break
+            # Four tool rounds and no sentence is silence, not an answer.
+            if speak and used_tools and not text:
+                heartbeat(who)
+                body = {
+                    "model": model,
+                    "messages": messages
+                    + [
+                        {
+                            "role": "user",
+                            "content": (
+                                "Say what those lookups found, in one or two "
+                                "spoken sentences. No more tools."
+                            ),
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "reasoning_effort": effort,
+                }
+                r = client.post(f"{base}/chat/completions", headers=headers, json=body)
+                r.raise_for_status()
+                data = r.json()
+                choice = (data.get("choices") or [{}])[0]
+                msg = choice.get("message") or {}
+                usage = data.get("usage") or {}
+                prompt_tokens += int(usage.get("prompt_tokens") or 0)
+                completion_tokens += int(usage.get("completion_tokens") or 0)
+                finish = choice.get("finish_reason") or "stop"
+                text = (msg.get("content") or "").strip()
+                log.info("cerebras spoke after tools chars=%s", len(text))
     except Exception:
         end(who)
         raise

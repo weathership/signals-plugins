@@ -213,6 +213,53 @@ def test_complete_cerebras_checkin_runs_sitrep_then_speaks(monkeypatch):
     assert any(m.get("role") == "tool" for m in follow)
 
 
+def test_tool_rounds_exhausted_still_speaks(monkeypatch):
+    """Four kb_search rounds must not end the turn with an empty mouth."""
+    monkeypatch.setenv("CEREBRAS_API_KEY", "test-key")
+    tool = {
+        "model": "qwen-3.8-27b",
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {
+                                "name": "kb_search",
+                                "arguments": '{"query":"card"}',
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+        "usage": {},
+    }
+    said = {
+        "model": "qwen-3.8-27b",
+        "choices": [
+            {
+                "message": {"content": "The card is Charter, thirty percent.", "reasoning": ""},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {},
+    }
+    client = _client_with_payloads([tool, tool, tool, tool, said])
+    with patch("hsengine.engine.interactive.httpx.Client", return_value=client):
+        with patch("hsengine.engine.ops.dispatch", return_value='{"hits":[]}'):
+            with patch("hsengine.engine.interactive._speak_cerebras"):
+                result = interactive.complete_cerebras(prompt="tell me about the card", tools=True)
+    assert result.text == "The card is Charter, thirty percent."
+    assert client.post.call_count == 5
+    last = client.post.call_args_list[-1].kwargs["json"]
+    assert "tools" not in last
+    assert "No more tools" in last["messages"][-1]["content"]
+
+
 def test_require_declared_workload_denies_missing_claims():
     with pytest.raises(RuntimeError, match="did not echo the agent-rtc workload claims"):
         interactive._require_declared_workload({"state": "running", "claims": []})
