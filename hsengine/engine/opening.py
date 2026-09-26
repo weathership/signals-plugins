@@ -292,6 +292,62 @@ def _instruction(catalog: opening_pb2.Catalog, gid: str, facts: frozenset[str]) 
     return ranked[0][1].instruction
 
 
+_WEATHER_KEYS = ("weather", "weather_spoken", "conditions")
+
+
+def greeting_facts(pack: dict[str, str] | None, listener: Listener) -> str:
+    """Facts already in hand for a novel Connect greeting. No live lookup."""
+    pack = pack or {}
+    lines = [
+        (
+            f"Clock: {listener.weekday} {listener.tod} "
+            f"{listener.hour:02d}:00 timezone={listener.timezone or 'unknown'}."
+        )
+    ]
+    for key in (
+        "workspace_note",
+        "agenda_title",
+        "agenda_spoken",
+        "thoughts_spoken",
+        "persistent_failures",
+        "session_prompt",
+    ):
+        val = " ".join((pack.get(key) or "").split())
+        if val:
+            lines.append(f"{key}: {val[:500]}")
+    weather = ""
+    for key in _WEATHER_KEYS:
+        weather = " ".join((pack.get(key) or "").split())
+        if weather:
+            lines.append(f"Weather already on hand: {weather[:300]}")
+            break
+    if not weather:
+        lines.append("Weather: not on hand. Do not invent a sky. Do not search.")
+    return "\n".join(lines)
+
+
+def greeting_prompts(facts: str) -> tuple[str, str]:
+    """Ask for one fresh spoken greeting. The line is the speech, not a template."""
+    from hsengine.engine.opening_tropes import tropes_execute_rail
+
+    system = (
+        "You are Ripley on a live voice call. Write the first thing they hear. "
+        "One or two sentences, then stop. No markdown, no lists, no tool calls. "
+        "A line that could be said again tomorrow unchanged is a failure — "
+        "use a concrete fact you were given so it is only true this once. "
+        "Do not open with a bare time-of-day greeting. "
+        "If the facts name something in the workspace, one clause on what you "
+        "are about to look into. Do not brief. Do not ask what they want to look at."
+    )
+    user = (
+        (facts or "").strip()
+        + "\n\n"
+        + tropes_execute_rail()
+        + " Speak now, from these facts only."
+    )
+    return system, user
+
+
 def bishop_handoff(
     plan_seq: list[str],
     *,

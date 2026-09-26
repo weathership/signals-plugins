@@ -329,6 +329,28 @@ class WebRtcHub:
                     "→".join(plan.sequence),
                     plan.listener.timezone,
                 )
+                from hsengine.engine.opening import greeting_facts
+                from hsengine.engine.named_bots import speak_connect_greeting
+
+                greeted = ""
+                try:
+                    greeted = await asyncio.to_thread(
+                        speak_connect_greeting,
+                        session_id=session_id,
+                        facts=greeting_facts(pack, plan.listener),
+                    )
+                except Exception:
+                    log.exception("connect greeting failed")
+                if greeted:
+                    turns = self._turns.get(session_id)
+                    if turns is not None and hasattr(turns, "last_agent_at"):
+                        turns.last_agent_at = time.monotonic()
+                    plan.handoff = (
+                        (plan.handoff + "\n") if plan.handoff else ""
+                    ) + (
+                        "A greeting was already spoken aloud from the facts. "
+                        "Do not greet again. Invent only the next beat."
+                    )
                 await asyncio.to_thread(ensure_bots)
                 outcome = await asyncio.to_thread(
                     bishop_run,
@@ -342,11 +364,21 @@ class WebRtcHub:
                     "yes" if outcome.steer else "no",
                     "yes" if outcome.monologue else "no",
                 )
-                spoken = await ripley_speak_outcome(
-                    outcome,
-                    session_id=session_id,
-                    speech=self._speech.get(session_id),
-                )
+                parts = [greeted] if greeted else []
+                if outcome.monologue:
+                    later = await ripley_speak_outcome(
+                        outcome,
+                        session_id=session_id,
+                        speech=self._speech.get(session_id),
+                    )
+                    if later:
+                        parts.append(later)
+                elif not greeted:
+                    log.warning(
+                        "webrtc opening bishop empty and greeting empty session=%s",
+                        session_id,
+                    )
+                spoken = " ".join(parts).strip()
                 from hsengine.engine import session_history
 
                 if spoken:

@@ -485,6 +485,25 @@ def bishop_run(
     return outcome
 
 
+def speak_connect_greeting(*, session_id: str, facts: str) -> str:
+    """Fast, tools-off greeting from facts already on hand. Not a canned line."""
+    from hsengine.engine import interactive
+    from hsengine.engine.opening import greeting_prompts
+
+    system, user = greeting_prompts(facts)
+    result = interactive.complete_cerebras(
+        prompt=user,
+        system_prompt=system,
+        max_tokens=120,
+        temperature=0.85,
+        reasoning_effort="none",
+        tools=False,
+        speak=True,
+        session_id=session_id,
+    )
+    return (getattr(result, "text", "") or "").strip()
+
+
 def ripley_opening_prompts(outcome: BishopOutcome) -> tuple[str, str]:
     """Execute pass: Ripley speaks Bishop's invented opening. No canned stand-in."""
     from hsengine.engine.webrtc_silence import apply_steer_system

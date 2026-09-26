@@ -253,6 +253,38 @@ def test_bishop_open_prompt_includes_handoff():
     assert "formula" in prompt.lower() or "two-ideas" in prompt
 
 
+def test_greeting_facts_use_clock_and_skip_missing_weather():
+    from hsengine.engine.opening import Listener, greeting_facts, greeting_prompts
+
+    listener = Listener(timezone="America/Denver", hour=9, tod="morning", weekday="Saturday")
+    facts = greeting_facts(
+        {"workspace_note": "fresh", "agenda_title": "Charter filings"},
+        listener,
+    )
+    assert "Saturday morning" in facts
+    assert "America/Denver" in facts
+    assert "Charter filings" in facts
+    assert "Weather: not on hand" in facts
+    assert "Do not search" in facts
+    system, user = greeting_prompts(facts)
+    assert "unchanged is a failure" in system
+    assert "bare time-of-day" in system
+    assert "Weather: not on hand" in user
+    assert "sitting with" in user
+
+
+def test_greeting_facts_keep_weather_already_on_hand():
+    from hsengine.engine.opening import Listener, greeting_facts
+
+    facts = greeting_facts(
+        {"weather": "high cloud, 4C, no wind"},
+        Listener(timezone="America/Denver", hour=9, tod="morning", weekday="Saturday"),
+    )
+    assert "already on hand" in facts
+    assert "4C" in facts
+    assert "not on hand" not in facts
+
+
 def test_bishop_next_prompt_is_not_a_scheduler():
     from hsengine.engine.named_bots import bishop_prompt
 
