@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260916a";
+  const JS_VERSION = "listen-js-20260926a";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -121,16 +121,23 @@
       setConn("connecting");
       setDetail(JS_VERSION);
       try {
-        // Mic first, on the Connect click, with unconstrained audio. Chrome
-        // will not prompt if the origin is already Allowed; extra constraints
-        // (channelCount) fail OverconstrainedError with no prompt.
+        // Mic first, on the Connect click. Echo cancellation stays on so her
+        // speaker doesn't walk back in as the user. channelCount constraints
+        // fail OverconstrainedError with no prompt, so those stay off.
         let mic = null;
         if (sendMic) {
           try {
             if (!window.isSecureContext) {
               throw new Error("page is not HTTPS — Chrome will not open the mic");
             }
-            mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            try {
+              mic = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                video: false,
+              });
+            } catch (_strict) {
+              mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            }
           } catch (micErr) {
             const name = (micErr && micErr.name) || "Error";
             const msg = (micErr && micErr.message) || String(micErr);
@@ -184,17 +191,29 @@
           el.defaultMuted = false;
           el.volume = 1;
           const p = el.play();
-          if (p && p.catch) p.catch(function () {});
-          if (track.kind === "audio" && audioCtxRef.current) {
+          // One speaker path. The element and AudioContext.destination on the
+          // same track play her twice; Chrome's echo canceller then pumps
+          // the level (speech, silence, speech).
+          function playViaContext() {
+            if (track.kind !== "audio" || !audioCtxRef.current) return;
             try {
               const ctx = audioCtxRef.current;
               if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+              el.muted = true;
               const src = ctx.createMediaStreamSource(new MediaStream([track]));
               src.connect(ctx.destination);
-              setDetail(JS_VERSION + " · audio track + AudioContext");
+              setDetail(JS_VERSION + " · audio via context");
             } catch (e) {
+              el.muted = false;
               setDetail(JS_VERSION + " · audio track (ctx " + e + ")");
             }
+          }
+          if (p && p.then) {
+            p.then(function () {
+              setDetail(JS_VERSION + " · audio element");
+            }).catch(playViaContext);
+          } else if (!p) {
+            playViaContext();
           }
         }
         pc.ontrack = function (ev) {

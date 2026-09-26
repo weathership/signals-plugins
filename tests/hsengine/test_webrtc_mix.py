@@ -70,6 +70,19 @@ def test_board_records_last_audible_on_pull():
     assert board.last_audible_at() > 0.0
 
 
+def test_board_holds_a_short_tail_instead_of_padding_silence():
+    """Zero-filling a partial frame is the speak-then-drop sine wave."""
+    board = SpeechBoard()
+    board.push(np.ones(100, dtype=np.float32) * 0.4, sample_rate=48000)
+    assert board.pull(960, 48000) is None
+    assert board.speaking() is True
+    board.push(np.ones(860, dtype=np.float32) * 0.4, sample_rate=48000)
+    got = board.pull(960, 48000)
+    assert got is not None
+    assert got.size == 960
+    assert float(np.min(got)) > 0.2
+
+
 def test_board_pull_none_when_empty():
     board = SpeechBoard()
     assert board.speaking() is False
