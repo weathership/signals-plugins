@@ -106,6 +106,18 @@ def test_ripley_spoken_ceiling_is_not_a_280_token_clip():
     assert _ripley_spoken_max_tokens() >= 4096
 
 
+def test_agent_line_stays_on_the_picture_after_room_caption_expires(monkeypatch):
+    board = CaptionBoard()
+    board.set_agent("The 10-K names the fiber network, not a numbered plan.")
+    board.set("tell me about the card")
+    assert "10-K" in board.get()
+    assert "card" in board.get()
+    board._at = time.monotonic() - 10
+    shown = board.get()
+    assert "10-K" in shown
+    assert "card" not in shown
+
+
 def test_caption_board_holds_then_clears(monkeypatch):
     board = CaptionBoard()
     board.set("hello there")

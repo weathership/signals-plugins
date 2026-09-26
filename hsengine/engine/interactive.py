@@ -464,6 +464,13 @@ _TTS_GATE = threading.Lock()
 
 
 def _speak_cerebras(text: str, epoch: int | None = None) -> None:
+    # On the picture even when her audio is silenced locally.
+    try:
+        from hsengine.engine.webrtc_session import HUB
+
+        HUB.show_agent_line(text)
+    except Exception:
+        log.debug("agent caption failed", exc_info=True)
     # The heard-you line may still be in the speaker. Wait for it.
     # Dropping the answer is the silence after a lookup.
     if not _TTS_GATE.acquire(timeout=12):

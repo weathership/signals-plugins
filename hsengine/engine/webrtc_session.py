@@ -129,6 +129,7 @@ class WebRtcHub:
         self._tracks: dict[str, list[object]] = {}
         self._tasks: dict[str, list[asyncio.Task]] = {}
         self._speech: dict[str, object] = {}
+        self._captions: dict[str, object] = {}
         self._turns: dict[str, object] = {}
         self._agenda: dict[str, str] = {}
         self._started: dict[str, float] = {}
@@ -203,6 +204,7 @@ class WebRtcHub:
         video, _clip_audio, _gate = looping_tracks(src)
         speech = SpeechBoard()
         self._speech[session_id] = speech
+        self._captions[session_id] = board
         tracks: list[object] = []
         if video is not None:
             painted = caption_track(video, board, activity) if captions else video
@@ -403,6 +405,16 @@ class WebRtcHub:
             "source": str(src),
         }
 
+    def show_agent_line(self, text: str) -> None:
+        """Burn what she is saying into every live video track. Stays until the next line."""
+        cleaned = " ".join((text or "").split())
+        if not cleaned:
+            return
+        for board in self._captions.values():
+            set_agent = getattr(board, "set_agent", None)
+            if callable(set_agent):
+                set_agent(cleaned)
+
     def speech(self, session_id: str) -> object | None:
         """The session's agent-speech board (None after hangup)."""
         return self._speech.get(session_id)
@@ -511,6 +523,7 @@ class WebRtcHub:
 
         await webrtc_viz.close_session(session_id)
         self._speech.pop(session_id, None)
+        self._captions.pop(session_id, None)
         self._turns.pop(session_id, None)
         from hsengine.engine.webrtc_activity import unbind as unbind_activity
 

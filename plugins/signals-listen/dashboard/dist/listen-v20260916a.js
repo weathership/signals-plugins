@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926a";
+  const JS_VERSION = "listen-js-20260926c";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -84,6 +84,7 @@
     const sessionRef = useRef(null);
     const micRef = useRef(null);
     const audioCtxRef = useRef(null);
+    const audioSinkRef = useRef(null);
     const [status, setStatus] = useState(null);
     const [statusErr, setStatusErr] = useState("");
     const [conn, setConn] = useState("idle");
@@ -96,6 +97,8 @@
     const [stopping, setStopping] = useState(false);
     const [lines, setLines] = useState([]);
     const [sessionId, setSessionId] = useState("");
+    const [roomMuted, setRoomMuted] = useState(false);
+    const [textOnly, setTextOnly] = useState(false);
 
     useEffect(function () {
       let cancelled = false;
@@ -163,8 +166,8 @@
           const tracks = mic.getAudioTracks();
           if (!tracks.length) throw new Error("no audio tracks");
           tracks.forEach(function (t) {
-            t.enabled = true;
-            if (t.muted) {
+            t.enabled = !roomMuted;
+            if (!roomMuted && t.muted) {
               try { t.enabled = true; } catch (_e) {}
             }
             pc.addTrack(t, mic);
@@ -187,21 +190,26 @@
           if (!ms.getTracks().some(function (t) { return t.id === track.id; })) {
             ms.addTrack(track);
           }
-          el.muted = false;
           el.defaultMuted = false;
           el.volume = 1;
+          el.muted = !!textOnly;
           const p = el.play();
           // One speaker path. The element and AudioContext.destination on the
           // same track play her twice; Chrome's echo canceller then pumps
           // the level (speech, silence, speech).
           function playViaContext() {
+            if (textOnly) return;
             if (track.kind !== "audio" || !audioCtxRef.current) return;
             try {
               const ctx = audioCtxRef.current;
               if (ctx.state === "suspended" && ctx.resume) ctx.resume();
               el.muted = true;
+              if (audioSinkRef.current) {
+                try { audioSinkRef.current.disconnect(); } catch (_d) {}
+              }
               const src = ctx.createMediaStreamSource(new MediaStream([track]));
               src.connect(ctx.destination);
+              audioSinkRef.current = src;
               setDetail(JS_VERSION + " · audio via context");
             } catch (e) {
               el.muted = false;
@@ -327,6 +335,32 @@
       }
     }
 
+    function toggleRoomMute() {
+      const next = !roomMuted;
+      setRoomMuted(next);
+      const mic = micRef.current;
+      if (mic && mic.getAudioTracks) {
+        mic.getAudioTracks().forEach(function (t) { t.enabled = !next; });
+      }
+      setDetail(next
+        ? JS_VERSION + " · room muted — she will not hear the room"
+        : JS_VERSION + " · mic live");
+    }
+
+    function toggleTextOnly() {
+      const next = !textOnly;
+      setTextOnly(next);
+      const el = videoRef.current;
+      if (el) el.muted = next;
+      if (next && audioSinkRef.current) {
+        try { audioSinkRef.current.disconnect(); } catch (_d) {}
+        audioSinkRef.current = null;
+      }
+      setDetail(next
+        ? JS_VERSION + " · her audio is off — her words stay on the video"
+        : JS_VERSION + " · hearing her");
+    }
+
     function onDraftKey(e) {
       if (!e) return;
       if (e.key === "Enter" && !e.shiftKey) {
@@ -377,6 +411,21 @@
             h(Button, { onClick: disconnect, disabled: !live && conn === "idle" }, "Disconnect"),
           ),
           h("p", { className: "signals-listen-status" }, detail),
+          onCall ? h("div", { className: "signals-listen-row" },
+            h(Button, {
+              onClick: toggleRoomMute,
+              variant: roomMuted ? "destructive" : "secondary",
+              "aria-pressed": roomMuted ? "true" : "false",
+            }, roomMuted ? "Room muted" : "Mute room"),
+            h(Button, {
+              onClick: toggleTextOnly,
+              variant: textOnly ? "destructive" : "secondary",
+              "aria-pressed": textOnly ? "true" : "false",
+            }, textOnly ? "Text only" : "Silence her"),
+          ) : null,
+          onCall ? h("p", { className: "signals-listen-status" },
+            "Mute room: talk locally without her hearing it. Silence her: stop her audio; her words stay on the picture."
+          ) : null,
           h("video", {
             ref: videoRef,
             autoPlay: true,

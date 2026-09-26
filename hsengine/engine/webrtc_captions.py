@@ -14,10 +14,13 @@ _HOLD_S = 4.0
 
 
 class CaptionBoard:
+    """Room STT is a short live line. What Ripley says stays until she speaks again."""
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._text = ""
         self._at = 0.0
+        self._agent = ""
 
     def set(self, text: str) -> None:
         cleaned = " ".join((text or "").split())
@@ -25,13 +28,19 @@ class CaptionBoard:
             self._text = cleaned
             self._at = time.monotonic()
 
+    def set_agent(self, text: str) -> None:
+        cleaned = " ".join((text or "").split())
+        with self._lock:
+            self._agent = cleaned
+
     def get(self) -> str:
         with self._lock:
-            if not self._text:
-                return ""
-            if time.monotonic() - self._at > _HOLD_S:
-                return ""
-            return self._text
+            room = ""
+            if self._text and time.monotonic() - self._at <= _HOLD_S:
+                room = self._text
+            if self._agent and room:
+                return self._agent + "\n" + room
+            return self._agent or room
 
 
 def _font(size: int) -> Any:
@@ -61,7 +70,10 @@ def paint_caption(image: Any, text: str) -> Any:
     font = _font(size)
     draw = ImageDraw.Draw(image)
     cols = max(16, width // max(10, size // 2))
-    lines = textwrap.wrap(cleaned, width=cols)[-2:]
+    lines: list[str] = []
+    for part in cleaned.split("\n"):
+        lines.extend(textwrap.wrap(part, width=cols) or [])
+    lines = lines[-3:]
     pad = max(8, size // 4)
     line_h = size + pad
     box_h = line_h * len(lines) + pad
