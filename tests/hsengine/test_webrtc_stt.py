@@ -144,6 +144,19 @@ def test_caption_board_holds_then_clears(monkeypatch):
     assert board.get() == ""
 
 
+def test_caption_plate_is_translucent():
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    image = Image.new("RGB", (640, 360), (180, 180, 180))
+    paint_caption(image, "Room: a short line")
+    # Right edge of the lower band, clear of the glyphs.
+    pixel = image.getpixel((630, 340))
+    assert pixel != (0, 0, 0)
+    assert pixel != (180, 180, 180)
+    assert 40 < pixel[0] < 170
+
+
 def test_paint_caption_changes_pixels():
     pytest.importorskip("PIL")
     from PIL import Image

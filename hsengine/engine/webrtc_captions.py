@@ -15,7 +15,10 @@ _HOLD_S = 4.0
 # until the utterance's real sample count is known.
 _SAMPLES_PER_CHAR_24K = 1800
 ROOM_LABEL = "Room"
-_CAPTION_LINES = 6
+_CAPTION_LINES = 14
+# Lower portion of the frame, kept for the dialog. Leaves the activity chips.
+_BAND_FRAC = 0.42
+_PLATE_RGBA = (8, 10, 14, 108)
 
 
 def revealed_words(
@@ -132,33 +135,45 @@ def _font(size: int) -> Any:
 
 
 def paint_caption(image: Any, text: str) -> Any:
-    """Draw wrapped caption onto a PIL RGB image; returns the same image."""
-    from PIL import ImageDraw
+    """Draw the dialog on a translucent plate. Returns the same RGB image."""
+    from PIL import Image, ImageDraw
 
     cleaned = (text or "").strip()
     if not cleaned:
         return image
     width, height = image.size
-    size = max(18, width // 42)
+    size = max(18, width // 36)
     font = _font(size)
-    draw = ImageDraw.Draw(image)
-    cols = max(16, width // max(10, size // 2))
+    cols = max(18, width // max(9, size // 2))
     lines: list[str] = []
     for part in cleaned.split("\n"):
         lines.extend(textwrap.wrap(part, width=cols) or [])
-    lines = lines[-_CAPTION_LINES:]
-    pad = max(8, size // 4)
+    pad = max(10, size // 3)
     line_h = size + pad
-    box_h = line_h * len(lines) + pad
-    top = height - box_h - pad
-    draw.rectangle((0, top, width, height), fill=(0, 0, 0))
-    y = top + pad // 2
+    band_h = max(int(height * _BAND_FRAC), line_h + pad * 2)
+    band_h = min(band_h, max(line_h + pad, height - 56))
+    fit = max(1, (band_h - pad * 2) // line_h)
+    lines = lines[-min(_CAPTION_LINES, fit) :]
+    top = height - band_h
+    plate = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    ImageDraw.Draw(plate).rectangle((0, top, width, height), fill=_PLATE_RGBA)
+    composed = Image.alpha_composite(image.convert("RGBA"), plate)
+    draw = ImageDraw.Draw(composed)
+    y = top + pad
     for line in lines:
         try:
-            draw.text((pad, y), line, font=font, fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
+            draw.text(
+                (pad, y),
+                line,
+                font=font,
+                fill=(255, 255, 255, 255),
+                stroke_width=1,
+                stroke_fill=(0, 0, 0, 180),
+            )
         except TypeError:
-            draw.text((pad, y), line, font=font, fill=(255, 255, 255))
+            draw.text((pad, y), line, font=font, fill=(255, 255, 255, 255))
         y += line_h
+    image.paste(composed.convert("RGB"))
     return image
 
 
