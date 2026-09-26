@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926d";
+  const JS_VERSION = "listen-js-20260926e";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -414,18 +414,18 @@
               disabled: !onCall,
               variant: roomMuted ? "destructive" : undefined,
               "aria-pressed": roomMuted ? "true" : "false",
-            }, roomMuted ? "Room muted" : "Mute room"),
+            }, "Mute"),
             h(Button, {
               onClick: toggleTextOnly,
               disabled: !onCall,
               variant: textOnly ? "destructive" : undefined,
               "aria-pressed": textOnly ? "true" : "false",
-            }, textOnly ? "Text only" : "Silence her"),
+            }, "Silence"),
           ),
           h("p", { className: "signals-listen-status" },
             onCall
-              ? "Mute room keeps local talk off her mic. Silence her cuts her audio; her words stay on the picture."
-              : "Mute room and Silence her arm after Connect."
+              ? "Mute keeps local talk off her mic. Silence cuts her audio; her words stay on the picture."
+              : "Mute and Silence arm after Connect."
           ),
           h("p", { className: "signals-listen-status" }, detail),
           h("video", {
