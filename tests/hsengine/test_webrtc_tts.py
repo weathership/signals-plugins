@@ -7,6 +7,19 @@ from hsengine.engine.webrtc_mix import SpeechBoard
 from hsengine.engine.webrtc_tts import _tts_phrases, speak_into, tts_url, tts_voice
 
 
+def test_silence_cap_keeps_speech_and_shortens_holes():
+    from hsengine.engine.webrtc_tts import SilenceCap
+
+    rate = 24000
+    speech = np.ones(rate // 10, dtype=np.float32) * 0.3
+    hole = np.zeros(rate // 2, dtype=np.float32)
+    cap = SilenceCap(rate=rate, keep_s=0.09)
+    out = np.concatenate([cap.feed(speech), cap.feed(hole), cap.feed(speech)])
+    assert float(np.max(out[: speech.size])) > 0.2
+    assert float(np.max(out[-speech.size :])) > 0.2
+    assert out.size < speech.size * 2 + int(0.12 * rate)
+
+
 def test_tts_phrases_group_words_at_sentence_breaks():
     parts = _tts_phrases("Hello there. How are you doing today? Fine.")
     assert parts[0].endswith(".")

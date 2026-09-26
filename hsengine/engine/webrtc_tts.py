@@ -13,6 +13,48 @@ from urllib.parse import urlencode, urlparse
 log = logging.getLogger("hsengine.engine.webrtc.tts")
 
 TTS_RATE = 24000
+# Kyutai inserts 0.2–0.6s of silence between phrases. Played raw, that is
+# the speak-then-drop sine wave. Keep a short breath, drop the rest.
+_SILENCE_KEEP_S = 0.09
+_SILENCE_THRESH = 0.02
+
+
+class SilenceCap:
+    """Cap silence runs across streamed PCM chunks. Speech samples pass through."""
+
+    def __init__(
+        self,
+        rate: int = TTS_RATE,
+        keep_s: float = _SILENCE_KEEP_S,
+        thresh: float = _SILENCE_THRESH,
+    ) -> None:
+        self.keep = max(1, int(keep_s * rate))
+        self.thresh = float(thresh)
+        self.run = 0
+
+    def feed(self, pcm: Any) -> Any:
+        import numpy as np
+
+        samples = np.asarray(pcm, dtype=np.float32).reshape(-1)
+        if samples.size == 0:
+            return samples
+        out = np.empty(samples.size, dtype=np.float32)
+        n = 0
+        run = self.run
+        keep = self.keep
+        thresh = self.thresh
+        for x in samples:
+            if abs(float(x)) < thresh:
+                run += 1
+                if run <= keep:
+                    out[n] = x
+                    n += 1
+            else:
+                run = 0
+                out[n] = x
+                n += 1
+        self.run = run
+        return out[:n]
 
 
 def _cfg_str(path: str, default: str) -> str:
@@ -179,11 +221,12 @@ def _stream_onto(
 
     async def _run() -> tuple[int, bool]:
         total = 0
+        cap = SilenceCap()
         async for pcm in synthesize_chunks(text):
             live = _live_boards(boards, expected)
             if not live:
                 return total, True
-            total += _push_chunks(live, pcm, source)
+            total += _push_chunks(live, cap.feed(pcm), source)
         return total, False
 
     return _run_isolated(_run)
