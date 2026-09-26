@@ -220,6 +220,7 @@ def complete_cerebras(
     reasoning = ""
     data: dict = {}
     used_tools = False
+    heard = False
     who = "ripley"
     if tool_defs is not None:
         who = "vasquez"
@@ -259,6 +260,14 @@ def complete_cerebras(
                 calls = _tool_calls_from(msg) if tools else []
                 if calls:
                     used_tools = True
+                    if speak and not heard and isinstance(prompt, str) and prompt.strip():
+                        heard = True
+                        threading.Thread(
+                            target=_heard_aside,
+                            args=(prompt.strip(), session_id, epoch),
+                            daemon=True,
+                            name="heard-aside",
+                        ).start()
                     pulse(who)
                     for c in calls:
                         name = ""
@@ -329,6 +338,49 @@ def complete_cerebras(
     return result
 
 
+def _aside_completion(system: str, user: str) -> str:
+    key = _cerebras_key()
+    model = _cfg("hermes.engine.webrtc.interactive.cerebras_model", "qwen-3.8-27b")
+    base = _cfg("hermes.engine.webrtc.interactive.cerebras_url", "https://api.cerebras.ai/v1").rstrip("/")
+    body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": 40,
+        "temperature": 0.9,
+        "reasoning_effort": "none",
+    }
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    with httpx.Client(timeout=15.0) as client:
+        r = client.post(f"{base}/chat/completions", headers=headers, json=body)
+        r.raise_for_status()
+        data = r.json()
+    msg = ((data.get("choices") or [{}])[0].get("message") or {})
+    return (msg.get("content") or "").strip()
+
+
+def _heard_aside(utterance: str, session_id: str, epoch: int | None) -> None:
+    """One fresh sentence while tools run. Discard a stock ack and try once more."""
+    from hsengine.engine.heard import heard_prompts, line_is_fresh
+
+    del session_id  # the line is spoken on the live boards, not stored as a turn
+    try:
+        system, user = heard_prompts(utterance)
+        text = _aside_completion(system, user)
+        if text and not line_is_fresh(utterance, text):
+            log.info("heard aside rejected %r", text[:80])
+            system, user = heard_prompts(utterance, rejected=text)
+            text = _aside_completion(system, user)
+        if not text or not line_is_fresh(utterance, text):
+            log.info("heard aside dropped %r", (text or "")[:80])
+            return
+        _speak_cerebras(spoken_text(text), epoch=epoch)
+    except Exception:
+        log.exception("heard aside failed")
+
+
 def spoken_text(text: str) -> str:
     """Plain words for Kyutai TTS — no markdown, URLs, or silent STEER notes."""
     import re
@@ -368,8 +420,10 @@ _TTS_GATE = threading.Lock()
 
 
 def _speak_cerebras(text: str, epoch: int | None = None) -> None:
-    if not _TTS_GATE.acquire(blocking=False):
-        log.info("tts skipped, already speaking")
+    # The heard-you line may still be in the speaker. Wait for it.
+    # Dropping the answer is the silence after a lookup.
+    if not _TTS_GATE.acquire(timeout=12):
+        log.info("tts skipped, still speaking")
         return
     try:
         from hsengine.engine.webrtc_activity import begin, end
