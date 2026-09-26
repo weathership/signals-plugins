@@ -220,6 +220,7 @@ def complete_cerebras(
     reasoning = ""
     data: dict = {}
     used_tools = False
+    tool_names: list[str] = []
     heard = False
     who = "ripley"
     if tool_defs is not None:
@@ -274,6 +275,7 @@ def complete_cerebras(
                         if isinstance(c, dict):
                             name = str((c.get("function") or {}).get("name") or "")
                         if name:
+                            tool_names.append(name)
                             pulse(name)
                     messages.append(msg)
                     messages.extend(_run_tool_calls(calls))
@@ -367,6 +369,7 @@ def complete_cerebras(
         finish_reason=finish,
         peer="cerebras",
         capability="thinking",
+        tool_names=tuple(tool_names),
     )
     spoken = spoken_text(text) if speak else ""
     if spoken:

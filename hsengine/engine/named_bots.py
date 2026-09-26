@@ -27,6 +27,7 @@ log = logging.getLogger("hsengine.engine.named_bots")
 RIPLEY = "ripley"
 BISHOP = "bishop"
 VASQUEZ = "vasquez"
+HICKS = "hicks"
 
 # Silent invent + tools. Ceiling only; short STEER/MONOLOGUE still stops at EOS.
 # Ripley's spoken path stays on webrtc_moshi._ripley_spoken_max_tokens (TTS).
@@ -37,7 +38,10 @@ _BOTS_ROOT = Path(__file__).resolve().parent.parent / "bots"
 
 _RIPLEY_META = {
     "display_name": "Ripley",
-    "description": "Spoken AgentRTC voice — dialog and thoughts-based contemplation.",
+    "description": (
+        "Spoken AgentRTC voice — dialog and thoughts-based contemplation. "
+        "Not a kanban assignee."
+    ),
     "ui_meta": {
         "hermes-bots": {
             "title": "Ripley",
@@ -48,7 +52,10 @@ _RIPLEY_META = {
 }
 _BISHOP_META = {
     "display_name": "Bishop",
-    "description": "Silent AgentRTC session — steers Ripley's narrative; up to two delegate_task children.",
+    "description": (
+        "Live invent voice on the AgentRTC call. Not a kanban assignee. "
+        "Suggests when several lanes are in flight. Up to two delegate_task children."
+    ),
     "ui_meta": {
         "hermes-bots": {
             "title": "Bishop",
@@ -59,12 +66,30 @@ _BISHOP_META = {
 }
 _VASQUEZ_META = {
     "display_name": "Vasquez",
-    "description": "Silent AgentRTC viz — one compositor JPEG per sequence; drives HoloViews. Never heard.",
+    "description": (
+        "Live HoloViews on the AgentRTC video. Not a kanban assignee. "
+        "A figure takes the video over the kanban view. Never heard."
+    ),
     "ui_meta": {
         "hermes-bots": {
             "title": "Vasquez",
             "shape": "blobatar::sharp",
             "color": "#6b8f3c",
+        }
+    },
+}
+_HICKS_META = {
+    "display_name": "Hicks",
+    "description": (
+        "Kanban orchestrator. Reads triage from the live call, decomposes, "
+        "and moves work across the board until it is done or blocked. Not a voice. "
+        "Leaf execution defaults to grok. Do not assign ripley, bishop, or vasquez."
+    ),
+    "ui_meta": {
+        "hermes-bots": {
+            "title": "Hicks",
+            "shape": "blobatar::hexagon",
+            "color": "#b08968",
         }
     },
 }
@@ -115,6 +140,48 @@ def _merge_profile_yaml(profile_dir: Path, *, display_name: str, description: st
     current["hermes-bots"] = {**bots, **incoming}
     existing["ui_meta"] = current
     atomic_yaml_write(path, existing, sort_keys=False)
+
+
+def _seed_hicks_config(profile_dir: Path) -> None:
+    """Hicks runs as grok-4.6 on xai-oauth, same wire as the grok worker.
+
+    A profile that is already on an xai-oauth grok model is left alone.
+    """
+    path = profile_dir / "config.yaml"
+    existing: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            import yaml
+
+            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                existing = loaded
+        except Exception:
+            log.debug("hicks config unreadable", exc_info=True)
+            return
+    model = existing.get("model") if isinstance(existing.get("model"), dict) else {}
+    provider = str(model.get("provider") or "")
+    default = str(model.get("default") or "")
+    if not (provider == "xai-oauth" and default.startswith("grok-")):
+        existing["model"] = {"default": "grok-4.6", "provider": "xai-oauth"}
+    toolsets = existing.get("toolsets")
+    if not isinstance(toolsets, list) or "hermes-cli" not in toolsets:
+        existing["toolsets"] = ["hermes-cli"]
+    from utils import atomic_yaml_write
+
+    atomic_yaml_write(path, existing, sort_keys=False)
+
+
+def _pin_hicks_orchestrator() -> None:
+    """The gateway reads this from the active Hermes home, not the Hicks profile."""
+    try:
+        from hermes_constants import get_hermes_home
+
+        from hsengine.engine.hicks import pin_orchestrator_file
+
+        pin_orchestrator_file(get_hermes_home() / "config.yaml")
+    except Exception:
+        log.debug("hicks orchestrator pin skipped", exc_info=True)
 
 
 def _seed_bishop_config(profile_dir: Path) -> None:
@@ -214,6 +281,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
         if (
             not replace
             and managed
+            and "Hicks orchestrates" in template
+            and "Hicks orchestrates" not in current
+        ):
+            replace = True
+        if (
+            not replace
+            and managed
             and "Kanban assignee is grok" in template
             and "Kanban assignee is grok" not in current
         ):
@@ -228,6 +302,9 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
     )
     if name == BISHOP:
         _seed_bishop_config(dest)
+    if name == HICKS:
+        _seed_hicks_config(dest)
+        _pin_hicks_orchestrator()
     return dest
 
 
@@ -241,6 +318,8 @@ def ensure_bots() -> dict[str, str]:
         out[BISHOP] = str(_profile_dir(BISHOP))
         _ensure_one(VASQUEZ, _VASQUEZ_META)
         out[VASQUEZ] = str(_profile_dir(VASQUEZ))
+        _ensure_one(HICKS, _HICKS_META)
+        out[HICKS] = str(_profile_dir(HICKS))
     except Exception:
         log.warning("ensure AgentRTC named bots failed", exc_info=True)
     return out
@@ -408,13 +487,25 @@ def bishop_prompt(
             lines.append(
                 "Call conversation, then web_search or fmp once for one adjacent spark."
             )
+    elif move == "board":
+        lines.append(
+            "Several lanes are already on the board and will keep moving "
+            "without this turn. Invent one suggestion that helps the foreground "
+            "conversation, or a design note about how one lane should end. "
+            "Do not recap the board. Do not ask her to stop the topic. "
+            "You may call recent_thoughts, web_search, or kb_search once if a "
+            "fact is missing. Do not call hermes. Do not viz_show kind=kanban "
+            "over a live figure. Hicks orchestrates; you suggest."
+        )
     else:
         lines.append(
             "Call conversation. Deepen the last live thread. Do not web-search. "
             "If a figure would help (ontology chord, Aegir aperture, a plot), "
             "call viz_show. For multi-track work, skills, or cron automations, "
-            "call hermes (kanban assignee=grok, never voice personas) then "
-            "viz_show kind=kanban if a board should be on the video. If the live thread is circling the same complex "
+            "call hermes (Hicks orchestrates; kanban assignee=grok, never voice "
+            "personas) then viz_show kind=kanban only if no HoloViews figure is "
+            "on the video. A figure takes precedence; the dashboard board still "
+            "shows the lanes. If the live thread is circling the same complex "
             "idea, grok_consult once then STEER/MONOLOGUE from that."
         )
     lines.append("Then output STEER and MONOLOGUE as specified in your persona.")

@@ -1131,12 +1131,38 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "bishop_suggest",
+            "description": (
+                "Ask Bishop for one suggestion while several kanban lanes "
+                "are already in flight. Use at most once on such a turn, "
+                "then stay with the foreground topic. Speak one sentence "
+                "from the suggestion if it earns a place. Do not call this "
+                "for a greeting, a simple lookup, or when the board note "
+                "does not say several lanes are in flight. Never name Bishop."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "What the suggestion should bear on.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "viz_show",
             "description": (
                 "Put a live page on the AgentRTC video (headless Chromium "
                 "compositor + CDP screencast). Humans spectate; you drive. "
                 "kind=kanban shows the Hermes kanban board (multi-track "
-                "tasks). Other kinds are HoloViews: chord|timeline|scatter|"
+                "tasks) only when no HoloViews figure is already on the "
+                "video. A figure takes precedence; the board stays on the "
+                "dashboard. Other kinds are HoloViews: chord|timeline|scatter|"
                 "curve|heatmap|aperture|density. timeline: event dots. "
                 "density: week×ticker heatmap of filing counts. "
                 "data JSON {tickers:['SLB','HAL']} pulls FMP filings for "
@@ -1383,6 +1409,50 @@ def _dispatch_fmp(args: dict[str, Any]) -> str:
     )
 
 
+def _dispatch_bishop_suggest(args: dict[str, Any]) -> str:
+    from hsengine.engine.hicks import (
+        _load_active,
+        board_aside,
+        suggestion_busy,
+        suggestion_enter,
+        suggestion_exit,
+    )
+
+    # Bishop's own tool round must not call this again.
+    if suggestion_busy():
+        return json.dumps({"ok": False, "error": "already asking Bishop"})
+    try:
+        active = _load_active()
+    except Exception as e:
+        return json.dumps({"ok": False, "error": str(e)[:160]})
+    if len(active) < 2:
+        return json.dumps({"ok": False, "error": "no multi-phase work on the board"})
+    from hsengine.engine.named_bots import bishop_run
+    from hsengine.engine.session_history import live_webrtc_id
+
+    token = suggestion_enter()
+    try:
+        outcome = bishop_run(
+            session_id=live_webrtc_id(),
+            move="board",
+            glance=board_aside(),
+            utterance=str(args.get("topic") or ""),
+        )
+    except Exception as e:
+        log.warning("bishop suggest failed", exc_info=True)
+        return json.dumps({"ok": False, "error": str(e)[:200]})
+    finally:
+        suggestion_exit(token)
+    spoken = (outcome.monologue or outcome.steer or "").strip()
+    return json.dumps(
+        {
+            "ok": bool(spoken),
+            "suggestion": spoken,
+            "error": "" if spoken else "Bishop returned nothing to say",
+        }
+    )
+
+
 def _dispatch_hermes(args: dict[str, Any]) -> str:
     return json.dumps(hermes(prompt=str(args.get("prompt") or "")), default=str)
 
@@ -1511,6 +1581,7 @@ _DISPATCH = {
     "fmp": _dispatch_fmp,
     "grok_consult": _dispatch_grok_consult,
     "hermes": _dispatch_hermes,
+    "bishop_suggest": _dispatch_bishop_suggest,
     "viz_show": _dispatch_viz_show,
     "viz_select": _dispatch_viz_select,
     "viz_clear": _dispatch_viz_clear,

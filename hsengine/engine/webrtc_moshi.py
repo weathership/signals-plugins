@@ -49,8 +49,19 @@ SPOKEN_SYSTEM = (
     "needed; never say the word steer; never read STEER or MONOLOGUE "
     "labels; do not dump JSON or name Grok. It shares this same session, "
     "so this call's transcript and memories are already there. "
-    "When tracking complex multi-track work — call hermes to manage "
-    "the kanban board, then viz_show kind=kanban so the board IS the video. "
+    "When tracking complex multi-track work — Hicks files implied or "
+    "promised work into triage while you keep talking, and the board "
+    "moves in the background. You do not have to call hermes just to "
+    "create the card. A promise is not the work: if the answer is a "
+    "lookup, call fmp, web_search, or kb_search this turn. "
+    "viz_show kind=kanban only when no HoloViews figure is on the video. "
+    "A figure takes precedence; the board stays on the dashboard either way. "
+    "You may change topic while cards are in flight. Say that the work "
+    "continues in the background; do not claim a card is finished. "
+    "When the board note says several lanes are in flight, you may call "
+    "bishop_suggest once for a suggestion, then stay with the topic. "
+    "recent_thoughts or web_search may color an aside about that work "
+    "or how it should end. "
     "When a figure would help — an ontology chord, Aegir aperture, or a "
     "plot — call viz_show so the live HoloViews page IS the video; "
     "viz_select to highlight a node; viz_hover so popups follow what "
@@ -239,16 +250,36 @@ async def _run_user_utterance(
             spoken=spoken or "",
         )
         return spoken or ""
+    system_prompt = apply_steer_system(ripley_spoken_system(), pending_steer)
+    try:
+        from hsengine.engine.hicks import board_aside
+
+        aside = board_aside()
+    except Exception:
+        aside = ""
+    if aside:
+        system_prompt = system_prompt.rstrip() + "\n\n" + aside
     result = await asyncio.to_thread(
         interactive.complete_cerebras,
         prompt=text,
-        system_prompt=apply_steer_system(ripley_spoken_system(), pending_steer),
+        system_prompt=system_prompt,
         max_tokens=_ripley_spoken_max_tokens(),
         temperature=0.5,
         reasoning_effort="none",
         tools=True,
         session_id=session_id,
     )
+    try:
+        from hsengine.engine.hicks import note_turn, tool_names_of
+
+        note_turn(
+            session_id=session_id,
+            user=text,
+            assistant=result.text or "",
+            tools_used=tool_names_of(result),
+        )
+    except Exception:
+        log.debug("hicks ingress skipped", exc_info=True)
     session_history.record_turn(
         session_id, assistant=result.text, model=result.model
     )

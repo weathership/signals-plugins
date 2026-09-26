@@ -150,7 +150,24 @@ async def _show_live(
     data: str,
     fade_s: float,
 ) -> dict[str, Any]:
-    from hsengine.engine import webrtc_bokeh, webrtc_program, webrtc_viz_apps
+    from hsengine.engine import webrtc_program
+    from hsengine.engine.hicks import kanban_would_cover_figure
+
+    st = webrtc_program.PROGRAM.status()
+    if kanban_would_cover_figure(
+        live=bool(st.get("live")),
+        current_kind=str(st.get("kind") or ""),
+        requested=kind,
+    ):
+        # The figure stays. Progress remains on the dashboard board.
+        return {
+            "ok": False,
+            "error": "a HoloViews figure is on the video; the board stays on the dashboard",
+            "precedence": "holoviews",
+            "kind": str(st.get("kind") or ""),
+        }
+
+    from hsengine.engine import webrtc_bokeh, webrtc_viz_apps
     from hsengine.engine.webrtc_cdp import CdpCamera
 
     port = webrtc_bokeh.ensure_server()

@@ -41,6 +41,8 @@ class CompleteResult:
     finish_reason: str
     peer: str
     capability: str
+    # Names of tools the voice loop actually invoked. Empty for gRPC Complete.
+    tool_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

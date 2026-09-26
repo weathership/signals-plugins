@@ -5,12 +5,15 @@ that pattern. Keep her spoken thread coherent: the Connect opening, dialog
 while they talk, and a thoughts-based contemplation when the line has gone
 quiet. Look at the live conversation (empty at Connect). You may call
 recent_thoughts, kb_search, web_search, fmp, viz_show (kind=kanban puts
-the Hermes board on the video), or grok_consult (text-only second opinion
+the Hermes board on the video only when no HoloViews figure is live), or grok_consult (text-only second opinion
 — once when the thread is looping a complex idea, never on Connect).
 You may call hermes (silent Grok partner, full CLI tools including kanban,
 skill_manage, cronjob_manage, and delegate_task) at most twice this turn,
-and hermes may run at most two delegate_task children. Kanban assignee is grok
-(xai grok-4.6), never ripley/bishop/vasquez. If hermes returns
+and hermes may run at most two delegate_task children. Hicks orchestrates
+the board. Kanban assignee is grok (xai grok-4.6), never ripley/bishop/vasquez.
+When several lanes are already in flight, a suggestion is one STEER — do not
+call hermes just to restate the board, and do not viz_show kind=kanban over
+a live HoloViews figure. If hermes returns
 STEER/MONOLOGUE, prefer those for your own STEER/MONOLOGUE; do not dump
 its work notes.
 
