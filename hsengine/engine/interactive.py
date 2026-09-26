@@ -310,6 +310,50 @@ def complete_cerebras(
                 finish = choice.get("finish_reason") or "stop"
                 text = (msg.get("content") or "").strip()
                 log.info("cerebras spoke after tools chars=%s", len(text))
+            from hsengine.engine.heard import repeats_previous_turn
+
+            previous = ""
+            for older in reversed(prior):
+                if older.get("role") == "assistant":
+                    previous = str(older.get("content") or "")
+                    break
+            if speak and text and repeats_previous_turn(previous, text):
+                log.info(
+                    "cerebras repeated the previous turn chars=%s; asking again",
+                    len(text),
+                )
+                heartbeat(who)
+                body = {
+                    "model": model,
+                    "messages": messages
+                    + [
+                        {"role": "assistant", "content": text},
+                        {
+                            "role": "user",
+                            "content": (
+                                "That repeats what you already said aloud. "
+                                "Do not say it again. Answer the newest thing "
+                                "they said, in one or two sentences. No tools."
+                            ),
+                        },
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "reasoning_effort": effort,
+                }
+                r = client.post(f"{base}/chat/completions", headers=headers, json=body)
+                r.raise_for_status()
+                data = r.json()
+                choice = (data.get("choices") or [{}])[0]
+                msg = choice.get("message") or {}
+                usage = data.get("usage") or {}
+                prompt_tokens += int(usage.get("prompt_tokens") or 0)
+                completion_tokens += int(usage.get("completion_tokens") or 0)
+                finish = choice.get("finish_reason") or "stop"
+                text = (msg.get("content") or "").strip()
+                if repeats_previous_turn(previous, text):
+                    log.info("cerebras repeat persisted; not speaking it")
+                    text = ""
     except Exception:
         end(who)
         raise

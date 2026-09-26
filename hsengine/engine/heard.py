@@ -70,6 +70,22 @@ def line_is_fresh(utterance: str, line: str) -> bool:
     return any(key in blob for key in keys)
 
 
+def repeats_previous_turn(previous: str, candidate: str) -> bool:
+    """A long reply that copies the last spoken turn is not an answer.
+
+    Short agreements ("yeah", "right") may repeat. The failure we saw was
+    the whole previous monologue spoken again, unchanged, after a new question.
+    """
+    prev = " ".join((previous or "").split())
+    cur = " ".join((candidate or "").split())
+    if len(prev) < 80 or len(cur) < 80:
+        return False
+    if cur == prev:
+        return True
+    n = min(240, len(prev), len(cur))
+    return prev[:n] == cur[:n]
+
+
 def heard_prompts(utterance: str, *, rejected: str = "") -> tuple[str, str]:
     said = " ".join((utterance or "").split())
     system = (
