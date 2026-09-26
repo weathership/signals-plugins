@@ -219,7 +219,7 @@ def hover_xy(
 ) -> tuple[float, float]:
     """CSS pixels on the 1280×720 compositor for a heatmap/timeline lane.
 
-    Layout matches the Panel HoloViews pane (plot in the inner 1280×720).
+    Layout matches the Panel HoloViews pane, inset so the toolbar stays in frame.
     """
     names = [str(n).strip() for n in (nodes or []) if str(n).strip()]
     if not names:
@@ -231,7 +231,9 @@ def hover_xy(
             idx = i
             break
     n = max(1, len(names))
-    left, right, top, bottom = 140.0, 1220.0, 90.0, 630.0
+    from hsengine.engine.webrtc_cdp import PLOT_W
+
+    left, right, top, bottom = 96.0, float(PLOT_W - 36), 72.0, 600.0
     x = left + max(0.0, min(1.0, float(t))) * (right - left)
     y = top + (idx + 0.5) / n * (bottom - top)
     return x, y

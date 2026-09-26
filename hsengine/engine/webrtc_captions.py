@@ -134,6 +134,38 @@ def _font(size: int) -> Any:
     return ImageFont.load_default()
 
 
+def _text_px(font: Any, text: str) -> float:
+    if hasattr(font, "getlength"):
+        return float(font.getlength(text))
+    bbox = getattr(font, "getbbox", None)
+    if callable(bbox):
+        box = bbox(text)
+        return float(box[2] - box[0])
+    return float(len(text) * 8)
+
+
+def wrap_to_width(text: str, font: Any, budget: int, max_lines: int) -> list[str]:
+    """Wrap on measured glyph width so a line cannot cross the frame."""
+    lines: list[str] = []
+    for part in (text or "").split("\n"):
+        words = part.split()
+        if not words:
+            continue
+        cur = ""
+        for word in words:
+            trial = word if not cur else f"{cur} {word}"
+            if not cur or _text_px(font, trial) <= budget:
+                cur = trial
+                continue
+            lines.append(cur)
+            cur = word
+        if cur:
+            lines.append(cur)
+    if max_lines > 0:
+        lines = lines[-max_lines:]
+    return lines
+
+
 def paint_caption(image: Any, text: str) -> Any:
     """Draw the dialog on a translucent plate. Returns the same RGB image."""
     from PIL import Image, ImageDraw
@@ -144,11 +176,9 @@ def paint_caption(image: Any, text: str) -> Any:
     width, height = image.size
     size = max(18, width // 36)
     font = _font(size)
-    cols = max(18, width // max(9, size // 2))
-    lines: list[str] = []
-    for part in cleaned.split("\n"):
-        lines.extend(textwrap.wrap(part, width=cols) or [])
     pad = max(10, size // 3)
+    budget = max(8, width - pad * 2)
+    lines = wrap_to_width(cleaned, font, budget, _CAPTION_LINES)
     line_h = size + pad
     band_h = max(int(height * _BAND_FRAC), line_h + pad * 2)
     band_h = min(band_h, max(line_h + pad, height - 56))

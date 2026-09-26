@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926f";
+  const JS_VERSION = "listen-js-20260926g";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);

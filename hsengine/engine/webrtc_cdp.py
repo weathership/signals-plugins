@@ -21,6 +21,10 @@ log = logging.getLogger("hsengine.engine.webrtc.cdp")
 
 VIEW_W = 1280
 VIEW_H = 720
+# Bokeh's toolbar sits to the right of the plot. Leave it inside the window.
+TOOLBAR_W = 72
+PLOT_W = VIEW_W - TOOLBAR_W
+PLOT_H = VIEW_H - 48
 JPEG_QUALITY = 65
 PUMP_HZ = 12
 # Keep the headless compositor dirty so Page.screencastFrame is a video,

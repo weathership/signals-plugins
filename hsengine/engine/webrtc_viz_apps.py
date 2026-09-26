@@ -10,6 +10,8 @@ import logging
 import re
 from typing import Any
 
+from hsengine.engine.webrtc_cdp import PLOT_H, PLOT_W
+
 log = logging.getLogger("hsengine.engine.webrtc.viz.apps")
 
 # SKOS-shaped demo so a Connect has a real chord with no federated workspace.
@@ -193,7 +195,7 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     if kind == "heatmap":
         data = [(i, j, ((i + j) % 7) / 7.0) for i in range(8) for j in range(8)]
         return hv.HeatMap(data, ["x", "y"], "v").opts(
-            title=title, width=720, height=720, cmap="Viridis"
+            title=title, width=PLOT_W, height=PLOT_H, cmap="Viridis"
         )
     if kind in ("density", "filings_density"):
         return _density(scene, title)
@@ -211,8 +213,8 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
             node_color="index",
             edge_color="source",
             cmap="Category20",
-            width=1100,
-            height=640,
+            width=PLOT_W,
+            height=PLOT_H,
             title=title,
             bgcolor="#0b0b12",
             label_text_color="#e8ecf4",
@@ -330,7 +332,7 @@ def _empty_plot(title: str, message: str) -> Any:
         text_color="#e8ecf4",
         fontsize=16,
         bgcolor="#0b0b12",
-        width=1100,
+        width=PLOT_W,
         height=620,
     )
 
@@ -367,7 +369,7 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
     if traces:
         opts = dict(
             title=title or "",
-            width=1100,
+            width=PLOT_W,
             height=620,
             bgcolor="#0b0b12",
         )
@@ -431,11 +433,11 @@ def _timeline(scene: dict[str, Any], title: str) -> Any:
     df["at"] = pd.to_datetime(df["at"], errors="coerce")
     df = df.dropna(subset=["at"])
     if df.empty:
-        return hv.Scatter([(0, 0)], "t", "lane").opts(title=title, width=1100, height=640, bgcolor="#0b0b12")
+        return hv.Scatter([(0, 0)], "t", "lane").opts(title=title, width=PLOT_W, height=PLOT_H, bgcolor="#0b0b12")
     return hv.Scatter(df, kdims=["at"], vdims=["lane"]).opts(
         title=title or "Filings timeline",
-        width=1100,
-        height=640,
+        width=PLOT_W,
+        height=PLOT_H,
         size=14,
         color="lane",
         cmap="Category20",
@@ -456,14 +458,14 @@ def _density(scene: dict[str, Any], title: str) -> Any:
     df = df.dropna(subset=["at"])
     if df.empty:
         return hv.HeatMap([(0, "—", 0)], ["week", "lane"], "n").opts(
-            title=title, width=1100, height=420, cmap="Magma", bgcolor="#0b0b12"
+            title=title, width=PLOT_W, height=420, cmap="Magma", bgcolor="#0b0b12"
         )
     df["week"] = df["at"].dt.to_period("W").dt.start_time
     counts = df.groupby(["week", "lane"], as_index=False).size()
     counts = counts.rename(columns={"size": "n"})
     return hv.HeatMap(counts, kdims=["week", "lane"], vdims=["n"]).opts(
         title=title or "Filings density",
-        width=1100,
+        width=PLOT_W,
         height=420,
         cmap="Magma",
         colorbar=True,
@@ -521,7 +523,9 @@ def modify_doc(doc: Any) -> None:
     hv.renderer("bokeh").webgl = False
     css = (
         "html, body, .bk-root, .bk-Row, .bk-Column, .bk-GridBox "
-        "{ background: #0b0b12 !important; color: #e8ecf4 !important; }"
+        "{ background: #0b0b12 !important; color: #e8ecf4 !important; "
+        "margin: 0 !important; overflow: hidden !important; "
+        "max-width: 1280px !important; box-sizing: border-box !important; }"
     )
     if css not in (pn.config.raw_css or []):
         pn.config.raw_css.append(css)
@@ -530,8 +534,8 @@ def modify_doc(doc: Any) -> None:
     pane = pn.pane.HoloViews(
         obj,
         backend="bokeh",
-        width=1280,
-        height=720,
+        width=PLOT_W,
+        height=PLOT_H,
         linked_axes=False,
     )
     if sid:

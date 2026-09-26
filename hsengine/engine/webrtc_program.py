@@ -222,7 +222,14 @@ def mix_frame(frame: Any) -> Any:
         except Exception:
             arr = frame.to_ndarray(format="rgb24")
             h, w = int(arr.shape[0]), int(arr.shape[1])
-        fitted = _fit(img, (w, h))
+        from PIL import Image
+
+        from hsengine.engine.webrtc_captions import _BAND_FRAC
+
+        chart_h = max(1, h - int(h * _BAND_FRAC))
+        chart = _fit(img, (w, chart_h))
+        fitted = Image.new("RGB", (w, h), (11, 11, 18))
+        fitted.paste(chart, (0, 0))
         if title:
             _paint_title(fitted, title)
         out = av.VideoFrame.from_ndarray(np.asarray(fitted), format="rgb24")

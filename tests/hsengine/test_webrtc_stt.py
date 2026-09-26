@@ -144,6 +144,26 @@ def test_caption_board_holds_then_clears(monkeypatch):
     assert board.get() == ""
 
 
+def test_caption_lines_stay_inside_the_frame():
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from hsengine.engine.webrtc_captions import _font, _text_px, wrap_to_width
+
+    width = 320
+    size = max(18, width // 36)
+    font = _font(size)
+    pad = max(10, size // 3)
+    budget = width - pad * 2
+    text = "Room: " + " ".join(["filament"] * 40)
+    lines = wrap_to_width(text, font, budget, 8)
+    assert lines
+    assert all(_text_px(font, line) <= budget + 1 for line in lines)
+    image = Image.new("RGB", (width, 180), (180, 180, 180))
+    paint_caption(image, text)
+    assert image.getpixel((width - 1, 170)) != (180, 180, 180)
+
+
 def test_caption_plate_is_translucent():
     pytest.importorskip("PIL")
     from PIL import Image
