@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926c";
+  const JS_VERSION = "listen-js-20260926d";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -409,23 +409,25 @@
               disabled: live || !webrtcReady,
             }, busy ? "Negotiating…" : (live ? "Connected" : "Connect")),
             h(Button, { onClick: disconnect, disabled: !live && conn === "idle" }, "Disconnect"),
-          ),
-          h("p", { className: "signals-listen-status" }, detail),
-          onCall ? h("div", { className: "signals-listen-row" },
             h(Button, {
               onClick: toggleRoomMute,
-              variant: roomMuted ? "destructive" : "secondary",
+              disabled: !onCall,
+              variant: roomMuted ? "destructive" : undefined,
               "aria-pressed": roomMuted ? "true" : "false",
             }, roomMuted ? "Room muted" : "Mute room"),
             h(Button, {
               onClick: toggleTextOnly,
-              variant: textOnly ? "destructive" : "secondary",
+              disabled: !onCall,
+              variant: textOnly ? "destructive" : undefined,
               "aria-pressed": textOnly ? "true" : "false",
             }, textOnly ? "Text only" : "Silence her"),
-          ) : null,
-          onCall ? h("p", { className: "signals-listen-status" },
-            "Mute room: talk locally without her hearing it. Silence her: stop her audio; her words stay on the picture."
-          ) : null,
+          ),
+          h("p", { className: "signals-listen-status" },
+            onCall
+              ? "Mute room keeps local talk off her mic. Silence her cuts her audio; her words stay on the picture."
+              : "Mute room and Silence her arm after Connect."
+          ),
+          h("p", { className: "signals-listen-status" }, detail),
           h("video", {
             ref: videoRef,
             autoPlay: true,
