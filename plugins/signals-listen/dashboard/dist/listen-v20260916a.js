@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926g";
+  const JS_VERSION = "listen-js-20260926h";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -369,6 +369,21 @@
       }
     }
 
+    function toggleControl(label, pressed, onClick, enabled) {
+      // Native button: the dashboard Button is a momentary press and does
+      // not keep aria-pressed on the DOM, so the latch never showed.
+      return h("button", {
+        type: "button",
+        className: "signals-listen-toggle",
+        onClick: onClick,
+        disabled: !enabled,
+        "aria-pressed": pressed ? "true" : "false",
+      },
+        h("span", { className: "signals-listen-toggle-mark", "aria-hidden": "true" }),
+        label,
+      );
+    }
+
     const webrtcReady = status && status.webrtc;
     const live = busy || conn === "connecting" || conn === "connected";
     const onCall = !!sessionId;
@@ -409,18 +424,8 @@
               disabled: live || !webrtcReady,
             }, busy ? "Negotiating…" : (live ? "Connected" : "Connect")),
             h(Button, { onClick: disconnect, disabled: !live && conn === "idle" }, "Disconnect"),
-            h(Button, {
-              onClick: toggleRoomMute,
-              disabled: !onCall,
-              variant: roomMuted ? "destructive" : undefined,
-              "aria-pressed": roomMuted ? "true" : "false",
-            }, "Mute"),
-            h(Button, {
-              onClick: toggleTextOnly,
-              disabled: !onCall,
-              variant: textOnly ? "destructive" : undefined,
-              "aria-pressed": textOnly ? "true" : "false",
-            }, "Silence"),
+            toggleControl("Mute", roomMuted, toggleRoomMute, onCall),
+            toggleControl("Silence", textOnly, toggleTextOnly, onCall),
           ),
           h("p", { className: "signals-listen-status" },
             onCall

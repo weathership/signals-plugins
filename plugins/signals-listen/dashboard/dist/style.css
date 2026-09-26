@@ -43,6 +43,53 @@
   margin: 0.75rem 0;
 }
 
+.signals-listen button.signals-listen-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #8aa0c8);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.signals-listen button.signals-listen-toggle:focus-visible {
+  outline: 2px solid var(--primary, #0053fd);
+  outline-offset: 2px;
+}
+
+.signals-listen button.signals-listen-toggle[aria-pressed="true"] {
+  background: var(--primary, #0053fd);
+  color: var(--primary-foreground, #fff);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.signals-listen button.signals-listen-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.signals-listen .signals-listen-toggle-mark {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+.signals-listen button.signals-listen-toggle[aria-pressed="true"] .signals-listen-toggle-mark {
+  background: currentColor;
+}
+
 .signals-listen .signals-listen-status {
   font-size: 0.85rem;
   color: var(--muted-foreground, #9aa3b5);
