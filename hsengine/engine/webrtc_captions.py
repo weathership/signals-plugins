@@ -50,16 +50,18 @@ class CaptionBoard:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._text = ""
+        self._room_label = ROOM_LABEL
         self._at = 0.0
         self._agent = ""
         self._agent_label = "Agent"
         self._shown_words = 0
         self._progress = lambda: (0, 0, False, 48000)
 
-    def set(self, text: str) -> None:
+    def set(self, text: str, *, label: str = ROOM_LABEL) -> None:
         cleaned = " ".join((text or "").split())
         with self._lock:
             self._text = cleaned
+            self._room_label = (label or ROOM_LABEL).strip() or ROOM_LABEL
             self._at = time.monotonic()
 
     def set_agent(self, text: str, *, label: str = "Agent") -> None:
@@ -89,7 +91,7 @@ class CaptionBoard:
             if agent:
                 parts.append(f"{self._agent_label}: {agent}")
             if room:
-                parts.append(f"{ROOM_LABEL}: {room}")
+                parts.append(f"{self._room_label}: {room}")
             return "\n".join(parts)
 
     def _agent_visible(self) -> str:

@@ -41,9 +41,10 @@ CATALOG_ID = "interactive.agent_rtc"
 RUNNER_INTERACTIVE = "interactive"
 SOURCE_ENGINE = "engine"
 DESCRIPTION = (
-    "agent-rtc interactive WebRTC: moshi 1 local GPU; Cerebras dialog "
-    "token-metered; CPU search/Qdrant on compute; Gaius thinking stays up. "
-    "Floors asserted only while a session runs"
+    "agent-rtc interactive WebRTC: moshi STT/TTS and Nemotron 3 diarization "
+    "share the one agent-rtc GPU; Cerebras dialog token-metered; CPU "
+    "search/Qdrant on compute; Gaius thinking stays up. Diarization is not "
+    "its own DAG or floor. Floors asserted only while a session runs"
 )
 
 SYNC_INTERVAL_S = 1800.0          # re-submit the catalogue every 30 min

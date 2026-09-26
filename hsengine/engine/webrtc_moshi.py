@@ -388,7 +388,14 @@ class MoshiCaptioner:
             self.words.append(word)
             del self.words[: -self.max_words]
             line = " ".join(self.words)
-            self.board.set(line)
+            label = "Room"
+            provider = getattr(self, "speaker_label", None)
+            if callable(provider):
+                try:
+                    label = str(provider() or label)
+                except Exception:
+                    label = "Room"
+            self.board.set(line, label=label)
             log.info("stt word %r line=%r", word, line)
             return line
         if kind == "Step":
@@ -416,6 +423,9 @@ async def follow_audio(
     import websockets
 
     captioner = MoshiCaptioner(board)
+    from hsengine.engine.diarization import note_pcm, speaker_label
+
+    captioner.speaker_label = lambda: speaker_label(session_id)
     turns = TurnTaker(asyncio.get_running_loop(), session_id=session_id, speech=speech)
     if hub is not None and session_id:
         bind = getattr(hub, "bind_turns", None)
@@ -445,6 +455,10 @@ async def follow_audio(
                 if pcm is None or getattr(pcm, "size", 0) == 0:
                     continue
                 pending = np.concatenate([pending, np.asarray(pcm, dtype=np.float32).reshape(-1)])
+                try:
+                    note_pcm(session_id, pcm)
+                except Exception:
+                    log.debug("diarization tap failed", exc_info=True)
                 while pending.size >= _CHUNK:
                     piece = pending[:_CHUNK]
                     pending = pending[_CHUNK:]
