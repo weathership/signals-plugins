@@ -170,6 +170,9 @@ class SpeechBoard:
         self._buf: deque[float] = deque()
         self._epoch = 0
         self._last_audible_at = 0.0
+        self._line_played = 0
+        self._line_queued = 0
+        self._line_closed = False
 
     @property
     def epoch(self) -> int:
@@ -201,12 +204,29 @@ class SpeechBoard:
         if mono.size == 0:
             return
         with self._lock:
+            self._line_queued += int(mono.size)
             self._buf.extend(float(x) for x in mono.tolist())
             overflow = len(self._buf) - self.max_samples
             if overflow > 0:
                 for _ in range(overflow):
                     self._buf.popleft()
         log.debug("speech queued %s samples=%s source=%s", rate, mono.size, source or "-")
+
+    def begin_line(self) -> None:
+        """A new spoken line. Playback progress for its caption starts at zero."""
+        with self._lock:
+            self._line_played = 0
+            self._line_queued = 0
+            self._line_closed = False
+
+    def finish_line(self) -> None:
+        """Synthesis finished. Caption timing uses the real sample count."""
+        with self._lock:
+            self._line_closed = True
+
+    def line_progress(self) -> tuple[int, int, bool, int]:
+        with self._lock:
+            return self._line_played, self._line_queued, self._line_closed, self.sample_rate
 
     def speaking(self) -> bool:
         with self._lock:
@@ -229,6 +249,7 @@ class SpeechBoard:
             if len(self._buf) < need:
                 return None
             chunk = np.fromiter((self._buf.popleft() for _ in range(need)), dtype=np.float32, count=need)
+            self._line_played += need
             self._last_audible_at = time.monotonic()
         if sample_rate != self.sample_rate:
             chunk = _resample_mono(chunk, self.sample_rate, sample_rate)

@@ -49,7 +49,7 @@ def test_moshi_captioner_joins_word_events():
     cap.on_message({"type": "Word", "text": "one"})
     cap.on_message({"type": "Word", "text": "two"})
     cap.on_message({"type": "Word", "text": "three"})
-    assert board.get() == "there one two three"
+    assert board.get() == "Room: there one two three"
     assert cap.on_message({"type": "Step", "prs": [0.1, 0.2]}) is None
 
 
@@ -108,20 +108,38 @@ def test_ripley_spoken_ceiling_is_not_a_280_token_clip():
 
 def test_agent_line_stays_on_the_picture_after_room_caption_expires(monkeypatch):
     board = CaptionBoard()
-    board.set_agent("The 10-K names the fiber network, not a numbered plan.")
+    board.set_agent("The 10-K names the fiber network, not a numbered plan.", label="Ripley")
+    board.note_progress(played=8_000_000, queued=8_000_000, closed=True)
     board.set("tell me about the card")
-    assert "10-K" in board.get()
-    assert "card" in board.get()
-    board._at = time.monotonic() - 10
     shown = board.get()
+    assert shown.startswith("Ripley:")
     assert "10-K" in shown
-    assert "card" not in shown
+    assert "Room: tell me about the card" in shown
+    board._at = time.monotonic() - 10
+    later = board.get()
+    assert "10-K" in later
+    assert "card" not in later
+
+
+def test_agent_caption_is_empty_until_audio_plays():
+    from hsengine.engine.webrtc_captions import revealed_words
+
+    text = "one two three four five six seven eight"
+    assert revealed_words(text, 0, sample_rate=48000) == ""
+    early = revealed_words(text, 48000, sample_rate=48000)
+    assert early.startswith("one")
+    assert early != text
+    done = revealed_words(text, 500_000, sample_rate=48000, samples_total=500_000, closed=True)
+    assert done == text
+    board = CaptionBoard()
+    board.set_agent(text, label="Agent")
+    assert board.get() == ""
 
 
 def test_caption_board_holds_then_clears(monkeypatch):
     board = CaptionBoard()
     board.set("hello there")
-    assert board.get() == "hello there"
+    assert board.get() == "Room: hello there"
     board._at = time.monotonic() - 10
     assert board.get() == ""
 

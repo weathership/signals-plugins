@@ -264,4 +264,8 @@ def speak_on_session_boards(
         return
     if n == 0:
         raise RuntimeError("Kyutai TTS returned no audio")
+    for board in boards:
+        finish = getattr(board, "finish_line", None)
+        if callable(finish):
+            finish()
     log.info("spoke %s onto %s board(s) (%s samples)", source, len(boards), n)

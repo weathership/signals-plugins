@@ -123,6 +123,19 @@ def looping_tracks(src: Path) -> tuple[object | None, object | None, object]:
     return video, None, gate
 
 
+def _spoken_caption_label() -> str:
+    """Name on the caption. Comes from the configured spoken bot, not a pronoun."""
+    try:
+        from hsengine.engine.named_bots import _RIPLEY_META
+
+        name = str(_RIPLEY_META.get("display_name") or "").strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return "Agent"
+
+
 class WebRtcHub:
     def __init__(self) -> None:
         self._pcs: dict[str, object] = {}
@@ -405,15 +418,25 @@ class WebRtcHub:
             "source": str(src),
         }
 
-    def show_agent_line(self, text: str) -> None:
-        """Burn the spoken reply into every live video track. Stays until the next line."""
+    def show_agent_line(self, text: str, *, label: str = "") -> None:
+        """Register a spoken line. The picture reveals it as audio plays."""
         cleaned = " ".join((text or "").split())
         if not cleaned:
             return
-        for board in self._captions.values():
+        shown = (label or _spoken_caption_label()).strip() or "Agent"
+        for sid, board in self._captions.items():
             set_agent = getattr(board, "set_agent", None)
-            if callable(set_agent):
-                set_agent(cleaned)
+            if not callable(set_agent):
+                continue
+            set_agent(cleaned, label=shown)
+            speech = self._speech.get(sid)
+            begin = getattr(speech, "begin_line", None)
+            progress = getattr(speech, "line_progress", None)
+            if callable(begin):
+                begin()
+            bind = getattr(board, "bind_progress", None)
+            if callable(bind) and callable(progress):
+                bind(progress)
 
     def speech(self, session_id: str) -> object | None:
         """The session's agent-speech board (None after hangup)."""

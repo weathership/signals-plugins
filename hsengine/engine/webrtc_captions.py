@@ -11,16 +11,50 @@ from typing import Any
 log = logging.getLogger("hsengine.engine.webrtc.captions")
 
 _HOLD_S = 4.0
+# ~15 characters a second at 24 kHz, from a measured spoken turn. Used only
+# until the utterance's real sample count is known.
+_SAMPLES_PER_CHAR_24K = 1800
+ROOM_LABEL = "Room"
+_CAPTION_LINES = 6
+
+
+def revealed_words(
+    text: str,
+    samples_played: int,
+    *,
+    sample_rate: int,
+    samples_total: int = 0,
+    closed: bool = False,
+) -> str:
+    """Words of *text* that the played audio has reached. Empty before audio."""
+    words = [w for w in (text or "").split() if w]
+    if not words or samples_played <= 0:
+        return ""
+    if closed and samples_total > 0:
+        denom = samples_total
+    else:
+        estimate = max(1, int(len(text) * _SAMPLES_PER_CHAR_24K * sample_rate / 24000))
+        denom = max(samples_total, estimate)
+    frac = min(1.0, samples_played / denom)
+    if closed and samples_total > 0 and samples_played >= samples_total:
+        return " ".join(words)
+    n = int(len(words) * frac)
+    if n <= 0:
+        return ""
+    return " ".join(words[:n])
 
 
 class CaptionBoard:
-    """Room STT is a short live line. The spoken reply stays until the next one."""
+    """Labeled lines. Room STT expires. The spoken reply reveals with playback."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._text = ""
         self._at = 0.0
         self._agent = ""
+        self._agent_label = "Agent"
+        self._shown_words = 0
+        self._progress = lambda: (0, 0, False, 48000)
 
     def set(self, text: str) -> None:
         cleaned = " ".join((text or "").split())
@@ -28,19 +62,56 @@ class CaptionBoard:
             self._text = cleaned
             self._at = time.monotonic()
 
-    def set_agent(self, text: str) -> None:
+    def set_agent(self, text: str, *, label: str = "Agent") -> None:
         cleaned = " ".join((text or "").split())
         with self._lock:
             self._agent = cleaned
+            self._agent_label = (label or "Agent").strip() or "Agent"
+            self._shown_words = 0
+
+    def bind_progress(self, fn: Any) -> None:
+        """fn() -> played samples, queued samples, closed, sample rate."""
+        with self._lock:
+            self._progress = fn
+
+    def note_progress(
+        self, *, played: int, queued: int, closed: bool = False, sample_rate: int = 48000
+    ) -> None:
+        self.bind_progress(lambda: (played, queued, closed, sample_rate))
 
     def get(self) -> str:
         with self._lock:
             room = ""
             if self._text and time.monotonic() - self._at <= _HOLD_S:
                 room = self._text
-            if self._agent and room:
-                return self._agent + "\n" + room
-            return self._agent or room
+            agent = self._agent_visible()
+            parts: list[str] = []
+            if agent:
+                parts.append(f"{self._agent_label}: {agent}")
+            if room:
+                parts.append(f"{ROOM_LABEL}: {room}")
+            return "\n".join(parts)
+
+    def _agent_visible(self) -> str:
+        if not self._agent:
+            return ""
+        try:
+            played, queued, closed, rate = self._progress()
+        except Exception:
+            return ""
+        target = revealed_words(
+            self._agent,
+            int(played or 0),
+            sample_rate=int(rate or 48000),
+            samples_total=int(queued or 0),
+            closed=bool(closed),
+        )
+        n = len(target.split()) if target else 0
+        if n > self._shown_words:
+            self._shown_words = n
+        if self._shown_words <= 0:
+            return ""
+        return " ".join(self._agent.split()[: self._shown_words])
 
 
 def _font(size: int) -> Any:
@@ -62,7 +133,7 @@ def paint_caption(image: Any, text: str) -> Any:
     """Draw wrapped caption onto a PIL RGB image; returns the same image."""
     from PIL import ImageDraw
 
-    cleaned = " ".join((text or "").split())
+    cleaned = (text or "").strip()
     if not cleaned:
         return image
     width, height = image.size
@@ -73,7 +144,7 @@ def paint_caption(image: Any, text: str) -> Any:
     lines: list[str] = []
     for part in cleaned.split("\n"):
         lines.extend(textwrap.wrap(part, width=cols) or [])
-    lines = lines[-3:]
+    lines = lines[-_CAPTION_LINES:]
     pad = max(8, size // 4)
     line_h = size + pad
     box_h = line_h * len(lines) + pad
