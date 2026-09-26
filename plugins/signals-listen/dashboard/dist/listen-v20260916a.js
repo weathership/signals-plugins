@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926e";
+  const JS_VERSION = "listen-js-20260926f";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -124,7 +124,7 @@
       setConn("connecting");
       setDetail(JS_VERSION);
       try {
-        // Mic first, on the Connect click. Echo cancellation stays on so her
+        // Mic first, on the Connect click. Echo cancellation stays on so the
         // speaker doesn't walk back in as the user. channelCount constraints
         // fail OverconstrainedError with no prompt, so those stay off.
         let mic = null;
@@ -195,7 +195,7 @@
           el.muted = !!textOnly;
           const p = el.play();
           // One speaker path. The element and AudioContext.destination on the
-          // same track play her twice; Chrome's echo canceller then pumps
+          // same track play the voice twice; Chrome's echo canceller then pumps
           // the level (speech, silence, speech).
           function playViaContext() {
             if (textOnly) return;
@@ -343,7 +343,7 @@
         mic.getAudioTracks().forEach(function (t) { t.enabled = !next; });
       }
       setDetail(next
-        ? JS_VERSION + " · room muted — she will not hear the room"
+        ? JS_VERSION + " · room muted — the mic is not sent"
         : JS_VERSION + " · mic live");
     }
 
@@ -357,8 +357,8 @@
         audioSinkRef.current = null;
       }
       setDetail(next
-        ? JS_VERSION + " · her audio is off — her words stay on the video"
-        : JS_VERSION + " · hearing her");
+        ? JS_VERSION + " · incoming audio is off — words stay on the video"
+        : JS_VERSION + " · hearing audio");
     }
 
     function onDraftKey(e) {
@@ -424,7 +424,7 @@
           ),
           h("p", { className: "signals-listen-status" },
             onCall
-              ? "Mute keeps local talk off her mic. Silence cuts her audio; her words stay on the picture."
+              ? "Mute keeps local talk off the mic. Silence cuts incoming audio; words stay on the picture."
               : "Mute and Silence arm after Connect."
           ),
           h("p", { className: "signals-listen-status" }, detail),

@@ -14,7 +14,7 @@ _HOLD_S = 4.0
 
 
 class CaptionBoard:
-    """Room STT is a short live line. What Ripley says stays until she speaks again."""
+    """Room STT is a short live line. The spoken reply stays until the next one."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()

@@ -406,7 +406,7 @@ class WebRtcHub:
         }
 
     def show_agent_line(self, text: str) -> None:
-        """Burn what she is saying into every live video track. Stays until the next line."""
+        """Burn the spoken reply into every live video track. Stays until the next line."""
         cleaned = " ".join((text or "").split())
         if not cleaned:
             return

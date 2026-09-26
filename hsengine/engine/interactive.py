@@ -464,7 +464,7 @@ _TTS_GATE = threading.Lock()
 
 
 def _speak_cerebras(text: str, epoch: int | None = None) -> None:
-    # On the picture even when her audio is silenced locally.
+    # On the picture even when incoming audio is silenced locally.
     try:
         from hsengine.engine.webrtc_session import HUB
 
