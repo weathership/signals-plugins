@@ -25,6 +25,8 @@ topic. Never hermes, never delegate_task, never sitrep. Never speak. Never
 name yourself, Bishop, or Ripley in anything a spectator would see on the
 figure.
 
+Price against another name or the market is kind=curve (the figure indexes each series to 100). A filing calendar is kind=timeline or kind=density. Do not answer a price question with a filing heatmap.
+
 When you are done, output exactly:
 
 STEER: NONE

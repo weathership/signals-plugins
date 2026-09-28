@@ -53,9 +53,11 @@ def test_timeline_kind_builds_a_scatter_of_dates():
     assert names == ["at"]
 
 
-def test_curve_without_series_does_not_invent_a_line():
+def test_curve_without_series_does_not_invent_a_line(monkeypatch):
+    """Ticker names are not a series. An empty FMP pull stays an empty plot."""
     from hsengine.engine import webrtc_viz_apps as apps
 
+    monkeypatch.setattr("hsengine.engine.ops.fmp", lambda **_k: {"hits": []})
     scene = apps.put_scene("c1", kind="curve", title="VTIP", data='{"tickers":["VTIP"]}')
     obj = apps._hv_obj(scene)
     assert obj.__class__.__name__ == "Text"
@@ -68,6 +70,39 @@ def test_curve_with_series_plots_those_points():
     scene = apps.put_scene("c2", kind="curve", title="VTIP", data=raw)
     obj = apps._hv_obj(scene)
     assert obj.__class__.__name__ == "Curve"
+
+
+def test_two_price_series_are_indexed_to_the_same_start():
+    """XOM at 110 and SPY at 500 must not share a raw price axis."""
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = (
+        '{"series":['
+        '{"name":"XOM","points":[["d0",100],["d1",110]]},'
+        '{"name":"SPY","points":[["d0",500],["d1",550]]}'
+        "]}"
+    )
+    scene = apps.put_scene("rel", kind="curve", title="XOM vs SPY", data=raw)
+    obj = apps._hv_obj(scene)
+    starts = []
+    ends = []
+    for element in obj:
+        col = [float(v) for v in element.dimension_values("y")]
+        starts.append(col[0])
+        ends.append(col[-1])
+    assert starts == [100.0, 100.0]
+    assert ends[0] == pytest.approx(110.0)
+    assert ends[1] == pytest.approx(110.0)
+
+
+def test_one_price_series_stays_in_dollars():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = '{"series":[{"name":"XOM","points":[["d0",50],["d1",55]]}]}'
+    scene = apps.put_scene("one", kind="curve", title="XOM", data=raw)
+    obj = apps._hv_obj(scene)
+    col = [float(v) for v in obj.dimension_values("y")]
+    assert col == [50.0, 55.0]
 
 
 def test_density_kind_is_a_week_by_lane_heatmap():

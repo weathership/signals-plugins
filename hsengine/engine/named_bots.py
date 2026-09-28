@@ -288,6 +288,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
         if (
             not replace
             and managed
+            and "indexed to 100" in template
+            and "indexed to 100" not in current
+        ):
+            replace = True
+        if (
+            not replace
+            and managed
             and "Kanban assignee is grok" in template
             and "Kanban assignee is grok" not in current
         ):

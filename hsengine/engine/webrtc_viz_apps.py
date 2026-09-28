@@ -343,7 +343,7 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
 
     payload = _payload(scene)
     series = payload.get("series")
-    traces: list[Any] = []
+    prepared: list[tuple[str, list]] = []
     if isinstance(series, list):
         for row in series:
             if not isinstance(row, dict):
@@ -360,18 +360,25 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
                 continue
             if len(data) < 2:
                 continue
-            if scatter:
-                traces.append(hv.Scatter(data, "x", "y", label=name))
-            else:
-                traces.append(hv.Curve(data, "x", "y", label=name))
-    if not traces:
-        traces = _curves_from_fmp_eod(scene, scatter=scatter)
+            prepared.append((name, data))
+    if not prepared:
+        prepared = _eod_series(scene)
+    # Two price levels on one axis hide the move (XOM near 110, SPY near 500).
+    if len(prepared) >= 2:
+        prepared = [(name, rebase_to_100(data)) for name, data in prepared]
+    traces: list[Any] = []
+    for name, data in prepared:
+        if scatter:
+            traces.append(hv.Scatter(data, "x", "y", label=name))
+        else:
+            traces.append(hv.Curve(data, "x", "y", label=name))
     if traces:
         opts = dict(
             title=title or "",
             width=PLOT_W,
             height=620,
             bgcolor="#0b0b12",
+            ylabel="indexed to 100" if len(prepared) >= 2 else "close",
         )
         if len(traces) == 1:
             return traces[0].opts(**opts)
@@ -380,6 +387,16 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
         title,
         "No numeric series — pass payload.series or tickers for FMP eod",
     )
+
+
+def rebase_to_100(points: list[tuple[Any, float]]) -> list[tuple[Any, float]]:
+    """Index a price path to 100 at its first point. Relative move, not the level."""
+    if len(points) < 2:
+        return list(points)
+    base = float(points[0][1])
+    if base == 0:
+        return list(points)
+    return [(t, 100.0 * float(y) / base) for t, y in points]
 
 
 def eod_points_from_hits(hits: list[Any]) -> list[tuple[str, float]]:
@@ -401,13 +418,11 @@ def eod_points_from_hits(hits: list[Any]) -> list[tuple[str, float]]:
     return pts
 
 
-def _curves_from_fmp_eod(scene: dict[str, Any], *, scatter: bool = False) -> list[Any]:
-    """Pull daily closes when viz_show got tickers but no series."""
-    import holoviews as hv
-
+def _eod_series(scene: dict[str, Any]) -> list[tuple[str, list]]:
+    """Daily closes when viz_show got tickers but no series. Not filings."""
     from hsengine.engine import ops
 
-    traces: list[Any] = []
+    series: list[tuple[str, list]] = []
     for ticker in _tickers_from_scene(scene)[:6]:
         try:
             out = ops.fmp(query=ticker, stream="eod", limit=90)
@@ -417,11 +432,8 @@ def _curves_from_fmp_eod(scene: dict[str, Any], *, scatter: bool = False) -> lis
         pts = eod_points_from_hits(out.get("hits") or [])
         if len(pts) < 2:
             continue
-        if scatter:
-            traces.append(hv.Scatter(pts, "x", "y", label=ticker))
-        else:
-            traces.append(hv.Curve(pts, "x", "y", label=ticker))
-    return traces
+        series.append((ticker, pts))
+    return series
 
 
 def _timeline(scene: dict[str, Any], title: str) -> Any:
