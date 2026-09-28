@@ -89,6 +89,31 @@ def test_tts_echo_does_not_interrupt_a_short_fragment():
     assert taker._words == ["um"]
 
 
+def test_a_short_phrase_does_not_dump_queued_speech():
+    from hsengine.engine.webrtc_mix import SpeechBoard
+
+    board = SpeechBoard()
+    board.push([0.2] * 480, sample_rate=48000)
+    taker = TurnTaker(_NoopLoop(), speech=board)
+    interrupted = []
+    board.interrupt = lambda: interrupted.append(1) or 0
+    taker.on_word("hello")
+    taker.on_word("there")
+    assert interrupted == []
+
+
+def test_stop_still_barges_in_over_tts():
+    from hsengine.engine.webrtc_mix import SpeechBoard
+
+    board = SpeechBoard()
+    board.push([0.2] * 480, sample_rate=48000)
+    taker = TurnTaker(_NoopLoop(), speech=board)
+    interrupted = []
+    board.interrupt = lambda: interrupted.append(1) or 0
+    taker.on_word("stop")
+    assert interrupted
+
+
 def test_real_user_speech_still_barges_in_over_tts():
     from hsengine.engine.webrtc_mix import SpeechBoard
 

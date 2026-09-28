@@ -169,6 +169,9 @@ class WebRtcHub:
                 "no WebRTC source clip; set HERMES_WEBRTC_VIDEO or place demo.mp4"
             )
 
+        from hsengine.engine.webrtc_consent import install as install_consent
+
+        install_consent()
         config = RTCConfiguration(
             iceServers=[RTCIceServer(urls=list(ICE_SERVERS))] if ICE_SERVERS else []
         )

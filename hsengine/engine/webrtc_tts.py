@@ -220,26 +220,28 @@ def _run_isolated(coro_fn: Any) -> Any:
         nested = False
     if not nested:
         return asyncio.run(coro_fn())
-    box: dict[str, Any] = {}
 
     def _thr() -> None:
         try:
-            box["v"] = asyncio.run(coro_fn())
-        except BaseException as e:
-            box["e"] = e
+            asyncio.run(coro_fn())
+        except BaseException:
+            log.exception("tts pump failed")
 
     t = threading.Thread(target=_thr, daemon=True, name="kyutai-tts-pump")
     t.start()
-    t.join()
-    if "e" in box:
-        raise box["e"]
-    return box.get("v")
+    # Joining here freezes the engine loop: ICE consent goes unanswered and
+    # the audio sender cannot pace. The pump thread owns the synthesis.
+    return None
 
 
 def _stream_onto(
     boards: list[Any], text: str, *, source: str, epoch: int | None
-) -> tuple[int, bool]:
-    """Push TTS chunks onto *boards*. Returns (samples, interrupted)."""
+) -> tuple[int, bool] | None:
+    """Push TTS chunks onto *boards*.
+
+    Returns (samples, interrupted), or None when the pump was handed to a
+    side thread so the engine loop can keep pacing audio and ICE.
+    """
     interrupted = False
     expected = _epoch_snapshot(boards, epoch)
     if not _live_boards(boards, expected):
@@ -270,7 +272,10 @@ def speak_into(
     hits Stop (or barge-in) the epoch advances and remaining chunks are
     dropped so queued speech cannot restart after the buffer is cleared.
     """
-    n, interrupted = _stream_onto([board], text, source=source, epoch=epoch)
+    result = _stream_onto([board], text, source=source, epoch=epoch)
+    if result is None:
+        return
+    n, interrupted = result
     if interrupted:
         log.info("tts interrupted after %s samples (%s chars)", n, len(text or ""))
         return
@@ -287,7 +292,10 @@ def speak_on_session_boards(
     boards = [b for b in getattr(HUB, "_speech", {}).values() if b is not None]
     if not boards:
         return
-    n, interrupted = _stream_onto(boards, text, source=source, epoch=epoch)
+    result = _stream_onto(boards, text, source=source, epoch=epoch)
+    if result is None:
+        return
+    n, interrupted = result
     if interrupted:
         log.info("tts interrupted after %s samples on %s board(s)", n, len(boards))
         return

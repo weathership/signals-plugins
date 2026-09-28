@@ -17,9 +17,13 @@ _MOSHI_RATE = 24000
 _CHUNK = 1920  # 80 ms at 24 kHz
 _TURN_QUIET_S = 3.0
 _TURN_MIN_CHARS = 8
-# Echo of our own TTS is not barge-in. Real user speech over TTS still wins
-# once a fragment is long enough to be an utterance.
+# Echo of our own TTS is not barge-in. While she is still speaking, a short
+# fragment must not dump the queued line. A stop word, or a real sentence,
+# still cuts in.
 _ECHO_HOLDOFF_S = 0.45
+_BARGE_MIN_CHARS = 24
+_BARGE_MIN_WORDS = 4
+_BARGE_STOP = frozenset({"stop", "wait", "hold", "quiet", "silence"})
 # Ceiling only: short turns stop at EOS. 280 cut ruminations mid-thought.
 _RIPLEY_SPOKEN_MAX_TOKENS = 4096
 SPOKEN_SYSTEM = (
@@ -364,10 +368,25 @@ class TurnTaker:
         at = float(last() if callable(last) else 0.0)
         return at > 0.0 and (time.monotonic() - at) < _ECHO_HOLDOFF_S
 
+    def _speaking_now(self) -> bool:
+        speech = self._speech
+        if speech is None:
+            return False
+        speaking = getattr(speech, "speaking", None)
+        if callable(speaking) and speaking():
+            return True
+        return self._echo_holdoff()
+
     def _barge_in(self, pending: str) -> None:
         # Stop still calls SpeechBoard.interrupt directly. Echo of Kyutai
         # into Moshi must not drop the rest of the board.
-        if self._echo_holdoff() and len((pending or "").strip()) < _TURN_MIN_CHARS:
+        text = (pending or "").strip()
+        if self._speaking_now():
+            words = [w.strip(".,!?").lower() for w in text.split() if w.strip(".,!?")]
+            if not any(w in _BARGE_STOP for w in words):
+                if len(text) < _BARGE_MIN_CHARS or len(words) < _BARGE_MIN_WORDS:
+                    return
+        elif len(text) < _TURN_MIN_CHARS and self._echo_holdoff():
             return
         speech = self._speech
         interrupt = getattr(speech, "interrupt", None) if speech is not None else None
@@ -492,6 +511,12 @@ async def follow_audio(
         try:
             while True:
                 frame = await track.recv()
+                try:
+                    from hsengine.engine.webrtc_consent import note_inbound_media
+
+                    note_inbound_media()
+                except Exception:
+                    pass
                 pcm = frame_to_mono24k(frame)
                 if pcm is None or getattr(pcm, "size", 0) == 0:
                     continue

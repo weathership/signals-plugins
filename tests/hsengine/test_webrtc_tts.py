@@ -97,10 +97,17 @@ def test_speak_into_from_a_running_event_loop(monkeypatch):
     board = SpeechBoard()
 
     async def _inside():
+        t0 = asyncio.get_running_loop().time()
         speak_into(board, "hello from the engine loop")
-        return board.speaking()
+        # Synthesis is on a side thread. This wait is the loop staying alive.
+        for _ in range(50):
+            if board.speaking():
+                return asyncio.get_running_loop().time() - t0
+            await asyncio.sleep(0.01)
+        return None
 
-    assert asyncio.run(_inside()) is True
+    elapsed = asyncio.run(_inside())
+    assert elapsed is not None and elapsed < 0.5
 
 
 def test_speak_into_preempts_clip_on_the_board(monkeypatch):

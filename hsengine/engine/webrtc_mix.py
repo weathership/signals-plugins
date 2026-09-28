@@ -334,6 +334,10 @@ def _silence_track(sample_rate: int = CANON_RATE, frame_samples: int = 960) -> A
             else:
                 due = self._t0 + (self._pts / self._rate)
                 wait = due - time.monotonic()
+                # A stalled loop must not dump the frames it owes as a burst.
+                if wait < -0.04:
+                    self._t0 = time.monotonic() - (self._pts / self._rate)
+                    wait = 0.0
                 if wait > 0:
                     await asyncio.sleep(wait)
             frame = s16_stereo_frame(
