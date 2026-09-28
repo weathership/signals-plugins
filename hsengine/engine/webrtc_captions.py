@@ -1,6 +1,7 @@
 """Burn STT text into outbound WebRTC video frames."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import textwrap
 import threading
@@ -237,6 +238,35 @@ def overlay_frame(frame: Any, text: str, activity: str = "") -> Any:
         return frame
 
 
+def stamp_frame(frame: Any, text: str, activity: str) -> Any:
+    """Compositor plus caption. Runs off the audio loop.
+
+    A 1312×688 caption paint is ~30 ms, and the clip is 24 fps, so doing
+    it on the loop starves the 20 ms audio sender: the jitter buffer holds
+    a few words, then the packet gap is a hard cut.
+    """
+    from hsengine.engine.webrtc_program import mix_frame
+
+    try:
+        # Keep the clip's PTS/time_base. Replacing the RTP clock with
+        # a 15 fps rgb24 stream made Listen show a white plate.
+        frame = mix_frame(frame)
+    except Exception:
+        log.debug("program mix failed", exc_info=True)
+    return overlay_frame(frame, text, activity)
+
+
+def _stamp_needed(text: str, activity: str) -> bool:
+    if text or activity:
+        return True
+    try:
+        from hsengine.engine.webrtc_program import PROGRAM
+
+        return bool(PROGRAM.active())
+    except Exception:
+        return False
+
+
 def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) -> Any:
     from aiortc import MediaStreamTrack
     from aiortc.mediastreams import MediaStreamError
@@ -251,17 +281,13 @@ def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) 
         async def recv(self):
             if self.readyState != "live":
                 raise MediaStreamError
-            from hsengine.engine.webrtc_program import mix_frame
-
             frame = await self._inner.recv()
-            try:
-                # Keep the clip's PTS/time_base. Replacing the RTP clock with
-                # a 15 fps rgb24 stream made Listen show a white plate.
-                frame = mix_frame(frame)
-            except Exception:
-                pass
+            text = board.get()
             act = activity.get() if activity is not None else ""
-            return overlay_frame(frame, board.get(), act)
+            if not _stamp_needed(text, act):
+                return frame
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, stamp_frame, frame, text, act)
 
         def stop(self) -> None:
             try:
