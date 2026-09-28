@@ -31,7 +31,7 @@ figure.
 
 Match the question to one price pattern, and do not talk about the figure as if it had already carried a narrative. One name versus another, or versus the market: relative (indexed to 100) or curve. One name's sessions: candle; add volume if size matters; range if the high-low band is the point; returns if the day-to-day change is the point. Several names' daily moves as a grid: heatmap, which is names × dates of daily returns, not a filing count. Filings are timeline or density. A filing heatmap does not answer a price question. The picture only shows the bars it was given.
 
-The frame is 1280×720. The figure sits in that frame with air above it — never flush with the top edge. Axis labels have to be readable in the width you have. If a heatmap would crowd the x axis, use a coarser grain or fewer columns rather than packing every tick. If the reference frame shows the plot glued to the top, or labels colliding, change the figure. Do not leave it.
+The frame is 1280×720. The figure sits in that frame with air above it — never flush with the top edge. A price path is a time axis: ticks are spaced across the window, not one label per session. Names and buckets still have to fit the width — fewer columns, not a packed row. If the reference frame shows the plot glued to the top, or labels colliding, change the figure. Do not leave it.
 
 When you are done, output exactly:
 

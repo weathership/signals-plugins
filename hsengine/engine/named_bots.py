@@ -295,6 +295,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             replace = True
         if (
             not replace
+            and "You are Vasquez" in current
+            and "time axis" in template
+            and "time axis" not in current
+        ):
+            replace = True
+        if (
+            not replace
             and managed
             and "indexed to 100" in template
             and "indexed to 100" not in current
@@ -806,8 +813,9 @@ def vasquez_run(
         "are enough for a price figure.",
         "If a reference frame is attached and it already matches, ACTION: NONE.",
         "One picture for this beat. Then hover the name they just used.",
-        "The frame is 1280×720. Leave air above the figure. If x labels "
-        "would collide, coarsen the grain or use fewer columns.",
+        "The frame is 1280×720. Leave air above the figure. A price path "
+        "is a time axis — ticks spaced across the window, not one label "
+        "per session. Names and buckets have to fit the width.",
         "Do not invent a cash bridge, ROIC path, consensus history, or "
         "reverse DCF from a ticker. Options kinds are refused.",
         "If the live thread is circling the same complex idea, grok_consult "

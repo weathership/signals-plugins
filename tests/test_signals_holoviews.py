@@ -63,6 +63,23 @@ def test_curve_without_series_does_not_invent_a_line(monkeypatch):
     assert obj.__class__.__name__ == "Text"
 
 
+def test_daily_dates_on_a_line_are_a_time_axis():
+    """Ninety session strings must not become ninety category ticks."""
+    from datetime import date
+
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    points = ",".join(
+        f'["2026-06-{i:02d}", {100 + i}]' for i in range(1, 21)
+    )
+    raw = '{"series":[{"name":"SLB","points":[' + points + "]}]}"
+    scene = apps.put_scene("energy", kind="curve", title="SLB", data=raw)
+    obj = apps._hv_obj(scene)
+    xs = list(obj.dimension_values(0))
+    assert xs[0] == date(2026, 6, 1)
+    assert xs[-1] == date(2026, 6, 20)
+
+
 def test_curve_with_series_plots_those_points():
     from hsengine.engine import webrtc_viz_apps as apps
 

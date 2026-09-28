@@ -478,6 +478,26 @@ def _style(title: str, **extra: Any) -> dict[str, Any]:
     return opts
 
 
+def _time_or_label(value: Any) -> Any:
+    """An ISO day is a time axis. A name or an index stays a category.
+
+    Ninety date strings on a category axis are one tick per session, which
+    packs the row. A time axis spaces them.
+    """
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return value
+    text = str(value).strip()
+    if len(text) >= 10 and text[4:5] == "-" and text[7:8] == "-":
+        try:
+            from datetime import date
+
+            year, month, day = (int(part) for part in text[:10].split("-"))
+            return date(year, month, day)
+        except ValueError:
+            return value
+    return value
+
+
 def axis_label_opts(
     n_x: int, labels: list[str] | None = None, *, width: int = PLOT_W
 ) -> dict[str, Any]:
@@ -532,6 +552,9 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False, force_i
             prepared.append((name, data))
     if not prepared:
         prepared = _eod_series(scene)
+    prepared = [
+        (name, [(_time_or_label(x), y) for x, y in data]) for name, data in prepared
+    ]
     # Two price levels on one axis hide the move (XOM near 110, SPY near 500).
     if force_index or len(prepared) >= 2:
         prepared = [(name, rebase_to_100(data)) for name, data in prepared]
@@ -542,13 +565,16 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False, force_i
         else:
             traces.append(hv.Curve(data, "x", "y", label=name))
     if traces:
-        opts = dict(
-            title=title or "",
-            width=PLOT_W,
-            height=620,
-            bgcolor="#0b0b12",
-            ylabel="indexed to 100" if force_index or len(prepared) >= 2 else "close",
+        indexed = force_index or len(prepared) >= 2
+        xs = [x for _name, data in prepared for x, _y in data]
+        time_axis = bool(xs) and all(hasattr(x, "year") for x in xs)
+        opts = _style(
+            title or "",
+            ylabel="indexed to 100" if indexed else "close",
         )
+        if not time_axis:
+            labels = list(dict.fromkeys(str(x) for x in xs))
+            opts.update(axis_label_opts(len(labels), labels))
         if len(traces) == 1:
             return traces[0].opts(**opts)
         return hv.Overlay(traces).opts(**opts, legend_position="top_left")

@@ -31,8 +31,10 @@ The video is 1280×720. The figure sits in that frame with air above it.
 It is not pinned to the top edge, and it is not letterboxed into a short
 top band.
 
-Axis labels must be readable in the width available. A horizontal tick
-needs about 80 pixels. When a heatmap has more x categories than that,
-do not keep every column label: coarsen the grain (weeks, not every
-session) or pass fewer names. Rotating or thinning ticks is the
-backstop, not an excuse to dump a month of daily labels into one row.
+Axis labels must be readable in the width available. A price path is a
+time axis: ticks are spaced across the window, not one label per
+session. Do not coarsen a line to fix the axis. Names, weeks, and other
+categories are different — a horizontal tick needs about 80 pixels.
+When there are more categories than that, use fewer columns or a
+coarser bucket. Rotating or thinning ticks is the backstop for a
+category axis, not a way to dump ninety daily labels into one row.
