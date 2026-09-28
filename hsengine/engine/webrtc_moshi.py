@@ -24,6 +24,38 @@ _ECHO_HOLDOFF_S = 0.45
 _BARGE_MIN_CHARS = 24
 _BARGE_MIN_WORDS = 4
 _BARGE_STOP = frozenset({"stop", "wait", "hold", "quiet", "silence"})
+# Mute sends silence, not "no RTP". Words from that silence, or from a
+# quiet room, are not a person cutting in.
+_MIC_HOT_RMS = 0.03
+_MIC_HOT_S = 0.6
+
+
+class MicGate:
+    """Recent inbound level. Cold means mute or a quiet room, not a turn."""
+
+    def __init__(self, thresh: float = _MIC_HOT_RMS, fresh_s: float = _MIC_HOT_S) -> None:
+        self.thresh = float(thresh)
+        self.fresh_s = float(fresh_s)
+        self._hot_at = 0.0
+
+    def note(self, pcm: Any) -> None:
+        import time
+
+        import numpy as np
+
+        samples = np.asarray(pcm, dtype=np.float32).reshape(-1)
+        if samples.size == 0:
+            return
+        rms = float(np.sqrt(np.mean(samples * samples)))
+        if rms >= self.thresh:
+            self._hot_at = time.monotonic()
+
+    def hot(self) -> bool:
+        import time
+
+        return self._hot_at > 0.0 and (time.monotonic() - self._hot_at) <= self.fresh_s
+
+
 # Ceiling only: short turns stop at EOS. 280 cut ruminations mid-thought.
 _RIPLEY_SPOKEN_MAX_TOKENS = 4096
 SPOKEN_SYSTEM = (
@@ -321,11 +353,13 @@ class TurnTaker:
         *,
         session_id: str = "",
         speech: Any | None = None,
+        mic: MicGate | None = None,
     ) -> None:
         self._loop = loop
         self._quiet_s = quiet_s
         self._session_id = session_id
         self._speech = speech
+        self._mic = mic
         self._words: list[str] = []
         self._gen = 0
         self._task: asyncio.Task | None = None
@@ -393,9 +427,17 @@ class TurnTaker:
         if callable(interrupt):
             interrupt()
 
+    def _mic_hot(self) -> bool:
+        mic = self._mic
+        if mic is None:
+            return True
+        return bool(mic.hot())
+
     def on_word(self, word: str) -> None:
         import time
 
+        if not self._mic_hot():
+            return
         self.last_user_at = time.monotonic()
         pending = " ".join(w for w in (self._words + [word]) if w).strip()
         self._barge_in(pending)
@@ -486,7 +528,10 @@ async def follow_audio(
     from hsengine.engine.diarization import note_pcm, speaker_label
 
     captioner.speaker_label = lambda: speaker_label(session_id)
-    turns = TurnTaker(asyncio.get_running_loop(), session_id=session_id, speech=speech)
+    mic = MicGate()
+    turns = TurnTaker(
+        asyncio.get_running_loop(), session_id=session_id, speech=speech, mic=mic
+    )
     if hub is not None and session_id:
         bind = getattr(hub, "bind_turns", None)
         if callable(bind):
@@ -520,6 +565,10 @@ async def follow_audio(
                 pcm = frame_to_mono24k(frame)
                 if pcm is None or getattr(pcm, "size", 0) == 0:
                     continue
+                try:
+                    mic.note(pcm)
+                except Exception:
+                    log.debug("mic level failed", exc_info=True)
                 pending = np.concatenate([pending, np.asarray(pcm, dtype=np.float32).reshape(-1)])
                 try:
                     note_pcm(session_id, pcm)

@@ -89,6 +89,22 @@ def test_tts_echo_does_not_interrupt_a_short_fragment():
     assert taker._words == ["um"]
 
 
+def test_a_quiet_mic_does_not_cut_her_off():
+    from hsengine.engine.webrtc_mix import SpeechBoard
+    from hsengine.engine.webrtc_moshi import MicGate
+
+    board = SpeechBoard()
+    board.push([0.2] * 4800, sample_rate=48000)
+    gate = MicGate()
+    taker = TurnTaker(_NoopLoop(), speech=board, mic=gate)
+    interrupted = []
+    board.interrupt = lambda: interrupted.append(1) or 0
+    for w in ("note", "that", "we", "just", "got", "cut"):
+        taker.on_word(w)
+    assert interrupted == []
+    assert taker._words == []
+
+
 def test_a_short_phrase_does_not_dump_queued_speech():
     from hsengine.engine.webrtc_mix import SpeechBoard
 

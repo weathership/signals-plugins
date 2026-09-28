@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260926h";
+  const JS_VERSION = "listen-js-20260928i";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -341,6 +341,14 @@
       const mic = micRef.current;
       if (mic && mic.getAudioTracks) {
         mic.getAudioTracks().forEach(function (t) { t.enabled = !next; });
+      }
+      // The sender may hold the same track. Disable that too, or mute is
+      // only a local flag and Moshi still hears the room.
+      const pc = pcRef.current;
+      if (pc && pc.getSenders) {
+        pc.getSenders().forEach(function (s) {
+          if (s && s.track && s.track.kind === "audio") s.track.enabled = !next;
+        });
       }
       setDetail(next
         ? JS_VERSION + " · room muted — the mic is not sent"

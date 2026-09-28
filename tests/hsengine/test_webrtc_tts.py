@@ -28,7 +28,7 @@ def test_silence_cap_keeps_a_quiet_syllable():
     from hsengine.engine.webrtc_tts import SilenceCap
 
     rate = 24000
-    quiet = np.ones(rate // 5, dtype=np.float32) * 0.08
+    quiet = np.ones(rate // 5, dtype=np.float32) * 0.025
     out = SilenceCap(rate=rate).feed(quiet)
     assert out.size > int(quiet.size * 0.9)
 
