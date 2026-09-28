@@ -16,8 +16,10 @@ TTS_RATE = 24000
 # Kyutai inserts 0.2–0.6s between phrases. The trough is not pure zeros:
 # the shoulders sit just above a per-sample gate, and one louder sample
 # in the middle resets it, so the pause survives. Judge 10 ms frames.
-_SILENCE_KEEP_S = 0.04
-_SILENCE_THRESH = 0.045
+# Keep a tenth of a second — a breath — not a dropout and not a hard gate
+# on the quiet end of a syllable.
+_SILENCE_KEEP_S = 0.10
+_SILENCE_THRESH = 0.03
 
 
 class SilenceCap:

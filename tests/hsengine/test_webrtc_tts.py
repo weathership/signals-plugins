@@ -18,7 +18,19 @@ def test_silence_cap_drops_a_spike_inside_a_phrase_hole():
     cap = SilenceCap(rate=rate)
     out = cap.feed(np.concatenate([speech, hole, speech]))
     assert float(np.max(out[: speech.size])) > 0.2
-    assert out.size < speech.size * 2 + int(0.08 * rate)
+    # The half-second hole is gone. A breath of it is kept.
+    assert out.size < speech.size * 2 + int(0.25 * rate)
+    assert out.size > speech.size * 2 + int(0.05 * rate)
+
+
+def test_silence_cap_keeps_a_quiet_syllable():
+    """A soft ending is speech. The gate must not trim it away."""
+    from hsengine.engine.webrtc_tts import SilenceCap
+
+    rate = 24000
+    quiet = np.ones(rate // 5, dtype=np.float32) * 0.08
+    out = SilenceCap(rate=rate).feed(quiet)
+    assert out.size > int(quiet.size * 0.9)
 
 
 def test_silence_cap_keeps_speech_and_shortens_holes():
