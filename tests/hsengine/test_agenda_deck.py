@@ -163,6 +163,70 @@ def test_put_agenda_item_identifies_ripley_to_gaius(monkeypatch):
     assert seen.get("attachments") and seen["attachments"][0].name == "prompt.md"
 
 
+def test_named_artifact_is_pinned_on_the_session(monkeypatch):
+    """A kanban or scratch document is an agenda attachment, not only prompt.md."""
+    from types import SimpleNamespace
+
+    from hsengine.engine.agenda_put import put_agenda_item
+
+    seen: dict = {}
+
+    class _Stub:
+        def PutAgendaItem(self, req, timeout=None):
+            seen["attachments"] = list(req.item.attachments)
+            seen["allowed"] = req.item.attachments_allowed
+            return SimpleNamespace(
+                ok=True,
+                note="",
+                item=SimpleNamespace(
+                    id="scratch/2026-09-28/2026-09-28-210000_afternoon-planning.md",
+                    title=req.item.title,
+                ),
+            )
+
+    class _Ch:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(
+        "hsengine.engine.federation.peer_target_for_project", lambda p: "127.0.0.1:50051"
+    )
+    monkeypatch.setattr("grpc.insecure_channel", lambda target: _Ch())
+    monkeypatch.setattr(
+        "hsengine.engine.generated.zndx.engine.v1.engine_pb2_grpc.EngineStub",
+        lambda ch: _Stub(),
+    )
+    monkeypatch.setattr(
+        "hsengine.engine.resources_store.put_session_materials",
+        lambda note_id, **k: [],
+    )
+    wrote: list = []
+    monkeypatch.setattr(
+        "hsengine.engine.resources_store.put_text",
+        lambda note_id, name, text: wrote.append((note_id, name, text))
+        or f"s3://hermes/resources/{note_id}/{name}",
+    )
+    out = put_agenda_item(
+        title="Afternoon planning",
+        artifacts=[
+            {
+                "name": "competitive-analysis.md",
+                "text": "Signals versus the combined stack.",
+                "role": "materials",
+            }
+        ],
+    )
+    assert out["ok"] is True
+    assert wrote and wrote[0][1] == "competitive-analysis.md"
+    assert seen["allowed"] is True
+    assert seen["attachments"][0].name == "competitive-analysis.md"
+    assert seen["attachments"][0].role == "materials"
+    assert seen["attachments"][0].uri.endswith("/competitive-analysis.md")
+
+
 def test_split_keeps_deck_off_the_public_lede():
     public, deck = split_public_deck(
         "A half hour to decide whether the book moves.\n\n"

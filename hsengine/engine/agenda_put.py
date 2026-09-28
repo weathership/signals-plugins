@@ -35,6 +35,7 @@ def put_agenda_item(
     with_whom: str = "",
     session_prompt: str = "",
     session_materials: str = "",
+    artifacts: list[dict[str, str]] | None = None,
     origin_agent: str = "ripley",
     origin_project: str = "hermes",
 ) -> dict[str, Any]:
@@ -90,15 +91,31 @@ def put_agenda_item(
     }
     if resp.item and resp.item.id:
         out["path"] = resp.item.id
-        if (session_prompt or "").strip() or (session_materials or "").strip():
+        extras = [
+            a
+            for a in (artifacts or [])
+            if str(a.get("name") or "").strip() and str(a.get("text") or "").strip()
+        ]
+        if (session_prompt or "").strip() or (session_materials or "").strip() or extras:
             try:
-                from hsengine.engine.resources_store import put_session_materials
+                from hsengine.engine.resources_store import put_session_materials, put_text
 
                 stored = put_session_materials(
                     resp.item.id,
                     prompt=session_prompt,
                     materials=session_materials,
                 )
+                for art in extras:
+                    name = str(art["name"]).strip().lstrip("/")
+                    uri = put_text(resp.item.id, name, str(art["text"]))
+                    if uri:
+                        stored.append(
+                            {
+                                "name": name,
+                                "uri": uri,
+                                "role": str(art.get("role") or "").strip(),
+                            }
+                        )
                 out["resources"] = stored
                 if stored:
                     item.id = resp.item.id
@@ -108,8 +125,11 @@ def put_agenda_item(
                         att = item.attachments.add()
                         att.name = str(obj.get("name") or "")
                         att.uri = str(obj.get("uri") or "")
+                        given = str(obj.get("role") or "").strip()
                         name = att.name.lower()
-                        if name in {"prompt.md", "session_prompt.md"}:
+                        if given:
+                            att.role = given
+                        elif name in {"prompt.md", "session_prompt.md"}:
                             att.role = "prompt"
                         elif name in {"materials.md", "supporting.md"}:
                             att.role = "materials"
