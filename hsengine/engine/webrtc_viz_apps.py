@@ -963,7 +963,11 @@ def modify_doc(doc: Any) -> None:
     hv.extension("bokeh", logo=False)
     hv.renderer("bokeh").webgl = False
     css = (
-        "html, body, .bk-root, .bk-Row, .bk-Column, .bk-GridBox "
+        "html, body { height: 100% !important; background: #0b0b12 !important; "
+        "margin: 0 !important; }"
+        "body { display: flex !important; align-items: center !important; "
+        "justify-content: center !important; }"
+        ".bk-root, .bk-Row, .bk-Column, .bk-GridBox "
         "{ background: #0b0b12 !important; color: #e8ecf4 !important; "
         "margin: 0 !important; overflow: hidden !important; "
         "max-width: 1280px !important; box-sizing: border-box !important; }"

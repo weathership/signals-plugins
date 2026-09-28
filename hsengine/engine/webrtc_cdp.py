@@ -24,7 +24,15 @@ VIEW_H = 720
 # Bokeh's toolbar sits to the right of the plot. Leave it inside the window.
 TOOLBAR_W = 72
 PLOT_W = VIEW_W - TOOLBAR_W
-PLOT_H = VIEW_H - 48
+# Shorter than the viewport so the figure can sit in the frame instead of
+# on the top edge. Width stays full.
+_VERT_MARGIN = 72
+PLOT_H = VIEW_H - 2 * _VERT_MARGIN
+
+
+def figure_top(view_h: int = VIEW_H, plot_h: int = PLOT_H) -> int:
+    """Y of a figure centered in the viewport. Zero would pin it to the top."""
+    return max(0, (int(view_h) - int(plot_h)) // 2)
 JPEG_QUALITY = 65
 PUMP_HZ = 12
 # Keep the headless compositor dirty so Page.screencastFrame is a video,

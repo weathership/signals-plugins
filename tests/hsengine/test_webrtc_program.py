@@ -70,6 +70,17 @@ def test_mix_frame_stamps_compositor_on_clip_clock():
     assert int(arr[36, 64, 1]) > 150
 
 
+def test_figure_sits_below_the_top_edge():
+    """The plot uses the width and is centered, not pinned to y = 0."""
+    from hsengine.engine.webrtc_cdp import PLOT_H, PLOT_W, VIEW_H, VIEW_W, figure_top
+
+    top = figure_top()
+    assert top >= 48
+    assert top == (VIEW_H - PLOT_H) // 2
+    assert PLOT_W >= int(VIEW_W * 0.9)
+    assert PLOT_H >= int(VIEW_H * 0.7)
+
+
 def test_mix_frame_fills_the_video_instead_of_the_top_band():
     """A 16:9 figure uses the frame. The caption plate is painted later."""
     pytest.importorskip("av")
