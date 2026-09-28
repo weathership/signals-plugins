@@ -309,6 +309,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
         if (
             not replace
             and managed
+            and "visual narrative agent" in template
+            and "visual narrative agent" not in current
+        ):
+            replace = True
+        if (
+            not replace
+            and managed
             and "Kanban assignee is grok" in template
             and "Kanban assignee is grok" not in current
         ):
@@ -704,12 +711,14 @@ async def ripley_speak_outcome(
 _VASQUEZ_LOCK = threading.Lock()
 _VASQUEZ_LAST = 0.0
 _VASQUEZ_GAP_S = 2.0
+_VASQUEZ_RUNNING = False
 
 
 def viz_tool_defs() -> list[dict[str, Any]]:
     from hsengine.engine.ops import CEREBRAS_TOOLS
 
     names = {
+        "fmp",
         "viz_show",
         "viz_select",
         "viz_input",
@@ -761,15 +770,18 @@ def vasquez_run(
     narrative: str = "",
     spoken: str = "",
 ) -> str:
-    """One silent instruct glance at the live figure. Never speaks. Never loops."""
-    global _VASQUEZ_LAST
+    """Silent visual narrative, in parallel with Ripley. Never speaks.
+
+    A reference frame is optional. She opens the page when nothing is up
+    and advances it when one is. She does not wait for Ripley to finish.
+    """
+    global _VASQUEZ_LAST, _VASQUEZ_RUNNING
     jpeg = reference_jpeg()
-    if not jpeg:
-        return ""
     now = time.monotonic()
     with _VASQUEZ_LOCK:
-        if now - _VASQUEZ_LAST < _VASQUEZ_GAP_S:
+        if _VASQUEZ_RUNNING or now - _VASQUEZ_LAST < _VASQUEZ_GAP_S:
             return ""
+        _VASQUEZ_RUNNING = True
         _VASQUEZ_LAST = now
     try:
         from hsengine.engine.webrtc_activity import pulse
@@ -779,9 +791,15 @@ def vasquez_run(
         pass
     system = load_soul(VASQUEZ)
     lines = [
-        f"Reason: {reason or 'end-of-sequence'}.",
-        "This is one reference frame of the live HoloViews page after the last beat.",
-        "If it already matches, ACTION: NONE.",
+        f"Reason: {reason or 'parallel'}.",
+        "You are running beside Ripley. She is speaking. You are not heard.",
+        "If nothing is on the video, open the figure this beat needs: "
+        "fmp when you need bars, then viz_show. Tickers in the data JSON "
+        "are enough for a price figure.",
+        "If a reference frame is attached and it already matches, ACTION: NONE.",
+        "One picture for this beat. Then hover the name they just used.",
+        "Do not invent a cash bridge, ROIC path, consensus history, or "
+        "reverse DCF from a ticker. Options kinds are refused.",
         "If the live thread is circling the same complex idea, grok_consult "
         "once then viz; otherwise do not consult.",
     ]
@@ -793,19 +811,27 @@ def vasquez_run(
         lines.append("Ripley just said: " + sp[:800])
     from hsengine.engine import interactive
 
-    result = interactive.complete_cerebras(
-        prompt="\n".join(lines),
-        system_prompt=system,
-        max_tokens=160,
-        temperature=0.3,
-        reasoning_effort="none",
-        tools=True,
-        tool_defs=viz_tool_defs(),
-        speak=False,
-        session_id=session_id,
-        recall_query="",
-        images=[jpeg],
-    )
+    kwargs: dict[str, Any] = {}
+    if jpeg:
+        kwargs["images"] = [jpeg]
+        lines.insert(2, "A reference frame of the live page is attached.")
+    try:
+        result = interactive.complete_cerebras(
+            prompt="\n".join(lines),
+            system_prompt=system,
+            max_tokens=500,
+            temperature=0.3,
+            reasoning_effort="none",
+            tools=True,
+            tool_defs=viz_tool_defs(),
+            speak=False,
+            session_id=session_id,
+            recall_query="",
+            **kwargs,
+        )
+    finally:
+        with _VASQUEZ_LOCK:
+            _VASQUEZ_RUNNING = False
     text = (getattr(result, "text", "") or "").strip()
     if text:
         log.info("vasquez glance session=%s reason=%s %r", session_id, reason, text[:160])
@@ -819,25 +845,21 @@ def schedule_vasquez_glance(
     narrative: str = "",
     spoken: str = "",
 ) -> None:
-    """Fire-and-forget after a spoken/invent sequence. No poll loop.
+    """Fire-and-forget beside the spoken turn. No poll loop.
 
-    A financial turn draws its figure here, then Vasquez may hover it.
-    She does not run at all when nothing is on the video.
+    She starts even when the video is still the clip. A long valuation
+    stays a Hicks card; she does not invent that figure.
     """
 
     def _run() -> None:
         if reason in ("user-turn", "bishop-execute"):
             try:
-                from hsengine.engine.market_session import desk_for_turn
+                from hsengine.engine.market_session import file_workflow_if_needed
 
-                desk_for_turn(session_id, narrative, spoken)
+                file_workflow_if_needed(session_id, narrative, spoken)
             except Exception:
-                log.exception("market desk failed")
+                log.exception("market briefing card failed")
         try:
-            from hsengine.engine.webrtc_program import PROGRAM
-
-            if not PROGRAM.active():
-                return
             vasquez_run(
                 session_id=session_id,
                 reason=reason,
@@ -845,6 +867,6 @@ def schedule_vasquez_glance(
                 spoken=spoken,
             )
         except Exception:
-            log.exception("vasquez glance failed")
+            log.exception("vasquez narrative failed")
 
     threading.Thread(target=_run, daemon=True, name="vasquez-glance").start()

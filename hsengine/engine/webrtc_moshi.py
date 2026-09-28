@@ -208,6 +208,13 @@ async def _run_user_utterance(
     from hsengine.engine.webrtc_silence import apply_steer_system
 
     session_history.record_turn(session_id, user=text)
+    from hsengine.engine.named_bots import schedule_vasquez_glance
+
+    schedule_vasquez_glance(
+        session_id=session_id,
+        reason="user-turn",
+        narrative=text,
+    )
     from hsengine.engine.opening import compose_next, wants_mediation
 
     if wants_mediation(text):

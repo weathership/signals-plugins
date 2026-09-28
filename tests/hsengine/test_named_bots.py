@@ -268,11 +268,29 @@ def test_bishop_run_is_silent(monkeypatch):
     assert out.monologue == ""
 
 
-def test_vasquez_run_skips_without_a_frame(monkeypatch):
+def test_vasquez_opens_a_page_when_nothing_is_up(monkeypatch):
     from hsengine.engine.named_bots import vasquez_run
+    import hsengine.engine.named_bots as nb
+
+    nb._VASQUEZ_LAST = 0.0
+    nb._VASQUEZ_RUNNING = False
+    seen: dict = {}
+
+    def _complete(**k):
+        seen.update(k)
+        return type("R", (), {"text": "ACTION: opened XOM", "model": "x"})()
 
     monkeypatch.setattr("hsengine.engine.named_bots.reference_jpeg", lambda: None)
-    assert vasquez_run(session_id="s1", reason="user-turn") == ""
+    monkeypatch.setattr("hsengine.engine.interactive.complete_cerebras", _complete)
+    out = vasquez_run(session_id="s1", reason="user-turn", narrative="XOM versus the market")
+    assert out == "ACTION: opened XOM"
+    assert seen.get("images") is None
+    assert seen.get("speak") is False
+    names = [t["function"]["name"] for t in (seen.get("tool_defs") or [])]
+    assert "fmp" in names
+    assert "viz_show" in names
+    assert "hermes" not in names
+    assert "nothing is on the video" in seen.get("prompt", "").lower() or "If nothing is on the video" in seen.get("prompt", "")
 
 
 def test_vasquez_run_sends_one_jpeg_and_only_viz_tools(monkeypatch):
@@ -294,6 +312,7 @@ def test_vasquez_run_sends_one_jpeg_and_only_viz_tools(monkeypatch):
     assert seen.get("images") == [b"\xff\xd8fakejpeg"]
     names = [t["function"]["name"] for t in (seen.get("tool_defs") or [])]
     assert set(names) <= {
+        "fmp",
         "viz_show",
         "viz_select",
         "viz_input",
@@ -301,6 +320,7 @@ def test_vasquez_run_sends_one_jpeg_and_only_viz_tools(monkeypatch):
         "viz_hover",
         "grok_consult",
     }
+    assert "fmp" in names
     assert "viz_hover" in names
     assert "grok_consult" in names
     assert "hermes" not in names
