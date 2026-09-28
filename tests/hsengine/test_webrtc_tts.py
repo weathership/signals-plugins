@@ -23,6 +23,19 @@ def test_silence_cap_drops_a_spike_inside_a_phrase_hole():
     assert out.size > speech.size * 2 + int(0.05 * rate)
 
 
+def test_a_phrase_hole_is_not_a_one_second_break():
+    """The failure mode: a few words, then ~1s of silence, then more words."""
+    from hsengine.engine.webrtc_tts import SilenceCap
+
+    rate = 24000
+    speech = np.ones(int(0.4 * rate), dtype=np.float32) * 0.3
+    hole = np.zeros(rate, dtype=np.float32)  # 1.0s
+    out = SilenceCap(rate=rate).feed(np.concatenate([speech, hole, speech]))
+    # Two speech blocks remain, and the join is a breath rather than a second.
+    assert out.size < speech.size * 2 + int(0.15 * rate)
+    assert out.size > speech.size * 2 + int(0.04 * rate)
+
+
 def test_silence_cap_keeps_a_quiet_syllable():
     """A soft ending is speech. The gate must not trim it away."""
     from hsengine.engine.webrtc_tts import SilenceCap

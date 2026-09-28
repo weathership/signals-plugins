@@ -13,12 +13,13 @@ from urllib.parse import urlencode, urlparse
 log = logging.getLogger("hsengine.engine.webrtc.tts")
 
 TTS_RATE = 24000
-# Kyutai inserts 0.2–0.6s of near-silence between phrases. A quiet
-# consonant sits well above that floor; gating it makes the voice
-# staccato. Only a near-zero hole is shortened, and a phrase breath
-# (about a fifth of a second) is kept.
-_SILENCE_KEEP_S = 0.22
-_SILENCE_THRESH = 0.018
+# Measured on this voice: a few words, then 0.6–0.9s of near-zero
+# samples, then a few more words. That hole is the break. A quiet
+# syllable is around 0.025 RMS and must pass. A single loud sample
+# inside a hole is under 0.02 RMS in a 10 ms frame, so it must not
+# reopen the hole. Keep a short join, not the hole.
+_SILENCE_KEEP_S = 0.08
+_SILENCE_THRESH = 0.02
 
 
 class SilenceCap:
