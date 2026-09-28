@@ -253,6 +253,7 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             "the spoken voice on this AgentRTC call" in current
             or "You are Bishop, the silent session" in current
             or "the silent visual gunner" in current
+            or "the visual narrative agent" in current
         )
         if not replace and managed and "kanban_create" in current and "kanban_create" not in template:
             replace = True
@@ -283,6 +284,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
             and managed
             and "Hicks orchestrates" in template
             and "Hicks orchestrates" not in current
+        ):
+            replace = True
+        if (
+            not replace
+            and "You are Vasquez" in current
+            and "air above it" in template
+            and "air above it" not in current
         ):
             replace = True
         if (
@@ -798,6 +806,8 @@ def vasquez_run(
         "are enough for a price figure.",
         "If a reference frame is attached and it already matches, ACTION: NONE.",
         "One picture for this beat. Then hover the name they just used.",
+        "The frame is 1280×720. Leave air above the figure. If x labels "
+        "would collide, coarsen the grain or use fewer columns.",
         "Do not invent a cash bridge, ROIC path, consensus history, or "
         "reverse DCF from a ticker. Options kinds are refused.",
         "If the live thread is circling the same complex idea, grok_consult "

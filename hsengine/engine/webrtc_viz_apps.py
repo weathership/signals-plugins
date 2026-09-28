@@ -478,6 +478,34 @@ def _style(title: str, **extra: Any) -> dict[str, Any]:
     return opts
 
 
+def axis_label_opts(
+    n_x: int, labels: list[str] | None = None, *, width: int = PLOT_W
+) -> dict[str, Any]:
+    """Keep x labels readable in the frame. Too many categories rotate, then thin.
+
+    A horizontal tick needs about 80 px. A rotated one needs about 28.
+    """
+    n = max(0, int(n_x))
+    wide = max(4, int(width) // 80)
+    turned = max(8, int(width) // 28)
+    font = {"title": 16, "labels": 13, "yticks": 14, "xticks": 12}
+    if n <= wide:
+        return {"xrotation": 0, "fontsize": font}
+    font = {**font, "xticks": 11}
+    if n <= turned:
+        return {"xrotation": 55, "fontsize": font}
+    font = {**font, "xticks": 9}
+    opts: dict[str, Any] = {"xrotation": 70, "fontsize": font}
+    if labels:
+        step = max(2, (n + turned - 1) // turned)
+        shown = list(labels)[::step]
+        last = labels[-1]
+        if shown and shown[-1] != last:
+            shown.append(last)
+        opts["xticks"] = shown
+    return opts
+
+
 def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False, force_index: bool = False) -> Any:
     """Real series only. Never invent index-vs-value from ticker names."""
     import holoviews as hv
@@ -687,8 +715,15 @@ def _return_heatmap(scene: dict[str, Any], title: str) -> Any:
             cells.append((str(at), name or "series", ret))
     if len({c[1] for c in cells}) < 2:
         return _empty_plot(title, "A return heatmap needs at least two names")
+    sessions = list(dict.fromkeys(c[0] for c in cells))
     return hv.HeatMap(cells, ["session", "name"], "return %").opts(
-        **_style(title or "Daily returns", cmap="RdBu_r", colorbar=True, symmetric=True)
+        **_style(
+            title or "Daily returns",
+            cmap="RdBu_r",
+            colorbar=True,
+            symmetric=True,
+            **axis_label_opts(len(sessions), sessions),
+        )
     )
 
 
@@ -899,21 +934,22 @@ def _density(scene: dict[str, Any], title: str) -> Any:
     df = df.dropna(subset=["at"])
     if df.empty:
         return hv.HeatMap([(0, "—", 0)], ["week", "lane"], "n").opts(
-            title=title, width=PLOT_W, height=420, cmap="Magma", bgcolor="#0b0b12"
+            **_style(title, cmap="Magma", colorbar=True)
         )
     df["week"] = df["at"].dt.to_period("W").dt.start_time
     counts = df.groupby(["week", "lane"], as_index=False).size()
     counts = counts.rename(columns={"size": "n"})
+    week_labels = list(dict.fromkeys(counts["week"].tolist()))
     return hv.HeatMap(counts, kdims=["week", "lane"], vdims=["n"]).opts(
-        title=title or "Filings density",
-        width=PLOT_W,
-        height=420,
-        cmap="Magma",
-        colorbar=True,
-        bgcolor="#0b0b12",
-        xlabel="",
-        ylabel="",
-        tools=["hover"],
+        **_style(
+            title or "Filings density",
+            cmap="Magma",
+            colorbar=True,
+            xlabel="",
+            ylabel="",
+            tools=["hover"],
+            **axis_label_opts(len(week_labels), week_labels),
+        )
     )
 
 
@@ -965,11 +1001,9 @@ def modify_doc(doc: Any) -> None:
     css = (
         "html, body { height: 100% !important; background: #0b0b12 !important; "
         "margin: 0 !important; }"
-        "body { display: flex !important; align-items: center !important; "
-        "justify-content: center !important; }"
         ".bk-root, .bk-Row, .bk-Column, .bk-GridBox "
         "{ background: #0b0b12 !important; color: #e8ecf4 !important; "
-        "margin: 0 !important; overflow: hidden !important; "
+        "margin: 0 !important; height: auto !important; overflow: hidden !important; "
         "max-width: 1280px !important; box-sizing: border-box !important; }"
     )
     if css not in (pn.config.raw_css or []):
@@ -985,7 +1019,16 @@ def modify_doc(doc: Any) -> None:
     )
     if sid:
         PANES[sid] = pane
-    pane.server_doc(doc)
+    # Flex on the body did not move the plot: the Bokeh root fills the
+    # viewport and the figure stays on its top edge. A spacer of the
+    # centered inset puts air above the figure inside the document.
+    from hsengine.engine.webrtc_cdp import VIEW_W, figure_top
+
+    pn.Column(
+        pn.Spacer(height=figure_top(), width=VIEW_W),
+        pane,
+        width=VIEW_W,
+    ).server_doc(doc)
     doc.title = title
     log.info(
         "holoviews document session=%s kind=%s roots=%s",

@@ -24,3 +24,15 @@ and `viz_select`.
 
 Do not say the figure is on the feed until `viz_show` returned `"ok": true`.
 `getDisplayMedia` is a later spectator-share ingest, not how HoloViews is captured.
+
+## Frame
+
+The video is 1280×720. The figure sits in that frame with air above it.
+It is not pinned to the top edge, and it is not letterboxed into a short
+top band.
+
+Axis labels must be readable in the width available. A horizontal tick
+needs about 80 pixels. When a heatmap has more x categories than that,
+do not keep every column label: coarsen the grain (weeks, not every
+session) or pass fewer names. Rotating or thinning ticks is the
+backstop, not an excuse to dump a month of daily labels into one row.

@@ -223,6 +223,31 @@ def test_cash_bridge_is_rectangles():
     assert obj.__class__.__name__ == "Rectangles"
 
 
+def test_axis_labels_turn_when_the_row_is_too_crowded():
+    from hsengine.engine.webrtc_viz_apps import axis_label_opts
+
+    assert axis_label_opts(6, width=800)["xrotation"] == 0
+    labels = [f"d{i}" for i in range(40)]
+    many = axis_label_opts(40, labels, width=800)
+    assert many["xrotation"] >= 45
+    assert many["xticks"][-1] == "d39"
+    assert len(many["xticks"]) < 40
+
+
+def test_density_heatmap_uses_the_frame_not_a_short_top_band():
+    from hsengine.engine import webrtc_viz_apps as apps
+    from hsengine.engine.webrtc_cdp import PLOT_H
+
+    scene = apps.put_scene(
+        "dens-h",
+        kind="density",
+        title="Filings density",
+        data='{"events":[{"at":"2026-08-31","lane":"SLB","label":"8-K"},{"at":"2026-09-01","lane":"SLB","label":"Form 4"}]}',
+    )
+    obj = apps._hv_obj(scene)
+    assert obj.opts.get().kwargs.get("height") == PLOT_H
+
+
 def test_density_kind_is_a_week_by_lane_heatmap():
     from hsengine.engine import webrtc_viz_apps as apps
 
