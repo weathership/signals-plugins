@@ -302,6 +302,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
         if (
             not replace
             and managed
+            and "options kinds are refused" in template
+            and "options kinds are refused" not in current
+        ):
+            replace = True
+        if (
+            not replace
+            and managed
             and "Kanban assignee is grok" in template
             and "Kanban assignee is grok" not in current
         ):
