@@ -1,9 +1,10 @@
-"""Hicks files implied call work into kanban triage without stopping the voice.
+"""Hicks orchestrates cards that were placed on the board.
 
-Ripley keeps the foreground. The gateway dispatcher (orchestrator profile
-``hicks``, leaf assignee ``grok``) pulls cards across the board. Bishop and
-Vasquez stay on the live call: a suggestion is ``bishop_suggest``, a figure
-is Vasquez, and a figure keeps the video.
+Ripley keeps the foreground. A Gaius session is ``agenda_create``. Multi-step
+work is one concrete ``hermes`` task. The gateway dispatcher (orchestrator
+profile ``hicks``, leaf assignee ``grok``) moves those cards. Speech is not
+a card. Bishop and Vasquez stay on the live call: a suggestion is
+``bishop_suggest``, a figure is Vasquez, and a figure keeps the video.
 """
 from __future__ import annotations
 
@@ -20,88 +21,11 @@ ACTIVE = frozenset(
     {"triage", "todo", "scheduled", "ready", "running", "blocked", "review"}
 )
 
-_ASK = re.compile(
-    r"\b("
-    r"look into|look up|pull up|pull the|follow up|follow-up|"
-    r"dig into|research|draft|write up|compare|design|"
-    r"check on|find out|on the board|add (?:a |the )?card|"
-    r"we should|keep an eye|circle back"
-    r")\b",
-    re.I,
-)
-_COMMIT = re.compile(
-    r"\b(i'll|i will|i'm going to|im going to|let me|i'm gonna)\b",
-    re.I,
-)
-_EMPTY_COMMIT = re.compile(
-    r"\b(let me know|i'll be here|i'll wait|i'm here)\b",
-    re.I,
-)
-_RESIDUAL = re.compile(
-    r"\b(i'll also|then i'll|next i'll|still need to|after that|in the background)\b",
-    re.I,
-)
-_LEAD = re.compile(
-    r"^(?:i'll|i will|i'm going to|im going to|let me|i'm gonna)\s+",
-    re.I,
-)
-_SMALLTALK = re.compile(
-    r"(?:hi|hey|hello|thanks|thank you|ok|okay|yes|yeah|yep|no|nope|"
-    r"good morning|good afternoon|good evening|how are you|how's it going)"
-    r"[.!]?",
-    re.I,
-)
-# A lookup that already happened in the foreground is not a second card.
-_DONE_TOOLS = frozenset(
-    {
-        "fmp",
-        "web_search",
-        "kb_search",
-        "hermes",
-        "agenda",
-        "sitrep",
-        "recent_thoughts",
-        "session_search",
-        "grok_consult",
-        "viz_show",
-        "viz_select",
-        "viz_hover",
-        "conversation",
-        "agenda_create",
-    }
-)
 _ORCH_LINE = re.compile(r"(?m)^(\s*orchestrator_profile:\s*)([^\s#]+)")
-
-_FILED_STEER = (
-    "Work just landed on the board and continues in the background. "
-    "You may change the subject. One sentence is enough if you mention it. "
-    "Do not say it is finished. Do not name the machinery."
-)
 
 
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
-
-
-def _is_smalltalk(text: str) -> bool:
-    return bool(_SMALLTALK.fullmatch((text or "").strip()))
-
-
-def _imperative(text: str) -> str:
-    raw = " ".join((text or "").split())
-    raw = _LEAD.sub("", raw).strip(" .?!;:")
-    raw = re.sub(
-        r"^(?:hey|ok|okay|so|well|please|can you|could you|would you|let's|lets)\b[:,\s]*",
-        "",
-        raw,
-        flags=re.I,
-    ).strip(" .?!;:")
-    if len(raw) < 8:
-        return ""
-    title = raw[0].upper() + raw[1:]
-    if len(title) > 80:
-        title = title[:77].rsplit(" ", 1)[0].rstrip() + "…"
-    return title
 
 
 def tool_names_of(result: Any) -> frozenset[str]:
@@ -110,41 +34,6 @@ def tool_names_of(result: Any) -> frozenset[str]:
     if type(raw) not in (list, tuple, set, frozenset):
         return frozenset()
     return frozenset(str(name) for name in raw if str(name).strip())
-
-
-def implied_title(user: str, assistant: str, *, tools_used: Any = ()) -> str | None:
-    """Triage title for suggested or promised work the turn did not finish.
-
-    A lookup that already ran (``fmp``, ``web_search``, ``hermes``, …) is the
-    work. A future-tense sentence with no tool, or a request that outlives
-    the reply, is a card.
-    """
-    said = " ".join((user or "").split())
-    spoken = " ".join((assistant or "").split())
-    if not said and not spoken:
-        return None
-    if _is_smalltalk(said) and not _COMMIT.search(spoken):
-        return None
-    if _EMPTY_COMMIT.search(spoken) and not _ASK.search(said):
-        return None
-    if type(tools_used) in (list, tuple, set, frozenset):
-        used = frozenset(str(n) for n in tools_used if str(n).strip())
-    else:
-        used = frozenset()
-    did = bool(used & _DONE_TOOLS)
-    residual = bool(_RESIDUAL.search(spoken))
-    commit = bool(_COMMIT.search(spoken))
-    ask = bool(_ASK.search(said))
-    if did and not residual:
-        return None
-    if not commit and not ask and not residual:
-        return None
-    if ask and said:
-        source = said
-    else:
-        source = spoken or said
-    title = _imperative(source)
-    return title or None
 
 
 def kanban_would_cover_figure(*, live: bool, current_kind: str, requested: str) -> bool:
@@ -304,25 +193,14 @@ def note_turn(
     assistant: str,
     tools_used: Any = (),
 ) -> dict[str, Any]:
-    """File this turn's implied work, if any, and steer the next spoken turn once."""
-    title = implied_title(user, assistant, tools_used=tools_used)
-    if not title:
-        return {"ok": True, "created": False}
-    try:
-        filed = file_implied(
-            session_id=session_id, title=title, user=user, assistant=assistant
-        )
-    except Exception:
-        log.warning("hicks ingress failed", exc_info=True)
-        return {"ok": False, "created": False, "error": "ingress failed"}
-    if filed.get("created"):
-        try:
-            from hsengine.engine.primary_hermes import offer_steer
+    """Speech does not become a card.
 
-            offer_steer(_FILED_STEER)
-        except Exception:
-            log.debug("hicks steer skipped", exc_info=True)
-    return filed
+    A Gaius session is ``agenda_create``. A board task is ``hermes``.
+    Harvesting phrases into triage flooded the board and left the real
+    task sitting there untitled as work.
+    """
+    del session_id, user, assistant, tools_used
+    return {"ok": True, "created": False}
 
 
 def suggestion_busy() -> bool:

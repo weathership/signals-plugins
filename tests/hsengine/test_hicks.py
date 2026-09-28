@@ -29,63 +29,16 @@ def _isolate_board(tmp_path, monkeypatch):
     return hermes
 
 
-def test_unkept_promise_is_a_card_and_a_finished_lookup_is_not():
-    promised = hicks.implied_title(
-        "what were the week's movers",
-        "I'll pull the week's movers.",
-        tools_used=(),
-    )
-    assert promised is not None
-    assert "movers" in promised.lower()
-    assert hicks.implied_title(
-        "what were the week's movers",
-        "XOM led, up two percent.",
-        tools_used=["fmp"],
-    ) is None
-    assert hicks.implied_title("good morning", "Good morning.", tools_used=()) is None
-    assert hicks.implied_title("thanks", "I'll be here.", tools_used=()) is None
-    residual = hicks.implied_title(
-        "pull the week's movers",
-        "XOM led. I'll also draft the note for the board.",
-        tools_used=frozenset({"fmp"}),
-    )
-    assert residual is not None
-    asked = hicks.implied_title(
-        "we should redesign the aperture for the week window",
-        "The aperture is the part that still matters.",
-        tools_used=(),
-    )
-    assert asked is not None
-    assert "aperture" in asked.lower()
-
-
-def test_note_turn_files_triage_once_and_steers_once(monkeypatch):
-    steered: list[str] = []
-    monkeypatch.setattr(
-        "hsengine.engine.primary_hermes.offer_steer",
-        lambda text: steered.append(text),
-    )
-    first = hicks.note_turn(
+def test_speech_does_not_become_a_card():
+    """A promise is not ingress. The board gets a task only when one is placed."""
+    filed = hicks.note_turn(
         session_id="cafe",
-        user="pull the week's movers",
-        assistant="I'll pull the week's movers.",
+        user="put an afternoon planning session on the Gaius agenda",
+        assistant="I'll set up a short afternoon planning session on Gaius.",
         tools_used=(),
     )
-    assert first["created"] is True
-    assert first["status"] == "triage"
-    again = hicks.note_turn(
-        session_id="cafe",
-        user="pull the week's movers",
-        assistant="I'll pull the week's movers.",
-        tools_used=(),
-    )
-    assert again["created"] is False
-    assert again["id"] == first["id"]
-    assert len(steered) == 1
-    assert "background" in steered[0].lower()
-    aside = hicks.board_aside()
-    assert "movers" in aside.lower()
-    assert "bishop_suggest" not in aside  # one lane is not multi-phase
+    assert filed["created"] is False
+    assert hicks.board_aside() == ""
 
 
 def test_several_lanes_invite_bishop_and_one_lane_does_not(monkeypatch):
@@ -173,7 +126,8 @@ def test_spoken_contract_names_hicks_and_figure_precedence():
 
     text = SPOKEN_SYSTEM.lower()
     assert "hicks" in text
-    assert "triage" in text
+    assert "agenda_create" in text
+    assert "a sentence does not become a card" in text
     assert "bishop_suggest" in text
     assert "kind=kanban" in text
     assert "precedence" in text or "takes precedence" in text
