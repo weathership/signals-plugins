@@ -14,6 +14,30 @@ from hsengine.engine.webrtc_cdp import PLOT_H, PLOT_W
 
 log = logging.getLogger("hsengine.engine.webrtc.viz.apps")
 
+# Not drawn. FMP's documented surface used here has no executable options chain.
+_OPTIONS_NOTE = (
+    "Options quotes are not a verified FMP adapter. "
+    "Hypothetical premiums are not shown as observations."
+)
+_OPTIONS_KINDS = frozenset(
+    {
+        "chain_liquidity",
+        "iv_smile",
+        "vol_surface",
+        "term_structure",
+        "implied_versus_realized",
+        "greeks_grid",
+        "physical_versus_risk_neutral",
+        "pricing_residuals",
+        "option_pnl_attribution",
+        "open_interest_profile",
+        "payoff_comparison",
+        "covered_call",
+        "strike_expiry_map",
+        "roll_surface",
+    }
+)
+
 # SKOS-shaped demo so a Connect has a real chord with no federated workspace.
 DEMO_NODES = [
     "Material",
@@ -190,8 +214,22 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     highlight = (scene.get("highlight") or "").strip().lower()
     nodes: list[str] = list(scene.get("nodes") or DEMO_NODES)
     edges: list[tuple[int, int, float]] = list(scene.get("edges") or DEMO_EDGES)
-    if kind in ("curve", "line", "relative"):
-        return _curves(scene, title, force_index=kind == "relative")
+    if kind in _OPTIONS_KINDS:
+        return _empty_plot(title, _OPTIONS_NOTE)
+    if kind in ("curve", "line", "relative", "relative_performance"):
+        return _curves(scene, title, force_index=kind in ("relative", "relative_performance"))
+    if kind in ("return_board", "cross_asset_return_board"):
+        return _return_board(scene, title)
+    if kind in ("price_structure",):
+        return _price_structure(scene, title)
+    if kind in ("cash_conversion", "cash_bridge"):
+        return _cash_bridge(scene, title)
+    if kind in ("roic", "roic_wacc"):
+        return _roic(scene, title)
+    if kind in ("consensus", "consensus_revisions"):
+        return _consensus(scene, title)
+    if kind in ("reverse_dcf",):
+        return _reverse_dcf(scene, title)
     if kind in ("candle", "ohlc"):
         return _candles(scene, title)
     if kind == "volume":
@@ -651,6 +689,145 @@ def _return_heatmap(scene: dict[str, Any], title: str) -> Any:
         return _empty_plot(title, "A return heatmap needs at least two names")
     return hv.HeatMap(cells, ["session", "name"], "return %").opts(
         **_style(title or "Daily returns", cmap="RdBu_r", colorbar=True, symmetric=True)
+    )
+
+
+def _return_board(scene: dict[str, Any], title: str) -> Any:
+    """Named assets × horizons. Values are the caller's returns, not a fetched basket."""
+    import holoviews as hv
+
+    assets = _payload(scene).get("assets") or []
+    cells = []
+    for row in assets:
+        if not isinstance(row, dict) or not row.get("name"):
+            continue
+        for horizon in ("d", "w", "m", "ytd"):
+            if row.get(horizon) in (None, ""):
+                continue
+            cells.append((horizon, str(row["name"]), float(row[horizon])))
+    if not cells:
+        return _empty_plot(title, "No return board — pass assets with d, w, m, ytd")
+    return hv.HeatMap(cells, ["horizon", "name"], "return %").opts(
+        **_style(title or "Return board", cmap="RdBu_r", colorbar=True, symmetric=True)
+    )
+
+
+def _price_structure(scene: dict[str, Any], title: str) -> Any:
+    """Candle, a 20-session average when there are enough bars, and volume if present."""
+    import holoviews as hv
+
+    bars = _price_frame(scene)
+    if len(bars) < 2:
+        return _empty_plot(title, "No OHLC bars for a price structure")
+    candle = _candles(scene, "")
+    layers = [candle]
+    if len(bars) >= 5:
+        closes = [(b["at"], b["close"]) for b in bars]
+        avg = _moving_average(closes, min(20, len(closes)))
+        if len(avg) >= 2:
+            layers.append(
+                hv.Curve([(i + len(bars) - len(avg), y) for i, (_t, y) in enumerate(avg)], "session", "ma").opts(
+                    color="#f0c14a"
+                )
+            )
+    plot = hv.Overlay(layers) if len(layers) > 1 else candle
+    if not any("volume" in b for b in bars):
+        return plot.opts(**_style(title or "Price structure"))
+    vol = hv.Bars([(i, b.get("volume") or 0) for i, b in enumerate(bars)], "session", "volume")
+    return (plot + vol).cols(1).opts(title=title or "Price structure")
+
+
+def _moving_average(points: list[tuple[Any, float]], window: int) -> list[tuple[Any, float]]:
+    out: list[tuple[Any, float]] = []
+    buf: list[float] = []
+    for at, price in points:
+        buf.append(float(price))
+        if len(buf) > window:
+            buf.pop(0)
+        if len(buf) == window:
+            out.append((at, sum(buf) / float(window)))
+    return out
+
+
+def _cash_bridge(scene: dict[str, Any], title: str) -> Any:
+    """Signed steps from net income toward free cash flow. Amounts are the caller's."""
+    import holoviews as hv
+
+    steps = _payload(scene).get("steps") or []
+    clean = []
+    for row in steps:
+        if not isinstance(row, dict) or row.get("value") in (None, ""):
+            continue
+        clean.append((str(row.get("label") or "step"), float(row["value"])))
+    if len(clean) < 2:
+        return _empty_plot(title, "No cash bridge — pass steps with label and value")
+    level = 0.0
+    boxes = []
+    for i, (label, value) in enumerate(clean):
+        boxes.append((i - 0.35, level, i + 0.35, level + value, label))
+        level += value
+    rects = [(b[0], b[1], b[2], b[3]) for b in boxes]
+    return hv.Rectangles(rects).opts(**_style(title or "Cash conversion", ylabel="amount", xlabel="step"))
+
+
+def _roic(scene: dict[str, Any], title: str) -> Any:
+    import holoviews as hv
+
+    rows = _payload(scene).get("points") or []
+    roic, wacc = [], []
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("at"):
+            continue
+        if row.get("roic") not in (None, ""):
+            roic.append((str(row["at"]), float(row["roic"])))
+        if row.get("wacc") not in (None, ""):
+            wacc.append((str(row["at"]), float(row["wacc"])))
+    if len(roic) < 2:
+        return _empty_plot(title, "No ROIC path — pass points with at and roic")
+    layers = [hv.Curve(roic, "period", "rate", label="ROIC")]
+    if len(wacc) >= 2:
+        layers.append(hv.Curve(wacc, "period", "rate", label="WACC"))
+    return hv.Overlay(layers).opts(**_style(title or "ROIC and WACC", ylabel="rate"))
+
+
+def _consensus(scene: dict[str, Any], title: str) -> Any:
+    """A single as-of is a snapshot. Revision history needs more than one stored vintage."""
+    import holoviews as hv
+
+    rows = _payload(scene).get("estimates") or []
+    vintages = {str(r.get("as_of") or "") for r in rows if isinstance(r, dict) and r.get("as_of")}
+    if len(vintages) < 2:
+        return _empty_plot(
+            title,
+            "Estimate snapshot only — a live pull is not a revision history",
+        )
+    pts = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("mean") in (None, "") or not row.get("as_of"):
+            continue
+        pts.append((str(row["as_of"]), float(row["mean"])))
+    if len(pts) < 2:
+        return _empty_plot(title, "Estimate snapshot only — a live pull is not a revision history")
+    pts.sort()
+    return hv.Curve(pts, "as of", "mean estimate").opts(**_style(title or "Consensus vintages", ylabel="estimate"))
+
+
+def _reverse_dcf(scene: dict[str, Any], title: str) -> Any:
+    """Cells the caller already valued. Masked cells are omitted, not drawn as zero."""
+    import holoviews as hv
+
+    rows = _payload(scene).get("cells") or []
+    cells = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("value") in (None, ""):
+            continue
+        cells.append((float(row["growth"]), float(row["roic"]), float(row["value"])))
+    if not cells:
+        return _empty_plot(title, "No admissible reverse-DCF cells")
+    return hv.HeatMap(cells, ["growth", "ROIC"], "enterprise value").opts(
+        **_style(title or "Reverse DCF (model)", cmap="Viridis", colorbar=True)
     )
 
 

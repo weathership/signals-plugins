@@ -177,6 +177,52 @@ def test_range_is_a_high_low_band_with_the_close():
     assert "Curve" in names
 
 
+def test_return_board_is_the_callers_horizons():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = '{"assets":[{"name":"XOM","d":1.0,"w":-2.0,"ytd":4.0}]}'
+    scene = apps.put_scene("rb", kind="return_board", title="board", data=raw)
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "HeatMap"
+    assert 1.0 in [float(v) for v in obj.dimension_values("return %")]
+
+
+def test_consensus_snapshot_is_not_a_revision_history():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = '{"estimates":[{"as_of":"2026-09-28","period":"FY2026","mean":5.1}]}'
+    scene = apps.put_scene("est", kind="consensus", title="estimates", data=raw)
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Text"
+
+
+def test_reverse_dcf_omits_masked_cells():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = '{"cells":[{"growth":0.02,"roic":0.12,"value":80},{"growth":0.09,"roic":0.12,"value":null}]}'
+    scene = apps.put_scene("dcf", kind="reverse_dcf", title="model", data=raw)
+    obj = apps._hv_obj(scene)
+    values = [float(v) for v in obj.dimension_values("enterprise value")]
+    assert values == [80.0]
+
+
+def test_options_kind_is_refused():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene("opt", kind="payoff_comparison", title="covered call", data="{}")
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Text"
+
+
+def test_cash_bridge_is_rectangles():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = '{"steps":[{"label":"Net income","value":100},{"label":"Capex","value":-20}]}'
+    scene = apps.put_scene("cash", kind="cash_conversion", title="bridge", data=raw)
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Rectangles"
+
+
 def test_density_kind_is_a_week_by_lane_heatmap():
     from hsengine.engine import webrtc_viz_apps as apps
 
