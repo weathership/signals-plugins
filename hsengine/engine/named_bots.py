@@ -806,17 +806,24 @@ def schedule_vasquez_glance(
     narrative: str = "",
     spoken: str = "",
 ) -> None:
-    """Fire-and-forget after a spoken/invent sequence. No poll loop."""
-    try:
-        from hsengine.engine.webrtc_program import PROGRAM
+    """Fire-and-forget after a spoken/invent sequence. No poll loop.
 
-        if not PROGRAM.active():
-            return
-    except Exception:
-        return
+    A financial turn draws its figure here, then Vasquez may hover it.
+    She does not run at all when nothing is on the video.
+    """
 
     def _run() -> None:
         try:
+            from hsengine.engine.market_session import surface_for_turn
+
+            surface_for_turn(narrative, spoken)
+        except Exception:
+            log.exception("market figure failed")
+        try:
+            from hsengine.engine.webrtc_program import PROGRAM
+
+            if not PROGRAM.active():
+                return
             vasquez_run(
                 session_id=session_id,
                 reason=reason,

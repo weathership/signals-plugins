@@ -692,21 +692,55 @@ def _return_heatmap(scene: dict[str, Any], title: str) -> Any:
     )
 
 
+def return_horizons(points: list[tuple[Any, float]]) -> dict[str, float]:
+    """Percent change over 1, 5, and 21 sessions, plus the fetched window.
+
+    The window is not calendar year-to-date. Ninety daily bars do not
+    reconstruct YTD.
+    """
+    if len(points) < 2:
+        return {}
+    last = float(points[-1][1])
+
+    def pct(back: int) -> float | None:
+        if len(points) <= back:
+            return None
+        prev = float(points[-1 - back][1])
+        if prev == 0:
+            return None
+        return round(100.0 * (last - prev) / prev, 2)
+
+    out: dict[str, float] = {}
+    for key, back in (("d", 1), ("w", 5), ("m", 21)):
+        value = pct(back)
+        if value is not None:
+            out[key] = value
+    first = float(points[0][1])
+    if first != 0:
+        out["span"] = round(100.0 * (last - first) / first, 2)
+    return out
+
+
 def _return_board(scene: dict[str, Any], title: str) -> Any:
-    """Named assets × horizons. Values are the caller's returns, not a fetched basket."""
+    """Named assets × horizons. Caller rows win; tickers pull FMP closes."""
     import holoviews as hv
 
-    assets = _payload(scene).get("assets") or []
+    assets = list(_payload(scene).get("assets") or [])
+    if not assets:
+        for name, pts in _eod_series(scene):
+            horizons = return_horizons([(a, float(y)) for a, y in pts])
+            if horizons:
+                assets.append({"name": name, **horizons})
     cells = []
     for row in assets:
         if not isinstance(row, dict) or not row.get("name"):
             continue
-        for horizon in ("d", "w", "m", "ytd"):
+        for horizon in ("d", "w", "m", "span", "ytd"):
             if row.get(horizon) in (None, ""):
                 continue
             cells.append((horizon, str(row["name"]), float(row[horizon])))
     if not cells:
-        return _empty_plot(title, "No return board — pass assets with d, w, m, ytd")
+        return _empty_plot(title, "No return board — pass assets or tickers")
     return hv.HeatMap(cells, ["horizon", "name"], "return %").opts(
         **_style(title or "Return board", cmap="RdBu_r", colorbar=True, symmetric=True)
     )
