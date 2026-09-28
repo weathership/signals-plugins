@@ -12,9 +12,9 @@ def test_spoken_system_treats_casual_checkin_as_ops():
     text = SPOKEN_SYSTEM.lower()
     assert "how's it going" in text or "hows it going" in text
     assert "special words" in text
-    assert " fmp" in text or "call fmp" in text
-    assert "viz_show" in text
-    assert "kind=kanban" in text
+    assert "you do not fetch market data" in text
+    assert "vasquez" in text
+    assert "kind=kanban" not in text or "dashboard" in text
     assert "call hermes" in text
     assert "kanban_create" not in text
 
@@ -165,7 +165,7 @@ def test_spoken_system_wiki_write_must_call_hermes():
     assert "wiki/" in text or "$wiki_path" in text
     assert "call hermes this turn" in text
     assert "verified" in text
-    assert "viz_show" in text
+    assert "you do not fetch market data" in text
 
 
 def test_kb_search_is_gaius_not_hermes_notes():

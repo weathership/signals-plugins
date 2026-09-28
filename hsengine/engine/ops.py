@@ -1476,6 +1476,23 @@ def _dispatch_hermes(args: dict[str, Any]) -> str:
     return json.dumps(hermes(prompt=str(args.get("prompt") or "")), default=str)
 
 
+def spoken_tool_defs() -> list[dict[str, Any]]:
+    """Tools on Ripley's turn. She talks. She does not fetch or draw.
+
+    Market data, figures, and workflow runs belong to Bishop, Vasquez,
+    Hicks, and the runners. The full tool list stays available to them.
+    """
+    skip = {
+        "fmp",
+        "viz_show",
+        "viz_select",
+        "viz_hover",
+        "viz_input",
+        "viz_clear",
+    }
+    return [tool for tool in CEREBRAS_TOOLS if tool.get("function", {}).get("name") not in skip]
+
+
 def _dispatch_viz_show(args: dict[str, Any]) -> str:
     from hsengine.engine import webrtc_program
 

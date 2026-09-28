@@ -508,6 +508,19 @@ def bishop_prompt(
             lines.append(
                 "Call conversation, then web_search or fmp once for one adjacent spark."
             )
+    elif move == "figure":
+        lines.append(
+            "Ripley is already in the conversation. You are not heard. "
+            "The handoff names a figure kind and tickers. Call viz_show "
+            "with that kind and data JSON {\"tickers\": [...]} so Vasquez's "
+            "page is the video. You may call fmp first if a close is missing. "
+            "Do not draw a filing heatmap for a price question. "
+            "Do not invent a cash bridge, ROIC path, consensus history, or "
+            "reverse DCF from a ticker. If the handoff says workflow, do not "
+            "viz_show; Hicks has the card for Airflow and Metaflow. "
+            "Options kinds are refused. STEER one short sentence she can use "
+            "later. Leave MONOLOGUE empty."
+        )
     elif move == "board":
         lines.append(
             "Several lanes are already on the board and will keep moving "
@@ -813,12 +826,13 @@ def schedule_vasquez_glance(
     """
 
     def _run() -> None:
-        try:
-            from hsengine.engine.market_session import surface_for_turn
+        if reason in ("user-turn", "bishop-execute"):
+            try:
+                from hsengine.engine.market_session import desk_for_turn
 
-            surface_for_turn(narrative, spoken)
-        except Exception:
-            log.exception("market figure failed")
+                desk_for_turn(session_id, narrative, spoken)
+            except Exception:
+                log.exception("market desk failed")
         try:
             from hsengine.engine.webrtc_program import PROGRAM
 

@@ -53,28 +53,22 @@ SPOKEN_SYSTEM = (
     "promised work into triage while you keep talking, and the board "
     "moves in the background. You do not have to call hermes just to "
     "create the card. A promise is not the work: if the answer is a "
-    "lookup, call fmp, web_search, or kb_search this turn. "
-    "viz_show kind=kanban only when no HoloViews figure is on the video. "
-    "A figure takes precedence; the board stays on the dashboard either way. "
+    "lookup that is not a ticker, call web_search or kb_search this turn. "
+    "A ticker, a figure, or a workflow is not your lookup. "
+    "When a figure is on the video it takes precedence; the board stays "
+    "on the dashboard. "
     "You may change topic while cards are in flight. Say that the work "
     "continues in the background; do not claim a card is finished. "
     "When the board note says several lanes are in flight, you may call "
     "bishop_suggest once for a suggestion, then stay with the topic. "
     "recent_thoughts or web_search may color an aside about that work "
     "or how it should end. "
-    "When a figure would help — an ontology chord, Aegir aperture, or a "
-    "plot — call viz_show so the live HoloViews page IS the video; "
-    "viz_select to highlight a node; viz_hover so popups follow what "
-    "you are saying; viz_clear to restore the clip. Do not describe a "
-    "figure as on-screen unless viz_show returned ok. "
-    "Price versus another name is kind=relative or kind=curve "
-    "(two names are indexed to 100). One name's sessions: candle, "
-    "volume, range, or returns. A filing calendar is timeline or "
-    "density. Do not use a filing heatmap for price. "
-    "return_board, cash_conversion, roic, consensus, and reverse_dcf "
-    "only show numbers you pass in the payload. Tickers alone fill "
-    "an eod price figure, not those briefing cards. "
-    "Options kinds are refused. "
+    "You do not fetch market data and you do not draw. Bishop acquires "
+    "and directs, Vasquez puts the HoloViews page on the video, Hicks "
+    "keeps multi-step work on the board, and a workflow runs off this "
+    "turn. Stay in the conversation. One sentence is enough if they "
+    "asked for a figure or a pull. Do not say you are pulling it, and "
+    "do not say a figure is on screen. "
     "If the conversation is circling the same complex idea across "
     "turns, call grok_consult once — Hermes' Grok subscription — then "
     "speak from that. Do not grok_consult for greetings or simple lookups. "
@@ -265,6 +259,8 @@ async def _run_user_utterance(
         aside = ""
     if aside:
         system_prompt = system_prompt.rstrip() + "\n\n" + aside
+    from hsengine.engine.ops import spoken_tool_defs
+
     result = await asyncio.to_thread(
         interactive.complete_cerebras,
         prompt=text,
@@ -273,6 +269,7 @@ async def _run_user_utterance(
         temperature=0.5,
         reasoning_effort="none",
         tools=True,
+        tool_defs=spoken_tool_defs(),
         session_id=session_id,
     )
     try:

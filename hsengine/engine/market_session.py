@@ -116,6 +116,91 @@ def _title(names: list[str], label: str) -> str:
     return f"{' / '.join(names[:4])} — {label}"
 
 
+_WORKFLOW = re.compile(
+    r"\b(reverse dcf|roic|wacc|consensus|revision|cash conversion|free cash|"
+    r"breadth|10-k|statement|valuation)\b",
+    re.I,
+)
+
+
+def needs_workflow(text: str) -> bool:
+    """Warehouse work. Not a live end-of-day picture."""
+    return bool(_WORKFLOW.search(text or ""))
+
+
+def desk_for_turn(session_id: str, user: str, assistant: str = "") -> None:
+    """Bishop directs, Vasquez's page renders, Hicks holds the long work.
+
+    Ripley has already spoken. This does not run on her turn.
+    """
+    plan = plan_figure(user, assistant)
+    if plan is None and not needs_workflow(user):
+        return
+    if needs_workflow(f"{user} {assistant}"):
+        _file_workflow(session_id, user, plan)
+    if plan is None:
+        return
+    handoff = (
+        f"kind={plan.kind} tickers={','.join(plan.tickers)} title={plan.title}. "
+        "Call viz_show with that kind and data JSON "
+        + json.dumps({"tickers": list(plan.tickers)})
+        + "."
+    )
+    try:
+        from hsengine.engine.named_bots import bishop_run
+
+        bishop_run(
+            session_id=session_id,
+            move="figure",
+            utterance=user,
+            handoff=handoff,
+        )
+    except Exception:
+        log.warning("bishop figure pass failed", exc_info=True)
+    try:
+        from hsengine.engine.webrtc_program import PROGRAM
+
+        status = PROGRAM.status()
+        if status.get("live") and str(status.get("kind") or "") == plan.kind:
+            return
+    except Exception:
+        log.debug("viz status unread", exc_info=True)
+    surface_for_turn(user, assistant)
+
+
+def _file_workflow(session_id: str, user: str, plan: FigurePlan | None) -> None:
+    """A multi-step briefing is a Hicks card, not a figure invented on the call."""
+    names = ", ".join(plan.tickers) if plan else "the names in the turn"
+    title = f"Market briefing: {names}"
+    try:
+        from hsengine.engine.hicks import file_implied
+
+        filed = file_implied(
+            session_id=session_id,
+            title=title[:80],
+            user=user,
+            assistant=(
+                "Workflow, not a live chart. Airflow orders gaius_market_briefing "
+                "(paused until the bars are stored). Metaflow runs it. Hicks owns "
+                "the card. Do not invent options prices or a reverse DCF from a ticker."
+            ),
+        )
+    except Exception:
+        log.warning("market briefing card failed", exc_info=True)
+        return
+    if not filed.get("created"):
+        return
+    try:
+        from hsengine.engine.primary_hermes import offer_steer
+
+        offer_steer(
+            "A market briefing is on the board and continues off this conversation. "
+            "Do not say it is finished. Do not describe a valuation figure."
+        )
+    except Exception:
+        log.debug("market steer skipped", exc_info=True)
+
+
 def surface_for_turn(user: str, assistant: str = "") -> bool:
     """Draw the planned figure. False when there is nothing honest to draw."""
     plan = plan_figure(user, assistant)

@@ -223,7 +223,7 @@ def complete_cerebras(
     tool_names: list[str] = []
     heard = False
     who = "ripley"
-    if tool_defs is not None:
+    if tool_defs is not None and not speak:
         who = "vasquez"
     elif not speak:
         who = "bishop"
@@ -497,9 +497,14 @@ def _speak_cerebras(text: str, epoch: int | None = None) -> None:
         _TTS_GATE.release()
 
 
+# Supervisor activate() waits 300s for :5080. A shorter client timeout
+# aborts, then POST /interactive/off kills the worker that just came up.
+_MOSHI_ACTIVATE_TIMEOUT_S = 330.0
+
+
 def _moshi_on() -> None:
     url = _control_url().rstrip("/")
-    with httpx.Client(timeout=180.0) as client:
+    with httpx.Client(timeout=_MOSHI_ACTIVATE_TIMEOUT_S) as client:
         r = client.post(f"{url}/interactive/on")
         if r.status_code >= 400:
             detail = r.text
@@ -559,8 +564,19 @@ def enter(owner: str = "webrtc") -> None:
     global _refcount, _active, _lease
     with _mu:
         _refcount += 1
-        if _refcount > 1 and _active:
+        reuse = _refcount > 1 and _active
+    if reuse:
+        # Stale posture (prior session never left, moshi died) used to skip
+        # activate and fail Connect with "STT unavailable after enter".
+        if moshi_serving():
             return
+        try:
+            _moshi_on()
+        except Exception:
+            with _mu:
+                _refcount = max(0, _refcount - 1)
+            raise
+        return
     _cerebras_key()
     lease: coordination.ActivityLease | None = None
     try:
@@ -572,7 +588,10 @@ def enter(owner: str = "webrtc") -> None:
             _refcount = max(0, _refcount - 1)
             _active = False
             _lease = None
-        _moshi_off()
+        if isinstance(e, httpx.TimeoutException):
+            log.warning("moshi activate timed out; leaving booting worker")
+        else:
+            _moshi_off()
         if lease is not None:
             lease.release(f"aborted: {str(e)[:120]}")
         raise
