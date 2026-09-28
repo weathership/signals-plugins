@@ -59,6 +59,23 @@ def test_silence_cap_keeps_speech_and_shortens_holes():
     assert out.size < speech.size * 2 + int(0.12 * rate)
 
 
+def test_spoken_text_does_not_leave_a_dash_as_its_own_word():
+    """An em dash token is what Kyutai speaks as a hard silence between clauses."""
+    from hsengine.engine.webrtc_tts import spoken_text
+
+    out = spoken_text("ahead of us this afternoon — five positions, sixty filings")
+    assert "—" not in out
+    assert "–" not in out
+    words = out.split()
+    assert "afternoon," in words
+    assert "five" in words
+    assert all(w not in {"—", "–", "-", ","} for w in words)
+    # A hyphen inside a word is not a pause token.
+    kept = spoken_text("the 36-hour window and the follow-ups")
+    assert "36-hour" in kept.split()
+    assert "follow-ups" in kept.split()
+
+
 def test_tts_phrases_group_words_at_sentence_breaks():
     parts = _tts_phrases("Hello there. How are you doing today? Fine.")
     assert parts[0].endswith(".")

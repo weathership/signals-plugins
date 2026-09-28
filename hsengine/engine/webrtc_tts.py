@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import threading
 from typing import Any
 from urllib.parse import urlencode, urlparse
@@ -104,9 +105,39 @@ def tts_key() -> str:
     return _cfg_str("hermes.engine.webrtc.tts.moshi_key", "public_token")
 
 
+# Kyutai tokenizes on whitespace and speaks each token. An em dash, or a
+# spaced hyphen, becomes its own word and decodes as a hard silence — a
+# few words, a cutoff, then the line tries to continue. The comma has to
+# stay glued to the previous word ("afternoon, five"), or the comma itself
+# is the silent token. Hyphens inside a word (36-hour) stay.
+_SPOKEN_TRANSLATE = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": " ",
+        "\u201d": " ",
+        "*": " ",
+        "#": " ",
+        "_": " ",
+    }
+)
+_DASH_RUN = re.compile(
+    r"(?:\s*[\u2012\u2013\u2014\u2015]+\s*)|(?:\s+-\s+)|(?:\s*\u2026\s*)"
+)
+
+
+def spoken_text(text: str) -> str:
+    """Words Kyutai can say. Punctuation that would be its own silent token is gone."""
+    cleaned = _DASH_RUN.sub(", ", text or "")
+    cleaned = cleaned.translate(_SPOKEN_TRANSLATE)
+    cleaned = re.sub(r"\s+,", ",", cleaned)
+    cleaned = re.sub(r",(?:\s*,)+", ", ", cleaned)
+    return " ".join(cleaned.split()).strip(" ,")
+
+
 def _tts_phrases(text: str, *, max_words: int = 12) -> list[str]:
     """Split spoken text into short phrases for Kyutai Text messages."""
-    words = (text or "").split()
+    words = spoken_text(text).split()
     out: list[str] = []
     buf: list[str] = []
     for w in words:
@@ -249,15 +280,13 @@ def _stream_onto(
 
     async def _run() -> tuple[int, bool]:
         total = 0
-        cap = SilenceCap()
+        # Do not slice the waveform. A near-zero run here is the model
+        # emitting pad tokens; cutting it leaves the sharp edge and the gap.
         async for pcm in synthesize_chunks(text):
             live = _live_boards(boards, expected)
             if not live:
                 return total, True
-            total += _push_chunks(live, cap.feed(pcm), source)
-        live = _live_boards(boards, expected)
-        if live:
-            total += _push_chunks(live, cap.flush(), source)
+            total += _push_chunks(live, pcm, source)
         return total, False
 
     return _run_isolated(_run)
