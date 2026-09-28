@@ -13,10 +13,11 @@ from urllib.parse import urlencode, urlparse
 log = logging.getLogger("hsengine.engine.webrtc.tts")
 
 TTS_RATE = 24000
-# Kyutai inserts 0.2–0.6s of silence between phrases. Played raw, that is
-# the speak-then-drop sine wave. Keep a short breath, drop the rest.
-_SILENCE_KEEP_S = 0.09
-_SILENCE_THRESH = 0.02
+# Kyutai inserts 0.2–0.6s between phrases. The trough is not pure zeros:
+# the shoulders sit just above a per-sample gate, and one louder sample
+# in the middle resets it, so the pause survives. Judge 10 ms frames.
+_SILENCE_KEEP_S = 0.04
+_SILENCE_THRESH = 0.045
 
 
 class SilenceCap:
@@ -28,33 +29,56 @@ class SilenceCap:
         keep_s: float = _SILENCE_KEEP_S,
         thresh: float = _SILENCE_THRESH,
     ) -> None:
-        self.keep = max(1, int(keep_s * rate))
+        self.rate = max(1, int(rate))
+        self.frame = max(1, self.rate // 100)
+        self.keep = max(self.frame, int(keep_s * self.rate))
         self.thresh = float(thresh)
         self.run = 0
+        self._pending = None
 
     def feed(self, pcm: Any) -> Any:
         import numpy as np
 
         samples = np.asarray(pcm, dtype=np.float32).reshape(-1)
+        if self._pending is not None and self._pending.size:
+            samples = np.concatenate([self._pending, samples])
         if samples.size == 0:
             return samples
-        out = np.empty(samples.size, dtype=np.float32)
-        n = 0
+        frame = self.frame
+        whole = (samples.size // frame) * frame
+        self._pending = samples[whole:]
+        if whole == 0:
+            return np.zeros(0, dtype=np.float32)
+        blocks = samples[:whole].reshape(-1, frame)
+        # RMS, not a single sample. A spike inside a hole must not keep the hole.
+        rms = np.sqrt(np.mean(blocks * blocks, axis=1))
+        silent = rms < self.thresh
+        parts: list[Any] = []
         run = self.run
         keep = self.keep
-        thresh = self.thresh
-        for x in samples:
-            if abs(float(x)) < thresh:
-                run += 1
+        for block, is_silent in zip(blocks, silent):
+            if is_silent:
+                run += frame
                 if run <= keep:
-                    out[n] = x
-                    n += 1
+                    parts.append(block)
             else:
                 run = 0
-                out[n] = x
-                n += 1
+                parts.append(block)
         self.run = run
-        return out[:n]
+        if not parts:
+            return np.zeros(0, dtype=np.float32)
+        return np.concatenate(parts)
+
+    def flush(self) -> Any:
+        """Samples shorter than one frame. Play them; do not drop the tail."""
+        import numpy as np
+
+        pending = self._pending
+        self._pending = None
+        self.run = 0
+        if pending is None or pending.size == 0:
+            return np.zeros(0, dtype=np.float32)
+        return pending
 
 
 def _cfg_str(path: str, default: str) -> str:
@@ -227,6 +251,9 @@ def _stream_onto(
             if not live:
                 return total, True
             total += _push_chunks(live, cap.feed(pcm), source)
+        live = _live_boards(boards, expected)
+        if live:
+            total += _push_chunks(live, cap.flush(), source)
         return total, False
 
     return _run_isolated(_run)

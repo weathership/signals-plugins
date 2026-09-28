@@ -7,6 +7,20 @@ from hsengine.engine.webrtc_mix import SpeechBoard
 from hsengine.engine.webrtc_tts import _tts_phrases, speak_into, tts_url, tts_voice
 
 
+def test_silence_cap_drops_a_spike_inside_a_phrase_hole():
+    """One loud sample in a Kyutai pause must not preserve the pause."""
+    from hsengine.engine.webrtc_tts import SilenceCap
+
+    rate = 24000
+    speech = np.ones(rate // 5, dtype=np.float32) * 0.3
+    hole = np.zeros(rate // 2, dtype=np.float32)
+    hole[hole.size // 2] = 0.25
+    cap = SilenceCap(rate=rate)
+    out = cap.feed(np.concatenate([speech, hole, speech]))
+    assert float(np.max(out[: speech.size])) > 0.2
+    assert out.size < speech.size * 2 + int(0.08 * rate)
+
+
 def test_silence_cap_keeps_speech_and_shortens_holes():
     from hsengine.engine.webrtc_tts import SilenceCap
 
