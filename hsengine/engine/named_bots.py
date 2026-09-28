@@ -849,7 +849,12 @@ def schedule_vasquez_glance(
 
     She starts even when the video is still the clip. A long valuation
     stays a Hicks card; she does not invent that figure.
+
+    Not on Connect. Opening Chromium in the first minute has been
+    followed by the ICE consent check expiring and the call dropping.
     """
+    if reason == "opening":
+        return
 
     def _run() -> None:
         if reason in ("user-turn", "bishop-execute"):
