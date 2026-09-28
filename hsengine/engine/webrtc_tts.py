@@ -287,6 +287,13 @@ def _stream_onto(
             if not live:
                 return total, True
             total += _push_chunks(live, pcm, source)
+        # The engine-loop caller returns before this thread finishes, so the
+        # line has to close here. Otherwise the caption keeps timing against
+        # a longer estimate and the last word never paints.
+        for board in _live_boards(boards, expected):
+            finish = getattr(board, "finish_line", None)
+            if callable(finish):
+                finish()
         return total, False
 
     return _run_isolated(_run)

@@ -172,6 +172,24 @@ def test_agent_caption_is_empty_until_audio_plays():
     assert early != text
     done = revealed_words(text, 500_000, sample_rate=48000, samples_total=500_000, closed=True)
     assert done == text
+
+
+def test_last_word_paints_when_its_audio_starts_not_after_it_ends():
+    """'now' was missing: the slice only opened at frac == 1, after the word."""
+    from hsengine.engine.webrtc_captions import revealed_words
+
+    text = "pulling up that headline for you right now"
+    words = text.split()
+    total = 48000 * 2
+    start = int(total * (len(words) - 1) / len(words))
+    got = revealed_words(
+        text, start, sample_rate=48000, samples_total=total, closed=True
+    )
+    assert got.split()[-1] == "now"
+    earlier = revealed_words(
+        text, start - 4800, sample_rate=48000, samples_total=total, closed=True
+    )
+    assert earlier.split()[-1] == "right"
     board = CaptionBoard()
     board.set_agent(text, label="Agent")
     assert board.get() == ""

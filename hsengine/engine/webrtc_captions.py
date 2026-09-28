@@ -39,13 +39,19 @@ def revealed_words(
     else:
         estimate = max(1, int(len(text) * _SAMPLES_PER_CHAR_24K * sample_rate / 24000))
         denom = max(samples_total, estimate)
-    frac = min(1.0, samples_played / denom)
+    frac = min(1.0, samples_played / denom) if denom else 1.0
+    # Caught up with a finished line. A tail shorter than one audio frame
+    # must not hide the last word.
     if closed and samples_total > 0 and samples_played >= samples_total:
         return " ".join(words)
-    n = int(len(words) * frac)
-    if n <= 0:
+    # Word k goes up when playback enters its slice. Flooring frac * n
+    # shows the last word only at frac == 1, after the word has already
+    # ended — and not at all if the tail never quite arrives.
+    n = len(words)
+    shown = n if frac >= 1.0 else int(frac * n) + 1
+    if shown <= 0:
         return ""
-    return " ".join(words[:n])
+    return " ".join(words[: min(n, shown)])
 
 
 class CaptionBoard:

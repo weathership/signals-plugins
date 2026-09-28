@@ -83,6 +83,24 @@ def test_board_holds_a_short_tail_instead_of_padding_silence():
     assert float(np.min(got)) > 0.2
 
 
+def test_closed_line_plays_the_last_partial_frame():
+    """The end of the last word is shorter than one Opus frame. Do not hold it."""
+    board = SpeechBoard()
+    tail = np.ones(100, dtype=np.float32) * 0.4
+    board.push(tail, sample_rate=48000)
+    assert board.pull(960, 48000) is None
+    board.finish_line()
+    got = board.pull(960, 48000)
+    assert got is not None and got.size == 960
+    assert float(np.max(got[:100])) > 0.2
+    assert float(np.max(got[100:])) == 0.0
+    played, queued, closed, _rate = board.line_progress()
+    assert closed is True
+    assert queued == 100
+    assert played == 100
+    assert board.speaking() is False
+
+
 def test_board_pull_none_when_empty():
     board = SpeechBoard()
     assert board.speaking() is False

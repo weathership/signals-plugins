@@ -244,13 +244,21 @@ class SpeechBoard:
             return None
         need = n if sample_rate == self.sample_rate else max(1, int(round(n * self.sample_rate / sample_rate)))
         with self._lock:
+            have = len(self._buf)
             # A short tail padded with zeros is a silence trough in the
             # middle of a word. Hold it until a full frame is queued.
-            if len(self._buf) < need:
+            # Once the line is finished, that tail is the end of the last
+            # word ("now" cut to "no"). Play it.
+            if have < need and not (self._line_closed and have > 0):
                 return None
-            chunk = np.fromiter((self._buf.popleft() for _ in range(need)), dtype=np.float32, count=need)
-            self._line_played += need
+            take = have if have < need else need
+            chunk = np.fromiter((self._buf.popleft() for _ in range(take)), dtype=np.float32, count=take)
+            self._line_played += take
             self._last_audible_at = time.monotonic()
+            if take < need:
+                padded = np.zeros(need, dtype=np.float32)
+                padded[:take] = chunk
+                chunk = padded
         if sample_rate != self.sample_rate:
             chunk = _resample_mono(chunk, self.sample_rate, sample_rate)
             chunk = _fit(chunk, n)

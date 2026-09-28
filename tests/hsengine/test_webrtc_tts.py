@@ -140,6 +140,20 @@ def test_speak_into_from_a_running_event_loop(monkeypatch):
     assert elapsed is not None and elapsed < 0.5
 
 
+def test_finished_tts_closes_the_line_for_the_caption(monkeypatch):
+    """Without close, the caption times the line against a longer estimate and drops the last word."""
+    pcm = np.ones(2400, dtype=np.float32) * 0.4
+
+    async def _chunks(text: str):
+        yield pcm
+
+    monkeypatch.setattr("hsengine.engine.webrtc_tts.synthesize_chunks", _chunks)
+    board = SpeechBoard()
+    speak_into(board, "pulling up that headline for you right now", source="cerebras")
+    _played, _queued, closed, _rate = board.line_progress()
+    assert closed is True
+
+
 def test_speak_into_preempts_clip_on_the_board(monkeypatch):
     pcm = np.ones(4800, dtype=np.float32) * 0.4
 
