@@ -25,17 +25,27 @@ _BARGE_MIN_CHARS = 24
 _BARGE_MIN_WORDS = 4
 _BARGE_STOP = frozenset({"stop", "wait", "hold", "quiet", "silence"})
 # Mute sends silence, not "no RTP". Words from that silence, or from a
-# quiet room, are not a person cutting in.
+# quiet room, are not a person cutting in. The mouth goes quiet before
+# Kyutai emits the last word (asr delay is several frames), so a turn
+# still accepts words for a short tail after the level drops. That tail
+# must not barge in.
 _MIC_HOT_RMS = 0.03
 _MIC_HOT_S = 0.6
+_MIC_TAIL_S = 2.0
 
 
 class MicGate:
     """Recent inbound level. Cold means mute or a quiet room, not a turn."""
 
-    def __init__(self, thresh: float = _MIC_HOT_RMS, fresh_s: float = _MIC_HOT_S) -> None:
+    def __init__(
+        self,
+        thresh: float = _MIC_HOT_RMS,
+        fresh_s: float = _MIC_HOT_S,
+        tail_s: float = _MIC_TAIL_S,
+    ) -> None:
         self.thresh = float(thresh)
         self.fresh_s = float(fresh_s)
+        self.tail_s = float(tail_s)
         self._hot_at = 0.0
 
     def note(self, pcm: Any) -> None:
@@ -53,7 +63,17 @@ class MicGate:
     def hot(self) -> bool:
         import time
 
-        return self._hot_at > 0.0 and (time.monotonic() - self._hot_at) <= self.fresh_s
+        if self._hot_at <= 0.0:
+            return False
+        return (time.monotonic() - self._hot_at) <= self.fresh_s
+
+    def heard(self) -> bool:
+        """Still inside the lag after a real voice. Not a muted room."""
+        import time
+
+        if self._hot_at <= 0.0:
+            return False
+        return (time.monotonic() - self._hot_at) <= self.tail_s
 
 
 # Ceiling only: short turns stop at EOS. 280 cut ruminations mid-thought.
@@ -433,14 +453,28 @@ class TurnTaker:
             return True
         return bool(mic.hot())
 
+    def _mic_heard(self) -> bool:
+        mic = self._mic
+        if mic is None:
+            return True
+        heard = getattr(mic, "heard", None)
+        if not callable(heard):
+            return bool(mic.hot())
+        return bool(heard())
+
     def on_word(self, word: str) -> None:
         import time
 
-        if not self._mic_hot():
+        hot = self._mic_hot()
+        # A cold mic drops the word. The tail still takes it: Kyutai emits
+        # "Nvidia" after the level has already fallen, and that word belongs
+        # to the turn. It must not cut her off.
+        if not hot and not self._mic_heard():
             return
         self.last_user_at = time.monotonic()
         pending = " ".join(w for w in (self._words + [word]) if w).strip()
-        self._barge_in(pending)
+        if hot:
+            self._barge_in(pending)
         self._words.append(word)
         self._gen += 1
         gen = self._gen

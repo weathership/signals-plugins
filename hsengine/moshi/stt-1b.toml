@@ -63,13 +63,12 @@ voice_folder = "hf-snapshot://kyutai/tts-voices/**/*.safetensors"
 default_voice = "unmute-prod-website/p329_022.wav"
 cfg_coef = 2.0
 cfg_is_no_text = true
-# A pad frame is 80 ms of silence between words. The model may take up
-# to max_padding of them after a short word; the default 8 is the
-# half-second hole (a few words, a hard cut, then the next word).
-# padding_bonus is added to the pad logit (-2..2). Negative means take
-# the next word instead of pausing. padding_between forces extra pads
-# after every word and stays off.
-padding_between = 0
-padding_bonus = -1.0
-max_padding = 2
+# A pad frame is 80 ms. The budget is spent first on pronouncing the
+# word, and only what remains can be a pause. Two frames left nothing,
+# so she speed-talked. Eight was the half-second hole. Six leaves a
+# breath. padding_bonus stays 0 so she is not pushed to spend all of it.
+# padding_between 1 is Kyutai's articulation setting.
+padding_between = 1
+padding_bonus = 0.0
+max_padding = 6
 n_q = 32

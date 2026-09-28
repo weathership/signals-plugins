@@ -89,6 +89,43 @@ def test_tts_echo_does_not_interrupt_a_short_fragment():
     assert taker._words == ["um"]
 
 
+def test_the_last_word_arrives_after_the_mic_drops_and_stays_in_the_turn():
+    """Kyutai emits the final word after the level falls. It is part of the turn, not a barge-in."""
+    import time
+
+    from hsengine.engine.webrtc_mix import SpeechBoard
+    from hsengine.engine.webrtc_moshi import MicGate
+
+    board = SpeechBoard()
+    board.push([0.2] * 4800, sample_rate=48000)
+    gate = MicGate()
+    now = time.monotonic()
+    gate._hot_at = now - 1.2
+    assert gate.hot() is False
+    assert gate.heard() is True
+    taker = TurnTaker(_NoopLoop(), speech=board, mic=gate)
+    interrupted = []
+    board.interrupt = lambda: interrupted.append(1) or 0
+    for w in ("circle", "back", "to"):
+        taker.on_word(w)
+    taker.on_word("Nvidia")
+    assert interrupted == []
+    assert taker._words[-1] == "Nvidia"
+
+
+def test_a_mic_that_has_been_cold_does_not_take_a_late_word():
+    import time
+
+    from hsengine.engine.webrtc_moshi import MicGate
+
+    gate = MicGate()
+    gate._hot_at = time.monotonic() - 5.0
+    assert gate.heard() is False
+    taker = TurnTaker(_NoopLoop(), mic=gate)
+    taker.on_word("Nvidia")
+    assert taker._words == []
+
+
 def test_a_quiet_mic_does_not_cut_her_off():
     from hsengine.engine.webrtc_mix import SpeechBoard
     from hsengine.engine.webrtc_moshi import MicGate
