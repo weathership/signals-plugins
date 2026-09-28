@@ -190,13 +190,18 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     highlight = (scene.get("highlight") or "").strip().lower()
     nodes: list[str] = list(scene.get("nodes") or DEMO_NODES)
     edges: list[tuple[int, int, float]] = list(scene.get("edges") or DEMO_EDGES)
-    if kind == "curve":
-        return _curves(scene, title)
+    if kind in ("curve", "line", "relative"):
+        return _curves(scene, title, force_index=kind == "relative")
+    if kind in ("candle", "ohlc"):
+        return _candles(scene, title)
+    if kind == "volume":
+        return _volume(scene, title)
+    if kind == "range":
+        return _range(scene, title)
+    if kind == "returns":
+        return _returns(scene, title)
     if kind == "heatmap":
-        data = [(i, j, ((i + j) % 7) / 7.0) for i in range(8) for j in range(8)]
-        return hv.HeatMap(data, ["x", "y"], "v").opts(
-            title=title, width=PLOT_W, height=PLOT_H, cmap="Viridis"
-        )
+        return _return_heatmap(scene, title)
     if kind in ("density", "filings_density"):
         return _density(scene, title)
     if kind in ("timeline", "filings"):
@@ -337,7 +342,105 @@ def _empty_plot(title: str, message: str) -> Any:
     )
 
 
-def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
+def daily_returns(points: list[tuple[Any, float]]) -> list[tuple[Any, float]]:
+    """Close-to-close percent. The first point has no prior close, so it is dropped."""
+    out: list[tuple[Any, float]] = []
+    prev: float | None = None
+    for at, price in points:
+        y = float(price)
+        if prev not in (None, 0.0):
+            out.append((at, 100.0 * (y - float(prev)) / float(prev)))
+        prev = y
+    return out
+
+
+def _bars_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = payload.get("bars") or payload.get("ohlc") or []
+    bars: list[dict[str, Any]] = []
+    if not isinstance(rows, list):
+        return bars
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            bar = {
+                "at": str(row.get("at") or row.get("date") or ""),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not bar["at"]:
+            continue
+        if row.get("volume") not in (None, ""):
+            try:
+                bar["volume"] = float(row["volume"])
+            except (TypeError, ValueError):
+                pass
+        bars.append(bar)
+    bars.sort(key=lambda b: b["at"])
+    return bars
+
+
+def eod_bars_from_hits(hits: list[Any]) -> list[dict[str, Any]]:
+    """OHLC bars from FMP eod hits. Skips a hit that is only a close."""
+    from hsengine.engine.ops import enrich_fmp_hit
+
+    payload_hits = []
+    for hit in hits or []:
+        if isinstance(hit, dict):
+            payload_hits.append(enrich_fmp_hit(dict(hit)))
+    bars: list[dict[str, Any]] = []
+    for hit in payload_hits:
+        try:
+            bar = {
+                "at": str(hit.get("as_of") or hit.get("title") or ""),
+                "open": float(hit["open"]),
+                "high": float(hit["high"]),
+                "low": float(hit["low"]),
+                "close": float(hit["close"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not bar["at"]:
+            continue
+        if hit.get("volume") not in (None, ""):
+            try:
+                bar["volume"] = float(hit["volume"])
+            except (TypeError, ValueError):
+                pass
+        bars.append(bar)
+    bars.sort(key=lambda b: b["at"])
+    return bars
+
+
+def _price_frame(scene: dict[str, Any]) -> list[dict[str, Any]]:
+    """Bars for one name. Payload bars win; otherwise the first ticker's eod."""
+    bars = _bars_from_payload(_payload(scene))
+    if bars:
+        return bars
+    from hsengine.engine import ops
+
+    tickers = _tickers_from_scene(scene)
+    if not tickers:
+        return []
+    try:
+        out = ops.fmp(query=tickers[0], stream="eod", limit=90)
+    except Exception:
+        log.debug("fmp eod bars failed", exc_info=True)
+        return []
+    return eod_bars_from_hits(out.get("hits") or [])
+
+
+def _style(title: str, **extra: Any) -> dict[str, Any]:
+    opts = dict(title=title or "", width=PLOT_W, height=PLOT_H, bgcolor="#0b0b12")
+    opts.update(extra)
+    return opts
+
+
+def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False, force_index: bool = False) -> Any:
     """Real series only. Never invent index-vs-value from ticker names."""
     import holoviews as hv
 
@@ -364,7 +467,7 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
     if not prepared:
         prepared = _eod_series(scene)
     # Two price levels on one axis hide the move (XOM near 110, SPY near 500).
-    if len(prepared) >= 2:
+    if force_index or len(prepared) >= 2:
         prepared = [(name, rebase_to_100(data)) for name, data in prepared]
     traces: list[Any] = []
     for name, data in prepared:
@@ -378,7 +481,7 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False) -> Any:
             width=PLOT_W,
             height=620,
             bgcolor="#0b0b12",
-            ylabel="indexed to 100" if len(prepared) >= 2 else "close",
+            ylabel="indexed to 100" if force_index or len(prepared) >= 2 else "close",
         )
         if len(traces) == 1:
             return traces[0].opts(**opts)
@@ -434,6 +537,121 @@ def _eod_series(scene: dict[str, Any]) -> list[tuple[str, list]]:
             continue
         series.append((ticker, pts))
     return series
+
+
+def _series_for_scene(scene: dict[str, Any]) -> list[tuple[str, list]]:
+    """Named close paths from payload.series, else FMP eod for the tickers."""
+    payload = _payload(scene)
+    prepared: list[tuple[str, list]] = []
+    series = payload.get("series")
+    if isinstance(series, list):
+        for row in series:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or row.get("symbol") or "")
+            pts = row.get("points")
+            xs, ys = row.get("x") or [], row.get("y") or []
+            if pts:
+                data = [(p[0], p[1]) for p in pts if isinstance(p, (list, tuple)) and len(p) >= 2]
+            elif xs and ys and len(xs) == len(ys):
+                data = list(zip(xs, ys))
+            else:
+                data = []
+            if len(data) >= 2:
+                prepared.append((name, data))
+    if prepared:
+        return prepared
+    return _eod_series(scene)
+
+
+def _candles(scene: dict[str, Any], title: str) -> Any:
+    """One name, daily OHLC. Wick is high–low; the body is open–close."""
+    import holoviews as hv
+
+    bars = _price_frame(scene)
+    if len(bars) < 2:
+        return _empty_plot(title, "No OHLC bars — pass bars or one ticker for FMP eod")
+    wick = [(i, b["low"], i, b["high"]) for i, b in enumerate(bars)]
+    up, down = [], []
+    for i, b in enumerate(bars):
+        body = (i - 0.3, b["open"], i + 0.3, b["close"])
+        (up if b["close"] >= b["open"] else down).append(body)
+    layers = [hv.Segments(wick, kdims=["x0", "y0", "x1", "y1"]).opts(color="#c5cdd8")]
+    if up:
+        layers.append(hv.Rectangles(up).opts(color="#3dd68c", line_color="#3dd68c"))
+    if down:
+        layers.append(hv.Rectangles(down).opts(color="#ff5d73", line_color="#ff5d73"))
+    plot = hv.Overlay(layers).opts(**_style(title or "OHLC", ylabel="price", xlabel="session"))
+    return plot
+
+
+def _volume(scene: dict[str, Any], title: str) -> Any:
+    """Close above volume. A layout, not one axis trying to hold both units."""
+    import holoviews as hv
+
+    bars = _price_frame(scene)
+    if len(bars) < 2 or not any("volume" in b for b in bars):
+        return _empty_plot(title, "No volume — pass bars with volume or one ticker")
+    close = hv.Curve([(i, b["close"]) for i, b in enumerate(bars)], "session", "close")
+    vol = hv.Bars([(i, b.get("volume") or 0) for i, b in enumerate(bars)], "session", "volume")
+    return (close + vol).cols(1).opts(title=title or "Close and volume")
+
+
+def _range(scene: dict[str, Any], title: str) -> Any:
+    """High–low band with the close through it."""
+    import holoviews as hv
+
+    bars = _price_frame(scene)
+    if len(bars) < 2:
+        return _empty_plot(title, "No high-low bars")
+    band = hv.Area(
+        [(i, b["low"], b["high"]) for i, b in enumerate(bars)],
+        kdims=["session"],
+        vdims=["low", "high"],
+    ).opts(alpha=0.35, color="#7aa2ff")
+    close = hv.Curve([(i, b["close"]) for i, b in enumerate(bars)], "session", "close").opts(
+        color="#e8ecf4"
+    )
+    return (band * close).opts(**_style(title or "High-low range", ylabel="price"))
+
+
+def _returns(scene: dict[str, Any], title: str) -> Any:
+    """Day-to-day percent change. One name is bars; several names are lines."""
+    import holoviews as hv
+
+    prepared = _series_for_scene(scene)
+    if not prepared:
+        return _empty_plot(title, "No closes to difference")
+    traces = []
+    for name, pts in prepared:
+        rets = daily_returns([(a, float(y)) for a, y in pts])
+        if len(rets) < 2:
+            continue
+        if len(prepared) == 1:
+            traces.append(hv.Bars(rets, "session", "return %", label=name))
+        else:
+            traces.append(hv.Curve(rets, "session", "return %", label=name))
+    if not traces:
+        return _empty_plot(title, "Not enough closes for a return")
+    if len(traces) == 1:
+        return traces[0].opts(**_style(title or "Daily returns", ylabel="return %"))
+    return hv.Overlay(traces).opts(**_style(title or "Daily returns", ylabel="return %"))
+
+
+def _return_heatmap(scene: dict[str, Any], title: str) -> Any:
+    """Names × dates of daily percent change. Not a filing count, not a demo grid."""
+    import holoviews as hv
+
+    prepared = _series_for_scene(scene)
+    cells = []
+    for name, pts in prepared:
+        for at, ret in daily_returns([(a, float(y)) for a, y in pts]):
+            cells.append((str(at), name or "series", ret))
+    if len({c[1] for c in cells}) < 2:
+        return _empty_plot(title, "A return heatmap needs at least two names")
+    return hv.HeatMap(cells, ["session", "name"], "return %").opts(
+        **_style(title or "Daily returns", cmap="RdBu_r", colorbar=True, symmetric=True)
+    )
 
 
 def _timeline(scene: dict[str, Any], title: str) -> Any:

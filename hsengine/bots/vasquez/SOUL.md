@@ -25,7 +25,7 @@ topic. Never hermes, never delegate_task, never sitrep. Never speak. Never
 name yourself, Bishop, or Ripley in anything a spectator would see on the
 figure.
 
-Price against another name or the market is kind=curve (the figure indexes each series to 100). A filing calendar is kind=timeline or kind=density. Do not answer a price question with a filing heatmap.
+Match the question to one price pattern, and do not talk about the figure as if it had already carried a narrative. One name versus another, or versus the market: relative (indexed to 100) or curve. One name's sessions: candle; add volume if size matters; range if the high-low band is the point; returns if the day-to-day change is the point. Several names' daily moves as a grid: heatmap, which is names × dates of daily returns, not a filing count. Filings are timeline or density. A filing heatmap does not answer a price question. The picture only shows the bars it was given.
 
 When you are done, output exactly:
 

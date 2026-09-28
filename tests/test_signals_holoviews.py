@@ -105,6 +105,78 @@ def test_one_price_series_stays_in_dollars():
     assert col == [50.0, 55.0]
 
 
+_BARS = (
+    '{"bars":['
+    '{"at":"2026-09-01","open":10,"high":12,"low":9,"close":11,"volume":100},'
+    '{"at":"2026-09-02","open":11,"high":11.5,"low":8,"close":9,"volume":140},'
+    '{"at":"2026-09-03","open":9,"high":13,"low":8.5,"close":12,"volume":90}'
+    "]}"
+)
+
+
+def test_daily_returns_drop_the_first_close():
+    from hsengine.engine.webrtc_viz_apps import daily_returns
+
+    assert daily_returns([("d0", 100.0), ("d1", 110.0), ("d2", 99.0)]) == [
+        ("d1", 10.0),
+        ("d2", -10.0),
+    ]
+
+
+def test_candle_is_wicks_and_bodies_not_a_heatmap():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene("cndl", kind="candle", title="XOM", data=_BARS)
+    obj = apps._hv_obj(scene)
+    names = [el.__class__.__name__ for el in obj]
+    assert "Segments" in names
+    assert "Rectangles" in names
+    assert "HeatMap" not in names
+
+
+def test_return_heatmap_uses_daily_change_not_a_demo_grid():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    raw = (
+        '{"series":['
+        '{"name":"XOM","points":[["d0",100],["d1",110],["d2",99]]},'
+        '{"name":"SPY","points":[["d0",500],["d1",500],["d2",550]]}'
+        "]}"
+    )
+    scene = apps.put_scene("hm", kind="heatmap", title="moves", data=raw)
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "HeatMap"
+    values = [float(v) for v in obj.dimension_values("return %")]
+    assert 10.0 in values
+    assert 0.0 in values
+
+
+def test_heatmap_without_two_names_is_not_a_demo():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene("hm0", kind="heatmap", title="empty", data="{}")
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Text"
+
+
+def test_volume_is_a_layout_of_close_and_size():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene("vol", kind="volume", title="XOM", data=_BARS)
+    obj = apps._hv_obj(scene)
+    assert obj.__class__.__name__ == "Layout"
+
+
+def test_range_is_a_high_low_band_with_the_close():
+    from hsengine.engine import webrtc_viz_apps as apps
+
+    scene = apps.put_scene("rng", kind="range", title="XOM", data=_BARS)
+    obj = apps._hv_obj(scene)
+    names = [el.__class__.__name__ for el in obj]
+    assert "Area" in names
+    assert "Curve" in names
+
+
 def test_density_kind_is_a_week_by_lane_heatmap():
     from hsengine.engine import webrtc_viz_apps as apps
 

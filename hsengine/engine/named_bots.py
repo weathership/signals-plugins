@@ -295,6 +295,13 @@ def _ensure_one(name: str, meta: dict[str, Any]) -> Path:
         if (
             not replace
             and managed
+            and "names × dates of daily returns" in template
+            and "names × dates of daily returns" not in current
+        ):
+            replace = True
+        if (
+            not replace
+            and managed
             and "Kanban assignee is grok" in template
             and "Kanban assignee is grok" not in current
         ):
