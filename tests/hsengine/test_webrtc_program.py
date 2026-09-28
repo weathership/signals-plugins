@@ -70,6 +70,30 @@ def test_mix_frame_stamps_compositor_on_clip_clock():
     assert int(arr[36, 64, 1]) > 150
 
 
+def test_mix_frame_fills_the_video_instead_of_the_top_band():
+    """A 16:9 figure uses the frame. The caption plate is painted later."""
+    pytest.importorskip("av")
+    pytest.importorskip("PIL")
+    pytest.importorskip("numpy")
+    from fractions import Fraction
+
+    import av
+    import numpy as np
+    from PIL import Image
+
+    clip = av.VideoFrame.from_ndarray(
+        np.zeros((72, 128, 3), dtype=np.uint8), format="rgb24"
+    )
+    clip.pts = 1
+    clip.time_base = Fraction(1, 90000)
+    viz = Image.new("RGB", (160, 90), (10, 200, 40))
+    wp.PROGRAM.set(viz, kind="density", fade_s=0.05)
+    arr = wp.mix_frame(clip).to_ndarray(format="rgb24")
+    # Lower third used to be empty plate (the figure was pinned to the top).
+    assert int(arr[60, 64, 1]) > 150
+    assert int(arr[8, 8, 1]) > 150
+
+
 def test_replace_image_drops_white_plates():
     pytest.importorskip("PIL")
     from PIL import Image

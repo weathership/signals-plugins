@@ -224,12 +224,10 @@ def mix_frame(frame: Any) -> Any:
             h, w = int(arr.shape[0]), int(arr.shape[1])
         from PIL import Image
 
-        from hsengine.engine.webrtc_captions import _BAND_FRAC
-
-        chart_h = max(1, h - int(h * _BAND_FRAC))
-        chart = _fit(img, (w, chart_h))
-        fitted = Image.new("RGB", (w, h), (11, 11, 18))
-        fitted.paste(chart, (0, 0))
+        # Captions are a plate on top of the picture. Reserving the lower
+        # band here letterboxes a 16:9 figure into the top ~58% and leaves
+        # it at about a third of the frame, pinned to the top edge.
+        fitted = _fit(img, (w, h))
         if title:
             _paint_title(fitted, title)
         out = av.VideoFrame.from_ndarray(np.asarray(fitted), format="rgb24")
