@@ -150,11 +150,15 @@ def _probe_airflow() -> dict[str, Any]:
 
 
 def _parse_miss_detail(raw: str) -> tuple[str, list[str], bool]:
-    """Guru, missed kinds, theta-not-caught-up from Status detail or a legacy URL."""
+    """Guru and missed kinds from Status detail.
+
+    ``miss:`` is the wire. The old ``theta_not_caught_up`` token is still
+    accepted so a Gaius that has not reloaded does not go silent.
+    """
     guru = ""
     missed: list[str] = []
-    not_caught = "theta_not_caught_up" in (raw or "")
     text = raw or ""
+    not_caught = "theta_not_caught_up" in text
     if text.startswith("#"):
         guru = text.split()[0]
     elif "#CO." in text:

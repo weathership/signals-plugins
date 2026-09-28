@@ -464,8 +464,7 @@ def test_sitrep_theta_miss_is_a_persistent_failure(monkeypatch):
                     "gpus": [],
                     "detail": (
                         "#CO.0000000D.MISSTICK miss:theta_cycle,"
-                        "weekly_signals_summary fail:theta_cycle "
-                        "theta_not_caught_up"
+                        "weekly_signals_summary"
                     ),
                 }
             ],
