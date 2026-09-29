@@ -30,6 +30,10 @@ class ProgramBoard:
         self._t0 = 0.0
         self._fade_s = 0.7
         self._gen = 0
+        # Bumps when the pixels change. The video stamp refits on this,
+        # not on every 24 fps tick — a refit holds the GIL long enough
+        # to miss the audio clock.
+        self._pixels = 0
 
     def _alpha(self, now: float | None = None) -> float:
         now = time.monotonic() if now is None else now
@@ -77,6 +81,7 @@ class ProgramBoard:
             self._t0 = now
             self._fade_s = max(0.05, float(fade_s))
             self._gen += 1
+            self._pixels += 1
             gen = self._gen
         log.info("program set kind=%s title=%r gen=%s", kind or "-", title[:80], gen)
         return self.status()
@@ -90,6 +95,7 @@ class ProgramBoard:
             self._t0 = now
             self._fade_s = max(0.05, float(fade_s))
             self._gen += 1
+            self._pixels += 1
         log.info("program clear fade_s=%s", fade_s)
         return self.status()
 
@@ -110,6 +116,12 @@ class ProgramBoard:
             pass
         with self._lock:
             self._image = image
+            self._pixels += 1
+
+    def pixels(self) -> int:
+        """Changes only when the compositor image changes, not every video frame."""
+        with self._lock:
+            return self._pixels
 
     def composite(self, base: Any) -> Any:
         """Fit the live frame onto a PIL RGB canvas. No-op when idle."""

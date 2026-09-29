@@ -105,6 +105,19 @@ def test_mix_frame_fills_the_video_instead_of_the_top_band():
     assert int(arr[8, 8, 1]) > 150
 
 
+def test_pixels_follow_the_compositor_not_a_dropped_plate():
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    before = wp.PROGRAM.pixels()
+    wp.PROGRAM.set(Image.new("RGB", (32, 32), (0, 180, 40)), kind="density", fade_s=0.05)
+    assert wp.PROGRAM.pixels() == before + 1
+    wp.PROGRAM.replace_image(Image.new("RGB", (32, 32), (255, 255, 255)))
+    assert wp.PROGRAM.pixels() == before + 1
+    wp.PROGRAM.replace_image(Image.new("RGB", (32, 32), (200, 10, 10)))
+    assert wp.PROGRAM.pixels() == before + 2
+
+
 def test_replace_image_drops_white_plates():
     pytest.importorskip("PIL")
     from PIL import Image

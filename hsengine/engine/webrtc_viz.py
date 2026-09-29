@@ -140,6 +140,31 @@ async def _show_kanban(
     return {"ok": True, **webrtc_program.PROGRAM.status()}
 
 
+def _publish_scene(
+    session_id: str,
+    *,
+    kind: str,
+    title: str,
+    highlight: str,
+    source: str,
+    data: str,
+) -> tuple[int, dict[str, Any], dict[str, Any]]:
+    """Start the viz process and hand it the scene. Not for the audio loop."""
+    from hsengine.engine import webrtc_bokeh, webrtc_viz_apps
+
+    port = webrtc_bokeh.ensure_server()
+    scene = webrtc_viz_apps.put_scene(
+        session_id,
+        kind=kind,
+        title=title,
+        highlight=highlight,
+        source=source,
+        data=data,
+    )
+    pushed = webrtc_bokeh.push_scene(session_id, scene)
+    return port, scene, pushed
+
+
 async def _show_live(
     session_id: str,
     *,
@@ -167,15 +192,18 @@ async def _show_live(
             "kind": str(st.get("kind") or ""),
         }
 
-    from hsengine.engine import webrtc_bokeh, webrtc_viz_apps
+    from hsengine.engine import webrtc_bokeh
     from hsengine.engine.webrtc_cdp import CdpCamera
 
-    port = webrtc_bokeh.ensure_server()
+    # Server start and the HoloViews build run in the viz process. Doing
+    # either on this loop stalls the 20 ms audio sender for the whole render.
     if (kind or "").strip().lower() == "kanban":
+        port = await asyncio.to_thread(webrtc_bokeh.ensure_server)
         return await _show_kanban(
             session_id, title=title, fade_s=fade_s, port=port
         )
-    scene = webrtc_viz_apps.put_scene(
+    port, scene, pushed = await asyncio.to_thread(
+        _publish_scene,
         session_id,
         kind=kind,
         title=title,
@@ -188,7 +216,7 @@ async def _show_live(
         webrtc_program.PROGRAM.replace_image(image)
 
     cam = _cameras.get(session_id)
-    in_place = cam is not None and webrtc_viz_apps.replace_object(session_id, scene)
+    in_place = cam is not None and bool(pushed.get("replaced"))
     if in_place:
         url = webrtc_bokeh.document_url(port, session_id)
         await asyncio.sleep(0.35)

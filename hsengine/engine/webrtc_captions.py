@@ -244,22 +244,97 @@ def overlay_frame(frame: Any, text: str, activity: str = "") -> Any:
         return frame
 
 
-def stamp_frame(frame: Any, text: str, activity: str) -> Any:
+def _frame_from_rgb(rgb: Any, src: Any) -> Any:
+    import av
+
+    out = av.VideoFrame.from_ndarray(rgb, format="rgb24")
+    pts = getattr(src, "pts", None)
+    if pts is not None:
+        out.pts = pts
+    tb = getattr(src, "time_base", None)
+    if tb is not None:
+        out.time_base = tb
+    return out
+
+
+def _paint_image(image: Any, text: str, activity: str) -> None:
+    if text:
+        paint_caption(image, text)
+    if activity:
+        from hsengine.engine.webrtc_activity import paint_activity
+
+        paint_activity(image, activity)
+
+
+def stamp_frame(
+    frame: Any, text: str, activity: str, cache: dict[str, Any] | None = None
+) -> Any:
     """Compositor plus caption. Runs off the audio loop.
 
     A 1312×688 caption paint is ~30 ms, and the clip is 24 fps, so doing
     it on the loop starves the 20 ms audio sender: the jitter buffer holds
     a few words, then the packet gap is a hard cut.
+
+    ``cache`` is per track. While a compositor is live its pixels do not
+    follow the clip, so the LANCZOS refit runs only when ``PROGRAM.pixels()``
+    or the frame size changes, and the caption is repainted only when the
+    revealed text or the activity chip changes. A hit still builds a new
+    frame (new pts) off the caller's thread — the caller must not be the
+    audio loop. With ``cache is None`` every call refits, which is what
+    the audio-clock yield test stubs.
     """
-    from hsengine.engine.webrtc_program import mix_frame
+    from hsengine.engine.webrtc_program import PROGRAM, mix_frame
+
+    live = False
+    pix = 0
+    try:
+        live = bool(PROGRAM.active())
+        pix = int(PROGRAM.pixels())
+    except Exception:
+        live = False
+    if cache is None or not live:
+        try:
+            # Keep the clip's PTS/time_base. Replacing the RTP clock with
+            # a 15 fps rgb24 stream made Listen show a white plate.
+            frame = mix_frame(frame)
+        except Exception:
+            log.debug("program mix failed", exc_info=True)
+        return overlay_frame(frame, text, activity)
 
     try:
-        # Keep the clip's PTS/time_base. Replacing the RTP clock with
-        # a 15 fps rgb24 stream made Listen show a white plate.
-        frame = mix_frame(frame)
+        try:
+            w = int(frame.width)
+            h = int(frame.height)
+        except Exception:
+            w, h = 0, 0
+        fit_key = (pix, w, h)
+        paint_key = (fit_key, text or "", activity or "")
+        cached = cache.get("rgb")
+        if cache.get("paint_key") == paint_key and cached is not None:
+            return _frame_from_rgb(cached, frame)
+        if cache.get("fit_key") == fit_key and cache.get("base") is not None:
+            base = cache["base"]
+        else:
+            mixed = mix_frame(frame)
+            import numpy as np
+            from PIL import Image
+
+            base = Image.fromarray(np.asarray(mixed.to_ndarray(format="rgb24")))
+            cache["fit_key"] = fit_key
+            cache["base"] = base
+            cache.pop("rgb", None)
+            cache.pop("paint_key", None)
+        painted = base.copy()
+        _paint_image(painted, text, activity)
+        import numpy as np
+
+        rgb = np.array(painted, dtype=np.uint8, copy=True)
+        cache["paint_key"] = paint_key
+        cache["rgb"] = rgb
+        return _frame_from_rgb(rgb, frame)
     except Exception:
-        log.debug("program mix failed", exc_info=True)
-    return overlay_frame(frame, text, activity)
+        log.warning("caption overlay failed", exc_info=True)
+        return frame
 
 
 def _stamp_needed(text: str, activity: str) -> bool:
@@ -283,6 +358,9 @@ def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) 
         def __init__(self) -> None:
             super().__init__()
             self._inner = inner
+            # Picture refit is cached here. A fresh dict per track so two
+            # sessions do not reuse each other's RGB.
+            self._stamp_cache: dict[str, Any] = {}
 
         async def recv(self):
             if self.readyState != "live":
@@ -293,7 +371,10 @@ def caption_track(inner: Any, board: CaptionBoard, activity: Any | None = None) 
             if not _stamp_needed(text, act):
                 return frame
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(None, stamp_frame, frame, text, act)
+            # Even a cache hit copies a full frame. That stays off this loop.
+            return await loop.run_in_executor(
+                None, stamp_frame, frame, text, act, self._stamp_cache
+            )
 
         def stop(self) -> None:
             try:

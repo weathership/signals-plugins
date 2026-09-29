@@ -133,6 +133,26 @@ def pick_cdp_page(pages: list) -> str:
     raise TimeoutError("no CDP page target for the HoloViews document")
 
 
+# A screencast frame is a JPEG decode plus a plate scan. That is enough
+# to miss a 20 ms audio tick if it runs on the sender loop, and frames
+# arrive faster than the picture needs to move.
+_PUSH_GAP_S = 0.12
+
+
+def decode_screencast_blob(data_b64: str) -> Any | None:
+    """RGB image, or None when the blob is empty, broken, or a blank plate."""
+    if not data_b64:
+        return None
+    try:
+        image = jpeg_to_image(base64.b64decode(data_b64))
+    except Exception:
+        log.debug("screencast jpeg decode failed", exc_info=True)
+        return None
+    if image is None or is_blank_plate(image):
+        return None
+    return image
+
+
 def jpeg_to_image(data: bytes) -> Any:
     import io
 
@@ -172,6 +192,8 @@ class CdpCamera:
         self.latest_image: Any = None
         self.frames = 0
         self._last_frame_at = 0.0
+        self._last_push = 0.0
+        self._decode_busy = False
         self._pump_task: asyncio.Task | None = None
 
     async def start(
@@ -223,10 +245,17 @@ class CdpCamera:
 
         deadline = time.monotonic() + timeout
         list_url = f"http://127.0.0.1:{self.debug_port}/json/list"
+
+        def _read_pages() -> list:
+            with urllib.request.urlopen(list_url, timeout=0.4) as resp:
+                payload = json.loads(resp.read().decode())
+            return payload if isinstance(payload, list) else []
+
         while time.monotonic() < deadline:
             try:
-                with urllib.request.urlopen(list_url, timeout=0.4) as resp:
-                    pages = json.loads(resp.read().decode())
+                # urlopen blocks the calling thread. The audio sender is
+                # this loop, so the wait has to be somewhere else.
+                pages = await asyncio.to_thread(_read_pages)
                 try:
                     picked = pick_cdp_page(pages)
                 except TimeoutError:
@@ -297,14 +326,19 @@ class CdpCamera:
             )
         except Exception:
             log.debug("screencast ack failed", exc_info=True)
-        blob = params.get("data") or ""
-        if not blob:
+        blob = str(params.get("data") or "")
+        if not blob or self._decode_busy:
             return
+        if self.frames > 0 and time.monotonic() - self._last_push < _PUSH_GAP_S:
+            return
+        self._decode_busy = True
         try:
-            image = jpeg_to_image(base64.b64decode(blob))
-        except Exception:
-            log.debug("screencast jpeg decode failed", exc_info=True)
+            image = await asyncio.to_thread(decode_screencast_blob, blob)
+        finally:
+            self._decode_busy = False
+        if image is None:
             return
+        self._last_push = time.monotonic()
         self._accept_image(image)
 
     def _accept_image(self, image: Any) -> None:
@@ -359,13 +393,18 @@ class CdpCamera:
             await asyncio.sleep(0.1)
         # Same compositor — seed one surface capture so we never start
         # the track on a black placeholder.
-        shot = await self.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY, "fromSurface": True})
-        blob = shot.get("data") or ""
+        shot = await self.send(
+            "Page.captureScreenshot",
+            {"format": "jpeg", "quality": JPEG_QUALITY, "fromSurface": True},
+        )
+        blob = str(shot.get("data") or "")
         if not blob:
             raise TimeoutError("CDP screencast produced no frames")
-        jpeg = base64.b64decode(blob)
-        image = jpeg_to_image(jpeg)
-        self._accept_image(image)
+        # Decode off this loop. The first frame is what the track starts on,
+        # and this loop is also the 20 ms audio sender.
+        image = await asyncio.to_thread(decode_screencast_blob, blob)
+        if image is not None:
+            self._accept_image(image)
         if self.latest_image is None:
             raise TimeoutError("CDP screencast produced no usable frames")
 
@@ -416,13 +455,23 @@ class CdpCamera:
             except Exception:
                 log.debug("viz frame pump failed", exc_info=True)
                 return
-            blob = shot.get("data") or ""
-            if not blob:
+            blob = str(shot.get("data") or "")
+            if not blob or self._decode_busy:
                 continue
+            if self.frames > 0 and time.monotonic() - self._last_push < _PUSH_GAP_S:
+                continue
+            self._decode_busy = True
             try:
-                self._accept_image(jpeg_to_image(base64.b64decode(blob)))
+                image = await asyncio.to_thread(decode_screencast_blob, blob)
             except Exception:
                 log.debug("viz frame pump decode failed", exc_info=True)
+                continue
+            finally:
+                self._decode_busy = False
+            if image is None:
+                continue
+            self._last_push = time.monotonic()
+            self._accept_image(image)
 
     async def stop_screencast(self) -> None:
         if not self._screencast:
