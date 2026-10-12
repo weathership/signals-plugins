@@ -35,6 +35,12 @@ log = logging.getLogger("hsengine.engine.coordination")
 PEER = "hermes"
 KIND_INTERACTIVE = "interactive_session"
 KIND_ACTIVITY = "activity"  # supervision bus kind (mirrored in supervision_bus)
+# A foreign RUNNING activity with this posture is the federation handover.
+# Hermes stops its own moshi worker. It does not dial Engine/Yield.
+POSTURE_FEDERATION_GPU = "federation.gpu"
+POSTURE_YIELD = "yield"
+HANDOVER_OFF_TIMEOUT_S = 30.0
+HANDOVER_ON_TIMEOUT_S = 330.0  # supervisor activate waits up to 300 s for :5080
 
 GURU_DECLAREFAIL = "#HS.COORD.00000001.DECLAREFAIL"
 GURU_RENEWFAIL = "#HS.COORD.00000002.RENEWFAIL"
@@ -62,6 +68,52 @@ _STATE_NAMES = {
 }
 _STATE_VALUES = {v: k for k, v in _STATE_NAMES.items()}
 IN_FORCE = ("queued", "running")
+
+
+def gpu_handover_active(activities: list[dict[str, Any]], peer: str = PEER) -> bool:
+    """True when another project has a RUNNING activity asking for every GPU.
+
+    ``queued`` is not yet a handover. An activity this peer declared is the
+    claim it is receiving, so it does not stop moshi for its own posture.
+    """
+    me = (peer or "").strip()
+    for activity in activities:
+        if str(activity.get("state") or "") != "running":
+            continue
+        if str(activity.get("peer") or "") == me:
+            continue
+        postures = activity.get("postures") or {}
+        if str(postures.get(POSTURE_FEDERATION_GPU) or "") == POSTURE_YIELD:
+            return True
+    return False
+
+
+def interactive_session_running(activities: list[dict[str, Any]], peer: str = PEER) -> bool:
+    """This peer still has an interactive session in force (moshi may return)."""
+    me = (peer or "").strip()
+    for activity in activities:
+        if str(activity.get("peer") or "") != me:
+            continue
+        if str(activity.get("kind") or "") != KIND_INTERACTIVE:
+            continue
+        if str(activity.get("state") or "") == "running":
+            return True
+    return False
+
+
+def _post_supervisor(path: str, timeout: float) -> None:
+    """POST the local moshi supervisor. Never a peer Engine/Yield."""
+    import httpx
+
+    from hsengine.engine.interactive import _control_url
+
+    url = _control_url().rstrip("/") + path
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(url, content=b"{}")
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"moshi supervisor {path} HTTP {response.status_code}: {response.text[:300]}"
+        )
 
 
 # ── config ────────────────────────────────────────────────────────────────────
@@ -503,6 +555,13 @@ class ActivityWatcher:
         self.events = 0
         self._unimplemented_logged = False
         self._task: asyncio.Task | None = None
+        # GPU handover is a local supervisor call, serialized off the watch loop.
+        self._handover_want = False
+        self._handover_on = False
+        self._restore_moshi = False
+        self._restore_sampled = False
+        self._handover_lock = threading.Lock()
+        self._handover_thread: threading.Thread | None = None
 
     # view --------------------------------------------------------------------
     def view(self, *, in_force_only: bool = False) -> list[dict[str, Any]]:
@@ -546,6 +605,76 @@ class ActivityWatcher:
             self.observed_ns = int(observed_ns or now_ns())
             self.events += 1
         return transitions
+
+    def _sync_gpu_handover(self) -> None:
+        """Yield or restore moshi when a foreign ``federation.gpu=yield`` is RUNNING.
+
+        ``/interactive/off`` is the supervisor, so it drops the worker and the
+        advisory lease and does not restart moshi underneath the handover.
+        ``kill_moshi`` would. Restore only if moshi was serving when the
+        handover began and this peer's interactive session is still running.
+        """
+        activities = self.view()
+        want = gpu_handover_active(activities, self.peer)
+        with self._handover_lock:
+            if want and not self._restore_sampled:
+                from hsengine.engine.yk_sentinel import moshi_serving
+
+                self._restore_moshi = bool(moshi_serving())
+                self._restore_sampled = True
+            self._handover_want = want
+            alive = self._handover_thread is not None and self._handover_thread.is_alive()
+            if want == self._handover_on and not alive:
+                return
+            if alive:
+                return
+            self._handover_thread = threading.Thread(
+                target=self._handover_worker, name="hermes-gpu-handover", daemon=True
+            )
+            self._handover_thread.start()
+
+    def _handover_worker(self) -> None:
+        while True:
+            with self._handover_lock:
+                want = self._handover_want
+                if want == self._handover_on:
+                    return
+            activities = self.view()
+            with self._handover_lock:
+                want = self._handover_want
+                if want == self._handover_on:
+                    return
+                if want:
+                    path, timeout = "/interactive/off", HANDOVER_OFF_TIMEOUT_S
+                else:
+                    bring_back = self._restore_moshi and interactive_session_running(
+                        activities, self.peer
+                    )
+                    if not bring_back:
+                        if self._handover_want != want:
+                            continue
+                        self._handover_on = False
+                        self._restore_moshi = False
+                        self._restore_sampled = False
+                        return
+                    path, timeout = "/interactive/on", HANDOVER_ON_TIMEOUT_S
+            try:
+                _post_supervisor(path, timeout)
+            except Exception as e:
+                log.warning(
+                    "gpu handover %s failed: %s — the next WatchActivities event retries",
+                    path,
+                    e,
+                )
+                return
+            log.info("gpu handover %s (peer %s)", path, self.peer)
+            with self._handover_lock:
+                if self._handover_want != want:
+                    continue
+                self._handover_on = want
+                if not want:
+                    self._restore_moshi = False
+                    self._restore_sampled = False
 
     # loop --------------------------------------------------------------------
     def start(self, loop: asyncio.AbstractEventLoop | None = None) -> asyncio.Task:
@@ -600,6 +729,7 @@ class ActivityWatcher:
                 self._unimplemented_logged = False
                 for a, transition in self.apply([activity_to_dict(x) for x in ev.activities], int(ev.observed_ns)):
                     publish_activity(a, transition)
+                self._sync_gpu_handover()
 
 
 _WATCHER: ActivityWatcher | None = None
