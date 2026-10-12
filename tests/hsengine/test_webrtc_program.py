@@ -70,15 +70,25 @@ def test_mix_frame_stamps_compositor_on_clip_clock():
     assert int(arr[36, 64, 1]) > 150
 
 
-def test_figure_sits_below_the_top_edge():
-    """The plot uses the width and is centered, not pinned to y = 0."""
-    from hsengine.engine.webrtc_cdp import PLOT_H, PLOT_W, VIEW_H, VIEW_W, figure_top
+def test_figure_fills_the_1280x720_frame():
+    """Native plot size fills the AgentRTC frame; 12px inset, not a letterbox."""
+    from hsengine.engine.webrtc_cdp import (
+        PLOT_H,
+        PLOT_W,
+        TOOLBAR_W,
+        VIEW_H,
+        VIEW_W,
+        figure_top,
+    )
 
     top = figure_top()
-    assert top >= 48
-    assert top == (VIEW_H - PLOT_H) // 2
-    assert PLOT_W >= int(VIEW_W * 0.9)
-    assert PLOT_H >= int(VIEW_H * 0.7)
+    assert (VIEW_W, VIEW_H) == (1280, 720)
+    assert PLOT_W + TOOLBAR_W == VIEW_W
+    assert PLOT_H + 2 * top == VIEW_H
+    assert top == 12
+    assert PLOT_W == 1208
+    assert PLOT_H == 696
+    assert PLOT_H >= int(VIEW_H * 0.9)
 
 
 def test_mix_frame_fills_the_video_instead_of_the_top_band():
@@ -103,6 +113,30 @@ def test_mix_frame_fills_the_video_instead_of_the_top_band():
     # Lower third used to be empty plate (the figure was pinned to the top).
     assert int(arr[60, 64, 1]) > 150
     assert int(arr[8, 8, 1]) > 150
+
+
+def test_native_1280x720_frame_is_not_title_barred():
+    """A CDP-sized figure already has its title. Do not cover the top 36px."""
+    pytest.importorskip("av")
+    pytest.importorskip("PIL")
+    pytest.importorskip("numpy")
+    from fractions import Fraction
+
+    import av
+    import numpy as np
+    from PIL import Image
+
+    clip = av.VideoFrame.from_ndarray(
+        np.zeros((720, 1280, 3), dtype=np.uint8), format="rgb24"
+    )
+    clip.pts = 1
+    clip.time_base = Fraction(1, 90000)
+    viz = Image.new("RGB", (1280, 720), (10, 200, 40))
+    wp.PROGRAM.set(viz, title="Telecom closes", kind="curve", fade_s=0.05)
+    arr = wp.mix_frame(clip).to_ndarray(format="rgb24")
+    assert arr.shape[0] == 720 and arr.shape[1] == 1280
+    assert int(arr[8, 8, 1]) > 150
+    assert int(arr[360, 640, 1]) > 150
 
 
 def test_pixels_follow_the_compositor_not_a_dropped_plate():

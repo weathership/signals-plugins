@@ -13,6 +13,7 @@ import uuid
 from concurrent import futures
 
 import grpc
+import httpx
 import pytest
 
 from hsengine.engine import coordination, interactive, s2s
@@ -275,6 +276,34 @@ def _wire(monkeypatch, calls: list[str], *, moshi_fails: bool = False) -> _Lease
     monkeypatch.setattr(interactive, "_moshi_on", _moshi_on)
     monkeypatch.setattr(interactive, "_moshi_off", lambda: calls.append("moshi_off"))
     return lease
+
+
+def test_enter_restarts_moshi_when_posture_is_stale(monkeypatch):
+    calls: list[str] = []
+    _wire(monkeypatch, calls)
+    interactive.enter(owner="webrtc:s1")
+    monkeypatch.setattr(interactive, "moshi_serving", lambda *a, **k: False)
+    interactive.enter(owner="webrtc:s2")
+    assert calls.count("moshi_on") == 2
+    assert calls.count("declare:webrtc:s1") == 1
+    assert "declare:webrtc:s2" not in calls
+    assert interactive.is_active()
+
+
+def test_enter_timeout_does_not_kill_booting_moshi(monkeypatch):
+    calls: list[str] = []
+    lease = _wire(monkeypatch, calls)
+
+    def _hang():
+        calls.append("moshi_on")
+        raise httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr(interactive, "_moshi_on", _hang)
+    with pytest.raises(httpx.ReadTimeout):
+        interactive.enter(owner="webrtc:s1")
+    assert "moshi_off" not in calls
+    assert lease.released and lease.released[0].startswith("aborted:")
+    assert not interactive.is_active()
 
 
 def test_enter_declares_before_moshi_and_leave_releases(monkeypatch):

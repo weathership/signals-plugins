@@ -112,6 +112,36 @@ def test_two_price_series_are_indexed_to_the_same_start():
     assert ends[1] == pytest.approx(110.0)
 
 
+def test_telecom_close_curves_fill_the_agentrtc_frame():
+    """VZ/T/TMUS overlay is native 1208x696, not a letterboxed 720x420."""
+    from hsengine.engine import webrtc_viz_apps as apps
+    from hsengine.engine.webrtc_cdp import PLOT_H, PLOT_W
+
+    raw = (
+        '{"series":['
+        '{"name":"VZ","points":[["2026-09-01",40],["2026-09-02",41],["2026-09-03",42]]},'
+        '{"name":"T","points":[["2026-09-01",20],["2026-09-02",21],["2026-09-03",19]]},'
+        '{"name":"TMUS","points":[["2026-09-01",200],["2026-09-02",202],["2026-09-03",198]]}'
+        "]}"
+    )
+    scene = apps.put_scene(
+        "telecom",
+        kind="curve",
+        title="Telecom closes",
+        data=raw,
+    )
+    obj = apps._hv_obj(scene)
+    names = [str(el.label) for el in obj]
+    assert names == ["VZ", "T", "TMUS"]
+    kwargs = obj.opts.get().kwargs
+    assert kwargs.get("width") == PLOT_W == 1208
+    assert kwargs.get("height") == PLOT_H == 696
+    assert kwargs.get("legend_position") == "top_left"
+    fonts = kwargs.get("fontsize") or {}
+    assert fonts.get("title") == 16
+    assert fonts.get("legend") == 12
+
+
 def test_one_price_series_stays_in_dollars():
     from hsengine.engine import webrtc_viz_apps as apps
 

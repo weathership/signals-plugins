@@ -216,6 +216,8 @@ def _hv_obj(scene: dict[str, Any]) -> Any:
     edges: list[tuple[int, int, float]] = list(scene.get("edges") or DEMO_EDGES)
     if kind in _OPTIONS_KINDS:
         return _empty_plot(title, _OPTIONS_NOTE)
+    if kind in ("bars", "hbar", "bar", "tape", "premarket"):
+        return _tape_bars(scene, title)
     if kind in ("curve", "line", "relative", "relative_performance"):
         return _curves(scene, title, force_index=kind in ("relative", "relative_performance"))
     if kind in ("return_board", "cross_asset_return_board"):
@@ -376,7 +378,7 @@ def _empty_plot(title: str, message: str) -> Any:
         fontsize=16,
         bgcolor="#0b0b12",
         width=PLOT_W,
-        height=620,
+        height=PLOT_H,
     )
 
 
@@ -473,7 +475,13 @@ def _price_frame(scene: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _style(title: str, **extra: Any) -> dict[str, Any]:
-    opts = dict(title=title or "", width=PLOT_W, height=PLOT_H, bgcolor="#0b0b12")
+    opts = dict(
+        title=title or "",
+        width=PLOT_W,
+        height=PLOT_H,
+        bgcolor="#0b0b12",
+        fontsize={"title": 16, "labels": 13, "yticks": 14, "xticks": 12, "legend": 12},
+    )
     opts.update(extra)
     return opts
 
@@ -549,7 +557,7 @@ def _curves(scene: dict[str, Any], title: str, *, scatter: bool = False, force_i
                 continue
             if len(data) < 2:
                 continue
-            prepared.append((name, data))
+            prepared.append((name, [(_time_or_label(x), y) for x, y in data]))
     if not prepared:
         prepared = _eod_series(scene)
     prepared = [
@@ -782,6 +790,92 @@ def return_horizons(points: list[tuple[Any, float]]) -> dict[str, float]:
     return out
 
 
+def _tape_bars(scene: dict[str, Any], title: str) -> Any:
+    """Horizontal pre-market (or session) percent bars. Sorted; zero line."""
+    import holoviews as hv
+
+    payload = _payload(scene)
+    blob = (
+        payload.get("changes")
+        or payload.get("tape")
+        or payload.get("assets")
+        or payload.get("values")
+        or payload.get("gappers")
+    )
+    if not isinstance(blob, list):
+        blob = []
+    rows: list[tuple[str, float]] = []
+    for row in blob:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or row.get("symbol") or row.get("ticker") or "").strip()
+        val = None
+        for key in ("pct", "change", "value", "d"):
+            if row.get(key) not in (None, ""):
+                try:
+                    val = float(row[key])
+                except (TypeError, ValueError):
+                    val = None
+                break
+        if name and val is not None:
+            rows.append((name, val))
+    if not rows:
+        return _empty_plot(title, "No tape — pass changes with name and pct")
+    rows.sort(key=lambda p: p[1])
+    xs = [p[1] for p in rows]
+    span = max(xs) - min(min(xs), 0.0)
+    pad = max(0.04, span * 0.18)
+    lo = min(0.0, min(xs)) - pad * 0.25
+    hi = max(0.0, max(xs)) + pad
+    colors = ["#3dd68c" if v >= 0 else "#ff5d73" for _, v in rows]
+    bars = hv.Bars(rows, "name", "pct").opts(
+        invert_axes=True,
+        color=colors if len(set(colors)) > 1 else colors[0],
+        line_color="#0b0b12",
+        xlabel="pre-market %",
+        ylabel="",
+        show_legend=False,
+        xlim=(lo, hi),
+        fontsize={"title": 20, "labels": 16, "xticks": 14, "yticks": 18},
+    )
+    zero = hv.VLine(0).opts(color="#8b93a7", line_width=1.5, line_dash="dotted", alpha=0.75)
+    extra = payload.get("gappers") if blob is not payload.get("gappers") else None
+    tape = (bars * zero).opts(
+        **_style(title or "Pre-market tape", xlabel="pre-market %", ylabel="")
+    )
+    if isinstance(extra, list) and extra:
+        gap_rows: list[tuple[str, float]] = []
+        for row in extra:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or row.get("symbol") or row.get("ticker") or "").strip()
+            val = None
+            for key in ("pct", "change", "value"):
+                if row.get(key) not in (None, ""):
+                    try:
+                        val = float(row[key])
+                    except (TypeError, ValueError):
+                        val = None
+                    break
+            if name and val is not None:
+                gap_rows.append((name, val))
+        if gap_rows:
+            gap_rows.sort(key=lambda p: p[1])
+            gbars = hv.Bars(gap_rows, "name", "pct").opts(
+                invert_axes=True,
+                color="#f0c14a",
+                line_color="#0b0b12",
+                xlabel="pre-market %",
+                ylabel="",
+                show_legend=False,
+                fontsize={"title": 16, "labels": 13, "xticks": 12, "yticks": 14},
+            )
+            gzero = hv.VLine(0).opts(color="#8b93a7", line_width=1, line_dash="dotted", alpha=0.7)
+            gaps = (gbars * gzero).opts(title="Top gappers")
+            return (tape + gaps).cols(1)
+    return tape
+
+
 def _return_board(scene: dict[str, Any], title: str) -> Any:
     """Named assets × horizons. Caller rows win; tickers pull FMP closes."""
     import holoviews as hv
@@ -965,7 +1059,9 @@ def _density(scene: dict[str, Any], title: str) -> Any:
     df["week"] = df["at"].dt.to_period("W").dt.start_time
     counts = df.groupby(["week", "lane"], as_index=False).size()
     counts = counts.rename(columns={"size": "n"})
-    week_labels = list(dict.fromkeys(counts["week"].tolist()))
+    weeks = [str(w) for w in counts["week"].tolist()]
+    # unique, stable order
+    week_labels = list(dict.fromkeys(weeks))
     return hv.HeatMap(counts, kdims=["week", "lane"], vdims=["n"]).opts(
         **_style(
             title or "Filings density",
@@ -1025,8 +1121,9 @@ def modify_doc(doc: Any) -> None:
     hv.extension("bokeh", logo=False)
     hv.renderer("bokeh").webgl = False
     css = (
-        "html, body { height: 100% !important; background: #0b0b12 !important; "
-        "margin: 0 !important; }"
+        "html, body { width: 1280px !important; height: 720px !important; "
+        "background: #0b0b12 !important; margin: 0 !important; padding: 0 !important; "
+        "overflow: hidden !important; }"
         ".bk-root, .bk-Row, .bk-Column, .bk-GridBox "
         "{ background: #0b0b12 !important; color: #e8ecf4 !important; "
         "margin: 0 !important; height: auto !important; overflow: hidden !important; "
@@ -1045,15 +1142,16 @@ def modify_doc(doc: Any) -> None:
     )
     if sid:
         PANES[sid] = pane
-    # Flex on the body did not move the plot: the Bokeh root fills the
-    # viewport and the figure stays on its top edge. A spacer of the
-    # centered inset puts air above the figure inside the document.
-    from hsengine.engine.webrtc_cdp import VIEW_W, figure_top
+    # Tight top inset (not a letterbox). Flex on the body did not move the
+    # plot — the Bokeh root fills the viewport and stays on its top edge.
+    from hsengine.engine.webrtc_cdp import VIEW_H, VIEW_W, figure_top
 
     pn.Column(
         pn.Spacer(height=figure_top(), width=VIEW_W),
         pane,
         width=VIEW_W,
+        height=VIEW_H,
+        margin=0,
     ).server_doc(doc)
     doc.title = title
     log.info(

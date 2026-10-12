@@ -27,9 +27,10 @@ Do not say the figure is on the feed until `viz_show` returned `"ok": true`.
 
 ## Frame
 
-The video is 1280×720. The figure sits in that frame with air above it.
-It is not pinned to the top edge, and it is not letterboxed into a short
-top band.
+The video is 1280×720. Size the HoloViews figure to that frame (plot
+1208×696 plus a 72px toolbar column and a 12px inset) so axes, title,
+legend, and toolbar sit inside. Do not letterbox into a short band, and
+do not scale the capture after the fact.
 
 Axis labels must be readable in the width available. A price path is a
 time axis: ticks are spaced across the window, not one label per

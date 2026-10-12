@@ -128,6 +128,13 @@ def needs_workflow(text: str) -> bool:
     return bool(_WORKFLOW.search(text or ""))
 
 
+def file_workflow_if_needed(session_id: str, user: str, assistant: str = "") -> None:
+    """Hicks keeps statement-scale work. Vasquez does not draw it from a ticker."""
+    if not needs_workflow(f"{user} {assistant}"):
+        return
+    _file_workflow(session_id, user, plan_figure(user, assistant))
+
+
 def desk_for_turn(session_id: str, user: str, assistant: str = "") -> None:
     """Bishop directs, Vasquez's page renders, Hicks holds the long work.
 

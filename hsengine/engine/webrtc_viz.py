@@ -276,9 +276,11 @@ def hover_xy(
             idx = i
             break
     n = max(1, len(names))
-    from hsengine.engine.webrtc_cdp import PLOT_W
+    from hsengine.engine.webrtc_cdp import PLOT_H, PLOT_W, figure_top
 
-    left, right, top, bottom = 96.0, float(PLOT_W - 36), 72.0, 600.0
+    inset = float(figure_top())
+    left, right = 96.0, float(PLOT_W - 36)
+    top, bottom = inset + 48.0, inset + float(PLOT_H) - 48.0
     x = left + max(0.0, min(1.0, float(t))) * (right - left)
     y = top + (idx + 0.5) / n * (bottom - top)
     return x, y

@@ -139,7 +139,7 @@ class ProgramBoard:
             if not isinstance(base, Image.Image):
                 return base
             fitted = _fit(img, base.size)
-            if title:
+            if title and img.size != base.size:
                 _paint_title(fitted, title)
             return fitted
 
@@ -197,7 +197,7 @@ def compositor_image() -> Any | None:
     if not live:
         return None
     fitted = _fit(img, (1280, 720))
-    if title:
+    if title and img.size != (1280, 720):
         _paint_title(fitted, title)
     return fitted
 
@@ -240,7 +240,7 @@ def mix_frame(frame: Any) -> Any:
         # band here letterboxes a 16:9 figure into the top ~58% and leaves
         # it at about a third of the frame, pinned to the top edge.
         fitted = _fit(img, (w, h))
-        if title:
+        if title and img.size != (w, h):
             _paint_title(fitted, title)
         out = av.VideoFrame.from_ndarray(np.asarray(fitted), format="rgb24")
         out.pts = frame.pts
