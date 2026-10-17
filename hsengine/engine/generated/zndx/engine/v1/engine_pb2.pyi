@@ -1,3 +1,4 @@
+from hsengine.engine.generated.zndx.platform.v1 import platform_pb2 as _platform_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
@@ -53,6 +54,7 @@ class ServerQueryKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SERVER_QUERY_KIND_FMP: _ClassVar[ServerQueryKind]
     SERVER_QUERY_KIND_RESOURCES: _ClassVar[ServerQueryKind]
     SERVER_QUERY_KIND_ASPECTS: _ClassVar[ServerQueryKind]
+    SERVER_QUERY_KIND_PLATFORMS: _ClassVar[ServerQueryKind]
 
 class ActivityState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -145,6 +147,7 @@ SERVER_QUERY_KIND_AGENTS: ServerQueryKind
 SERVER_QUERY_KIND_FMP: ServerQueryKind
 SERVER_QUERY_KIND_RESOURCES: ServerQueryKind
 SERVER_QUERY_KIND_ASPECTS: ServerQueryKind
+SERVER_QUERY_KIND_PLATFORMS: ServerQueryKind
 ACTIVITY_STATE_UNSPECIFIED: ActivityState
 ACTIVITY_QUEUED: ActivityState
 ACTIVITY_RUNNING: ActivityState
@@ -327,6 +330,52 @@ class CompleteResponse(_message.Message):
     fulfilled_by: str
     profile: OperatingProfile
     def __init__(self, text: _Optional[str] = ..., model: _Optional[str] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., latency_ms: _Optional[float] = ..., reasoning_content: _Optional[str] = ..., finish_reason: _Optional[str] = ..., tool_calls: _Optional[_Iterable[_Union[ToolCall, _Mapping]]] = ..., reasoning: _Optional[_Iterable[_Union[ReasoningLayer, _Mapping]]] = ..., fulfilled_by: _Optional[str] = ..., profile: _Optional[_Union[OperatingProfile, _Mapping]] = ...) -> None: ...
+
+class DecisionQuestion(_message.Message):
+    __slots__ = ("id", "type", "instructions", "criteria_json")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    INSTRUCTIONS_FIELD_NUMBER: _ClassVar[int]
+    CRITERIA_JSON_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    type: str
+    instructions: str
+    criteria_json: str
+    def __init__(self, id: _Optional[str] = ..., type: _Optional[str] = ..., instructions: _Optional[str] = ..., criteria_json: _Optional[str] = ...) -> None: ...
+
+class DecideRequest(_message.Message):
+    __slots__ = ("capability", "state_json", "questions", "instructions", "cache_salt")
+    CAPABILITY_FIELD_NUMBER: _ClassVar[int]
+    STATE_JSON_FIELD_NUMBER: _ClassVar[int]
+    QUESTIONS_FIELD_NUMBER: _ClassVar[int]
+    INSTRUCTIONS_FIELD_NUMBER: _ClassVar[int]
+    CACHE_SALT_FIELD_NUMBER: _ClassVar[int]
+    capability: str
+    state_json: str
+    questions: _containers.RepeatedCompositeFieldContainer[DecisionQuestion]
+    instructions: str
+    cache_salt: str
+    def __init__(self, capability: _Optional[str] = ..., state_json: _Optional[str] = ..., questions: _Optional[_Iterable[_Union[DecisionQuestion, _Mapping]]] = ..., instructions: _Optional[str] = ..., cache_salt: _Optional[str] = ...) -> None: ...
+
+class DecideResponse(_message.Message):
+    __slots__ = ("id", "model", "answers_json", "diagnostics_json", "input_tokens", "output_tokens", "latency_ms", "fulfilled_by")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    ANSWERS_JSON_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_JSON_FIELD_NUMBER: _ClassVar[int]
+    INPUT_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    OUTPUT_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    LATENCY_MS_FIELD_NUMBER: _ClassVar[int]
+    FULFILLED_BY_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    model: str
+    answers_json: str
+    diagnostics_json: str
+    input_tokens: int
+    output_tokens: int
+    latency_ms: float
+    fulfilled_by: str
+    def __init__(self, id: _Optional[str] = ..., model: _Optional[str] = ..., answers_json: _Optional[str] = ..., diagnostics_json: _Optional[str] = ..., input_tokens: _Optional[int] = ..., output_tokens: _Optional[int] = ..., latency_ms: _Optional[float] = ..., fulfilled_by: _Optional[str] = ...) -> None: ...
 
 class StatusRequest(_message.Message):
     __slots__ = ()
@@ -536,7 +585,7 @@ class ServerQueryRequest(_message.Message):
     def __init__(self, kind: _Optional[_Union[ServerQueryKind, str]] = ..., ttl: _Optional[int] = ..., nonce: _Optional[str] = ..., origin_project: _Optional[str] = ..., note_id: _Optional[str] = ..., limit: _Optional[int] = ..., since_ms: _Optional[int] = ..., stream: _Optional[str] = ..., query: _Optional[str] = ...) -> None: ...
 
 class ServerQueryResponse(_message.Message):
-    __slots__ = ("project", "remotes", "head", "peers", "schedules", "note", "surfaces", "queues", "workloads", "posture", "products", "cognition", "contributions", "activities", "thoughts_hint", "agenda_hint", "search_hint", "agents", "fmp_hint", "resources_hint", "aspect_catalog", "product_specs")
+    __slots__ = ("project", "remotes", "head", "peers", "schedules", "note", "surfaces", "queues", "workloads", "posture", "products", "cognition", "contributions", "activities", "thoughts_hint", "agenda_hint", "search_hint", "agents", "fmp_hint", "resources_hint", "aspect_catalog", "product_specs", "platforms")
     PROJECT_FIELD_NUMBER: _ClassVar[int]
     REMOTES_FIELD_NUMBER: _ClassVar[int]
     HEAD_FIELD_NUMBER: _ClassVar[int]
@@ -559,6 +608,7 @@ class ServerQueryResponse(_message.Message):
     RESOURCES_HINT_FIELD_NUMBER: _ClassVar[int]
     ASPECT_CATALOG_FIELD_NUMBER: _ClassVar[int]
     PRODUCT_SPECS_FIELD_NUMBER: _ClassVar[int]
+    PLATFORMS_FIELD_NUMBER: _ClassVar[int]
     project: str
     remotes: _containers.RepeatedCompositeFieldContainer[GitRemote]
     head: str
@@ -581,7 +631,8 @@ class ServerQueryResponse(_message.Message):
     resources_hint: ResourcesHint
     aspect_catalog: _containers.RepeatedCompositeFieldContainer[AspectSpec]
     product_specs: _containers.RepeatedCompositeFieldContainer[ProductSpec]
-    def __init__(self, project: _Optional[str] = ..., remotes: _Optional[_Iterable[_Union[GitRemote, _Mapping]]] = ..., head: _Optional[str] = ..., peers: _Optional[_Iterable[_Union[PeerHint, _Mapping]]] = ..., schedules: _Optional[_Iterable[_Union[ScheduleHint, _Mapping]]] = ..., note: _Optional[_Union[WikiNote, _Mapping]] = ..., surfaces: _Optional[_Iterable[_Union[Surface, _Mapping]]] = ..., queues: _Optional[_Iterable[_Union[QueueHint, _Mapping]]] = ..., workloads: _Optional[_Iterable[_Union[WorkloadOffer, _Mapping]]] = ..., posture: _Optional[_Union[SourcePosture, _Mapping]] = ..., products: _Optional[_Iterable[_Union[ProductHint, _Mapping]]] = ..., cognition: _Optional[_Union[CognitionHint, _Mapping]] = ..., contributions: _Optional[_Union[ContributionsHint, _Mapping]] = ..., activities: _Optional[_Iterable[_Union[Activity, _Mapping]]] = ..., thoughts_hint: _Optional[_Union[ThoughtsHint, _Mapping]] = ..., agenda_hint: _Optional[_Union[AgendaHint, _Mapping]] = ..., search_hint: _Optional[_Union[SearchHint, _Mapping]] = ..., agents: _Optional[_Iterable[_Union[AgentHint, _Mapping]]] = ..., fmp_hint: _Optional[_Union[FmpHint, _Mapping]] = ..., resources_hint: _Optional[_Union[ResourcesHint, _Mapping]] = ..., aspect_catalog: _Optional[_Iterable[_Union[AspectSpec, _Mapping]]] = ..., product_specs: _Optional[_Iterable[_Union[ProductSpec, _Mapping]]] = ...) -> None: ...
+    platforms: _containers.RepeatedCompositeFieldContainer[_platform_pb2.PlatformHint]
+    def __init__(self, project: _Optional[str] = ..., remotes: _Optional[_Iterable[_Union[GitRemote, _Mapping]]] = ..., head: _Optional[str] = ..., peers: _Optional[_Iterable[_Union[PeerHint, _Mapping]]] = ..., schedules: _Optional[_Iterable[_Union[ScheduleHint, _Mapping]]] = ..., note: _Optional[_Union[WikiNote, _Mapping]] = ..., surfaces: _Optional[_Iterable[_Union[Surface, _Mapping]]] = ..., queues: _Optional[_Iterable[_Union[QueueHint, _Mapping]]] = ..., workloads: _Optional[_Iterable[_Union[WorkloadOffer, _Mapping]]] = ..., posture: _Optional[_Union[SourcePosture, _Mapping]] = ..., products: _Optional[_Iterable[_Union[ProductHint, _Mapping]]] = ..., cognition: _Optional[_Union[CognitionHint, _Mapping]] = ..., contributions: _Optional[_Union[ContributionsHint, _Mapping]] = ..., activities: _Optional[_Iterable[_Union[Activity, _Mapping]]] = ..., thoughts_hint: _Optional[_Union[ThoughtsHint, _Mapping]] = ..., agenda_hint: _Optional[_Union[AgendaHint, _Mapping]] = ..., search_hint: _Optional[_Union[SearchHint, _Mapping]] = ..., agents: _Optional[_Iterable[_Union[AgentHint, _Mapping]]] = ..., fmp_hint: _Optional[_Union[FmpHint, _Mapping]] = ..., resources_hint: _Optional[_Union[ResourcesHint, _Mapping]] = ..., aspect_catalog: _Optional[_Iterable[_Union[AspectSpec, _Mapping]]] = ..., product_specs: _Optional[_Iterable[_Union[ProductSpec, _Mapping]]] = ..., platforms: _Optional[_Iterable[_Union[_platform_pb2.PlatformHint, _Mapping]]] = ...) -> None: ...
 
 class AgentHint(_message.Message):
     __slots__ = ("agent_id", "project", "name", "version", "transport", "model_capabilities", "billing")

@@ -58,7 +58,8 @@ def hosted() -> bool:
 
 
 def advertised_names() -> list[str]:
-    return list(_NAMES) if hosted() else []
+    """Agent yellow-page names. Mistral is a platform, not an agent offer."""
+    return []
 
 
 def _agent_id(name: str) -> str:
@@ -75,57 +76,9 @@ def owns(agent_id: str) -> bool:
     return any(agent_id == _agent_id(name) or agent_id.endswith(f"/{name}") for name in _NAMES)
 
 
-def _offer(name: str, *, behaviours: list[str], note: str) -> apb.AgentOffer:
-    return apb.AgentOffer(
-        agent_id=_agent_id(name),
-        project=PROJECT,
-        name=name,
-        version=hsengine.__version__,
-        transport=apb.AGENT_TRANSPORT_SDK,
-        billing=apb.BILLING_SUBSCRIPTION,
-        behaviours=behaviours,
-        note=note,
-    )
-
-
-def _workflow_note() -> str:
-    from hsengine.engine.source_drop import paper_workflow_name
-
-    configured = paper_workflow_name()
-    default = f" Configured workflow: {configured}." if configured else ""
-    return (
-        "Run a Mistral workflow. instruction is a public arXiv, bioRxiv, or "
-        "medRxiv URL, or a short reason when kwargs_json.input is set. "
-        'kwargs_json is {"workflow":"name","input":{...},"wait":true}. '
-        "workflow defaults to mistral.paper_workflow. wait true returns the "
-        "workflow result; wait false returns execution_id. The credential "
-        "stays on this engine. No GPU claim."
-        + default
-    )
-
-
 def offers() -> list[apb.AgentOffer]:
-    if not hosted():
-        return []
-    return [
-        _offer(
-            DOCUMENT,
-            behaviours=["ocr", "document_annotation"],
-            note=(
-                "OCR and structured annotation of one public arXiv, bioRxiv, "
-                "or medRxiv URL. instruction is the URL. Optional kwargs_json "
-                '{"kind":"arxiv"|"biorxiv"|"medrxiv"}. result_text is JSON '
-                "(title, summary, claims, method, limits, text, model). "
-                "Mistral hosts the model. This engine holds the credential. "
-                "No GPU claim. The result is not written to a wiki."
-            ),
-        ),
-        _offer(
-            WORKFLOW,
-            behaviours=["workflow"],
-            note=_workflow_note(),
-        ),
-    ]
+    # Mistral is a platform. Peers use zndx.platform.v1.Platforms, not AgentOffer.
+    return []
 
 
 def hints() -> list[zpb.AgentHint]:

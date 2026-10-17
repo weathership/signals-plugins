@@ -74,17 +74,29 @@ python -m grpc_tools.protoc \
   --python_out="$OUT" --pyi_out="$OUT" --grpc_python_out="$OUT" \
   "$ZNDX/zndx/agent/v1/agent.proto"
 
-echo "Compiling inference.GRPCInferenceService (OIP)"
+echo "Compiling zndx.platform.v1.Platforms"
 python -m grpc_tools.protoc \
   -I "$ZNDX" \
   --python_out="$OUT" --pyi_out="$OUT" --grpc_python_out="$OUT" \
-  "$ZNDX/inference/v2/open_inference_grpc.proto"
+  "$ZNDX/zndx/platform/v1/platform.proto"
+
+OIP="$ZNDX/inference/v2/open_inference_grpc.proto"
+if [[ -f "$OIP" ]]; then
+  echo "Compiling inference.GRPCInferenceService (OIP)"
+  python -m grpc_tools.protoc \
+    -I "$ZNDX" \
+    --python_out="$OUT" --pyi_out="$OUT" --grpc_python_out="$OUT" \
+    "$OIP"
+else
+  echo "Leaving the existing OIP stub (no inference/v2 proto in $ZNDX)"
+fi
 
 mkdir -p \
   "$OUT/zndx/engine/v1" \
   "$OUT/zndx/supervision/v1" \
   "$OUT/zndx/scheduler/v1" \
   "$OUT/zndx/agent/v1" \
+  "$OUT/zndx/platform/v1" \
   "$OUT/inference/v2"
 touch \
   "$OUT/zndx/__init__.py" \
@@ -96,6 +108,8 @@ touch \
   "$OUT/zndx/scheduler/v1/__init__.py" \
   "$OUT/zndx/agent/__init__.py" \
   "$OUT/zndx/agent/v1/__init__.py" \
+  "$OUT/zndx/platform/__init__.py" \
+  "$OUT/zndx/platform/v1/__init__.py" \
   "$OUT/inference/__init__.py" \
   "$OUT/inference/v2/__init__.py"
 
@@ -120,6 +134,14 @@ if [[ -f "$OUT/zndx/agent/v1/agent_pb2_grpc.py" ]]; then
     "$OUT/zndx/agent/v1/agent_pb2_grpc.py"
   sed -i 's/^from zndx\.engine\.v1 import engine_pb2 as /from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as /' \
     "$OUT/zndx/agent/v1/agent_pb2.py" "$OUT/zndx/agent/v1/agent_pb2.pyi"
+fi
+if [[ -f "$OUT/zndx/platform/v1/platform_pb2_grpc.py" ]]; then
+  sed -i 's/^from zndx\.platform\.v1 import/from hsengine.engine.generated.zndx.platform.v1 import/' \
+    "$OUT/zndx/platform/v1/platform_pb2_grpc.py"
+fi
+if [[ -f "$OUT/zndx/engine/v1/engine_pb2.py" ]]; then
+  sed -i 's/^from zndx\.platform\.v1 import platform_pb2 as /from hsengine.engine.generated.zndx.platform.v1 import platform_pb2 as /' \
+    "$OUT/zndx/engine/v1/engine_pb2.py" "$OUT/zndx/engine/v1/engine_pb2.pyi"
 fi
 if [[ -f "$OUT/inference/v2/open_inference_grpc_pb2_grpc.py" ]]; then
   sed -i 's/^from inference\.v2 import/from hsengine.engine.generated.inference.v2 import/' \

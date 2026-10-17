@@ -29,6 +29,8 @@ from hsengine.engine.generated.inference.v2 import open_inference_grpc_pb2 as oi
 from hsengine.engine.generated.inference.v2 import open_inference_grpc_pb2_grpc as oip_grpc
 from hsengine.engine.generated.zndx.agent.v1 import agent_pb2 as apb
 from hsengine.engine.generated.zndx.agent.v1 import agent_pb2_grpc as apb_grpc
+from hsengine.engine.generated.zndx.platform.v1 import platform_pb2 as ppb
+from hsengine.engine.generated.zndx.platform.v1 import platform_pb2_grpc as ppb_grpc
 from hsengine.engine.generated.zndx.engine.v1 import engine_pb2 as zpb
 from hsengine.engine.generated.zndx.engine.v1 import engine_pb2_grpc as zpb_grpc
 from hsengine.engine.generated.zndx.supervision.v1 import supervision_pb2 as sv_pb
@@ -127,9 +129,11 @@ class HermesEngineServicer(pb_grpc.HermesEngineServicer):
     async def EngineStatus(self, request, context):
         from hsengine.engine.webrtc_stt import stt_available
 
-        from hsengine.engine.mistral_agents import advertised_names
+        from hsengine.engine.mistral_platform import hosted as mistral_hosted
 
-        capabilities = [CAPABILITY_AGENT, "webrtc", *advertised_names()]
+        capabilities = [CAPABILITY_AGENT, "webrtc"]
+        if mistral_hosted():
+            capabilities.append("mistral")
         if stt_available():
             capabilities.append("stt")
         if federation.federation_peers():
@@ -332,10 +336,12 @@ async def serve() -> None:
     server = grpc.aio.server()
     init_bus()
     from hsengine.engine.agents import AgentsServicer
+    from hsengine.engine.mistral_platform import PlatformsServicer
 
     pb_grpc.add_HermesEngineServicer_to_server(HermesEngineServicer(), server)
     zpb_grpc.add_EngineServicer_to_server(ZndxEngineServicer(), server)
     apb_grpc.add_AgentsServicer_to_server(AgentsServicer(), server)
+    ppb_grpc.add_PlatformsServicer_to_server(PlatformsServicer(), server)
     sv_grpc.add_EngineSupervisionServicer_to_server(EngineSupervisionServicer(), server)
     oip_grpc.add_GRPCInferenceServiceServicer_to_server(
         oip_servicer.OipInferenceServicer(), server
@@ -344,6 +350,7 @@ async def serve() -> None:
         pb.DESCRIPTOR.services_by_name["HermesEngine"].full_name,
         zpb.DESCRIPTOR.services_by_name["Engine"].full_name,
         apb.DESCRIPTOR.services_by_name["Agents"].full_name,
+        ppb.DESCRIPTOR.services_by_name["Platforms"].full_name,
         sv_pb.DESCRIPTOR.services_by_name["EngineSupervision"].full_name,
         oip_pb.DESCRIPTOR.services_by_name["GRPCInferenceService"].full_name,
         reflection.SERVICE_NAME,
@@ -356,7 +363,7 @@ async def serve() -> None:
     await server.start()
     log.info(
         "hermes engine serving on %s:%s "
-        "(native + zndx.engine.v1 + zndx.agent.v1 + EngineSupervision + OIP + reflection; "
+        "(native + zndx.engine.v1 + zndx.agent.v1 + zndx.platform.v1 + EngineSupervision + OIP + reflection; "
         "capability=agent; surfaces=%s; peers=%s)",
         host,
         port,

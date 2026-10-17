@@ -147,6 +147,12 @@ def local_response(
         from hsengine.engine import agents
 
         resp.agents.extend(agents.hints())
+    if kind == zpb.SERVER_QUERY_KIND_PLATFORMS:
+        from hsengine.engine.mistral_platform import hint as platform_hint
+        from hsengine.engine.mistral_platform import hosted as platform_hosted
+
+        if platform_hosted():
+            resp.platforms.append(platform_hint())
     if kind == zpb.SERVER_QUERY_KIND_SCHEDULES:
         # This engine's WORKLOAD CATALOGUE — the same entries it submits to
         # Signals (Scheduler/SyncWorkloads): the interactive agent-rtc workflow,

@@ -39,6 +39,11 @@ class EngineStub:
                 request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.CompleteRequest.SerializeToString,
                 response_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.CompleteResponse.FromString,
                 _registered_method=True)
+        self.Decide = channel.unary_unary(
+                '/zndx.engine.v1.Engine/Decide',
+                request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideRequest.SerializeToString,
+                response_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideResponse.FromString,
+                _registered_method=True)
         self.Status = channel.unary_unary(
                 '/zndx.engine.v1.Engine/Status',
                 request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.StatusRequest.SerializeToString,
@@ -87,6 +92,20 @@ class EngineServicer:
     def Complete(self, request, context):
         """Request an inference CAPABILITY. The engine selects/ensures the model and serves internally;
         the caller never sees a model endpoint.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Decide(self, request, context):
+        """Structured decision read. Capability must be "decisions". The serving
+        engine posts {model, state, questions} to d3_server POST /v1/systemone
+        on one vllm-sr/d3-flash replica (dual-d3-flash: two light replicas
+        beside thinking, which stays on the heavy queue) and returns the
+        answers. This is not Complete: a text method cannot conjoin with it,
+        and calling Complete with capability "decisions" is FAILED_PRECONDITION
+        #EP.00000022.NOTTEXT. The caller does not name a model.
+        (added 2026-10-11, gaius — additive v1.)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -193,6 +212,11 @@ def add_EngineServicer_to_server(servicer, server):
                     request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.CompleteRequest.FromString,
                     response_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.CompleteResponse.SerializeToString,
             ),
+            'Decide': grpc.unary_unary_rpc_method_handler(
+                    servicer.Decide,
+                    request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideRequest.FromString,
+                    response_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideResponse.SerializeToString,
+            ),
             'Status': grpc.unary_unary_rpc_method_handler(
                     servicer.Status,
                     request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.StatusRequest.FromString,
@@ -261,6 +285,33 @@ class Engine:
             '/zndx.engine.v1.Engine/Complete',
             zndx_dot_engine_dot_v1_dot_engine__pb2.CompleteRequest.SerializeToString,
             zndx_dot_engine_dot_v1_dot_engine__pb2.CompleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Decide(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/zndx.engine.v1.Engine/Decide',
+            zndx_dot_engine_dot_v1_dot_engine__pb2.DecideRequest.SerializeToString,
+            zndx_dot_engine_dot_v1_dot_engine__pb2.DecideResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -23,19 +23,14 @@ def test_absent_credential_is_not_advertised(monkeypatch, tmp_path):
     assert [agent.name for agent in resp.agents] == ["hermes"]
 
 
-def test_profile_dotenv_advertises_both_agents(monkeypatch, tmp_path):
+def test_profile_dotenv_does_not_put_mistral_on_the_agent_yellow_pages(monkeypatch, tmp_path):
     monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     (tmp_path / ".env").write_text('MISTRAL_API_KEY="from-file"\n', encoding="utf-8")
-    offers = mistral_agents.offers()
-    assert [offer.name for offer in offers] == ["mistral-document", "mistral-workflow"]
-    assert all(offer.billing == apb.BILLING_SUBSCRIPTION for offer in offers)
-    assert all(list(offer.model_capabilities) == [] for offer in offers)
-    assert "from-file" not in " ".join(offer.note for offer in offers)
+    assert mistral_agents.offers() == []
     resp = s2s.local_response(zpb.SERVER_QUERY_KIND_AGENTS)
-    names = [agent.name for agent in resp.agents]
-    assert names == ["hermes", "mistral-document", "mistral-workflow"]
-    assert resp.agents[1].billing == "subscription"
+    assert [agent.name for agent in resp.agents] == ["hermes"]
+    assert "from-file" not in str(resp)
 
 
 def test_document_run_returns_analysis_without_the_credential(monkeypatch, tmp_path):
