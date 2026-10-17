@@ -461,25 +461,68 @@ def _curated_source(
     return await_paper_workflow(execution_id)
 
 
-def start_paper_workflow(name: str, url: str, kind: str) -> str:
-    key = os.environ.get("MISTRAL_API_KEY", "").strip()
-    if not key:
+_WORKFLOW_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+
+
+def execute_workflow(
+    name: str,
+    inputs: dict[str, Any],
+    *,
+    wait: bool = True,
+    key: str | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> dict[str, Any]:
+    """Start a Mistral workflow. ``wait`` polls until the execution finishes.
+
+    The credential is the Authorization header only. It is not copied into
+    ``inputs`` or the returned object.
+    """
+    workflow = (name or "").strip()
+    if not _WORKFLOW_NAME.fullmatch(workflow):
+        raise RuntimeError("workflow name is empty or not a single token")
+    if not isinstance(inputs, dict):
+        raise RuntimeError("workflow input must be an object")
+    secret = (key if key is not None else os.environ.get("MISTRAL_API_KEY", "")).strip()
+    if not secret:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     status, body = _mistral_json(
         "POST",
-        _WORKFLOW_EXECUTE.format(name=name),
-        {"input": {"url": pdf_url_for(url, kind), "kind": kind}, "wait_for_result": False},
-        key,
+        _WORKFLOW_EXECUTE.format(name=workflow),
+        {"input": inputs, "wait_for_result": False},
+        secret,
     )
     if status == 404:
-        raise RuntimeError(f"workflow {name} HTTP 404")
+        raise RuntimeError(f"workflow {workflow} HTTP 404")
     if status >= 300 or not isinstance(body, dict) or not body.get("execution_id"):
         raise RuntimeError(f"workflow execute HTTP {status}")
-    return str(body["execution_id"])
+    execution_id = str(body["execution_id"])
+    if not wait:
+        return {"execution_id": execution_id, "workflow": workflow, "status": "started"}
+    result = await_paper_workflow(execution_id, sleep=sleep, key=secret)
+    return {
+        "execution_id": execution_id,
+        "workflow": workflow,
+        "status": "COMPLETED",
+        "result": result,
+    }
 
 
-def await_paper_workflow(execution_id: str, *, sleep: Callable[[float], None] | None = None) -> dict[str, Any]:
-    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+def start_paper_workflow(name: str, url: str, kind: str) -> str:
+    started = execute_workflow(
+        name,
+        {"url": pdf_url_for(url, kind), "kind": kind},
+        wait=False,
+    )
+    return str(started["execution_id"])
+
+
+def await_paper_workflow(
+    execution_id: str,
+    *,
+    sleep: Callable[[float], None] | None = None,
+    key: str | None = None,
+) -> dict[str, Any]:
+    key = (key if key is not None else os.environ.get("MISTRAL_API_KEY", "")).strip()
     if not key:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     pause = sleep or time.sleep
@@ -547,12 +590,12 @@ def _yaml_scalar(text: str, path: tuple[str, ...]) -> str:
     return ""
 
 
-def mistral_analyze(url: str, *, kind: str) -> dict[str, Any]:
+def mistral_analyze(url: str, *, kind: str, key: str | None = None) -> dict[str, Any]:
     """OCR the public PDF and return the structured paper analysis.
 
     One Document AI call. No local PDF read and no local model.
     """
-    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    key = (key if key is not None else os.environ.get("MISTRAL_API_KEY", "")).strip()
     if not key:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     pdf_url = pdf_url_for(url, kind)

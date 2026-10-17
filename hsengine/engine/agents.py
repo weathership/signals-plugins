@@ -48,6 +48,18 @@ def _billing() -> "apb.Billing":
     return apb.BILLING_LOCAL
 
 
+def offers() -> list[apb.AgentOffer]:
+    from hsengine.engine.mistral_agents import offers as mistral_offers
+
+    return [offer(), *mistral_offers()]
+
+
+def hints() -> list[zpb.AgentHint]:
+    from hsengine.engine.mistral_agents import hints as mistral_hints
+
+    return [hint(), *mistral_hints()]
+
+
 def offer() -> apb.AgentOffer:
     return apb.AgentOffer(
         agent_id=agent_id(),
@@ -102,14 +114,22 @@ def _event(run_id: str, seq: int, **fields: Any) -> apb.AgentEvent:
     return ev
 
 
+def _hosted_ids() -> list[str]:
+    from hsengine.engine.mistral_agents import agent_ids
+
+    return [agent_id(), *agent_ids()]
+
+
 def _resolve_agent(name: str) -> str:
     wanted = (name or "").strip()
     if not wanted:
         raise ValueError("agent is required")
-    aid = agent_id()
-    if wanted in (AGENT_NAME, aid, f"{PROJECT}/{AGENT_NAME}"):
-        return aid
-    raise ValueError(f"this engine hosts {aid}, not {wanted}")
+    for aid in _hosted_ids():
+        name_part = aid.split("/")[-1].split("@", 1)[0]
+        project = aid.split("/", 1)[0]
+        if wanted in (name_part, aid, f"{project}/{name_part}"):
+            return aid
+    raise ValueError(f"this engine hosts {', '.join(_hosted_ids())}, not {wanted}")
 
 
 def _run_agent(instruction: str, *, run_id: str, system_prompt: str = "") -> str:
@@ -152,7 +172,11 @@ def iter_run(request: apb.RunRequest) -> Iterator[apb.AgentEvent]:
     """Drive one Run as a sequence of AgentEvents (tests call this directly)."""
     from hsengine.engine.coordination import uuid7
 
+    from hsengine.engine.mistral_agents import fulfil as mistral_fulfil
+    from hsengine.engine.mistral_agents import owns as mistral_owns
+
     aid = _resolve_agent(request.agent)
+    mistral = mistral_owns(aid)
     run_id = (request.run_id or "").strip() or uuid7()
     instruction = (request.instruction or "").strip()
     if not instruction:
@@ -174,18 +198,27 @@ def iter_run(request: apb.RunRequest) -> Iterator[apb.AgentEvent]:
         accepted=apb.RunAccepted(
             run_id=run_id,
             agent_id=aid,
-            model=request.model_capability or "thinking",
-            model_peer="cerebras" if _billing() == apb.BILLING_TOKEN_METERED else "gaius",
+            model="mistral" if mistral else (request.model_capability or "thinking"),
+            model_peer="mistral" if mistral else (
+                "cerebras" if _billing() == apb.BILLING_TOKEN_METERED else "gaius"
+            ),
             activity_id="",
             workspace_uri=request.workspace_uri or "",
         ),
     )
     try:
-        text = _run_agent(
-            instruction,
-            run_id=run_id,
-            system_prompt=request.system_prompt or "",
-        )
+        if mistral:
+            text = mistral_fulfil(
+                aid,
+                instruction=instruction,
+                kwargs_json=request.kwargs_json or "",
+            )
+        else:
+            text = _run_agent(
+                instruction,
+                run_id=run_id,
+                system_prompt=request.system_prompt or "",
+            )
         seq += 1
         yield _event(
             run_id,
@@ -228,7 +261,7 @@ def iter_run(request: apb.RunRequest) -> Iterator[apb.AgentEvent]:
 
 class AgentsServicer(apb_grpc.AgentsServicer):
     async def ListAgents(self, request, context):
-        return apb.ListAgentsResponse(project=PROJECT, agents=[offer()])
+        return apb.ListAgentsResponse(project=PROJECT, agents=offers())
 
     async def Run(self, request, context):
         try:

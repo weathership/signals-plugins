@@ -25,11 +25,12 @@ def test_offer_is_hermes_sdk_not_complete_capability():
     assert o.agent_id.startswith("hermes/hermes@")
 
 
-def test_server_query_agents_lists_the_offer():
+def test_server_query_agents_lists_the_offer(monkeypatch):
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("HERMES_HOME", raising=False)
     resp = s2s.local_response(zpb.SERVER_QUERY_KIND_AGENTS)
     assert resp.project == "hermes"
-    assert len(resp.agents) == 1
-    assert resp.agents[0].name == "hermes"
+    assert [agent.name for agent in resp.agents] == ["hermes"]
     assert resp.agents[0].transport == "sdk"
 
 

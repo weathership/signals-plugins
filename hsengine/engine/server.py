@@ -127,7 +127,9 @@ class HermesEngineServicer(pb_grpc.HermesEngineServicer):
     async def EngineStatus(self, request, context):
         from hsengine.engine.webrtc_stt import stt_available
 
-        capabilities = [CAPABILITY_AGENT, "webrtc"]
+        from hsengine.engine.mistral_agents import advertised_names
+
+        capabilities = [CAPABILITY_AGENT, "webrtc", *advertised_names()]
         if stt_available():
             capabilities.append("stt")
         if federation.federation_peers():
