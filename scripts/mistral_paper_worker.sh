@@ -25,7 +25,7 @@ if [[ -z "${MISTRAL_API_KEY:-}" ]]; then
   exit 1
 fi
 
-export DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-hermes-papers}"
+export DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-signals-preprints}"
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 cd "${ROOT}"
 exec "${VENV}/bin/python" "${ROOT}/scripts/hermes_paper_workflow.py"
