@@ -111,7 +111,7 @@ def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any])
             )
         # The execution is what Studio lists under Executions. Inline OCR
         # never creates one.
-        name = str(payload.get("name") or "").strip() or drop.paper_workflow_name() or "signals-preprint-analysis"
+        name = str(payload.get("name") or "").strip() or drop.signals_preprints_name() or "signals-preprint-analysis"
         started = drop.execute_workflow(
             name,
             {"url": drop.pdf_url_for(url, kind), "kind": kind},
@@ -129,7 +129,7 @@ def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any])
             "wiki": written.get("relpath") or "",
         }
     if product == "workflow" and verb == "execute":
-        name = str(payload.get("name") or "").strip() or drop.paper_workflow_name()
+        name = str(payload.get("name") or "").strip() or drop.signals_preprints_name()
         if not name:
             raise ValueError("workflow.execute requires input_json.name")
         wait = payload.get("wait", True)
@@ -151,10 +151,10 @@ def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any])
         execution_id = (foreign_id or str(payload.get("execution_id") or "")).strip()
         if not execution_id:
             raise ValueError("workflow.get requires foreign_id")
-        result = drop.await_paper_workflow(execution_id, key=secret)
+        result = drop.await_signals_preprints(execution_id, key=secret)
         return {"execution_id": execution_id, "status": "COMPLETED", "result": result}
     if product == "workflow" and verb == "list":
-        name = drop.paper_workflow_name()
+        name = drop.signals_preprints_name()
         names = [name] if name else []
         return {"workflows": names}
     raise ValueError(f"this engine does not serve {product}.{verb}")

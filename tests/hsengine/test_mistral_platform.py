@@ -39,7 +39,7 @@ def test_server_query_lists_mistral_for_every_peer(monkeypatch, tmp_path):
 def test_document_analyze_starts_a_workflow_execution_and_writes_the_wiki(monkeypatch, tmp_path):
     _silence(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("MISTRAL_API_KEY=super-secret\n", encoding="utf-8")
-    monkeypatch.setattr(drop, "paper_workflow_name", lambda home=None: "signals-preprint-analysis")
+    monkeypatch.setattr(drop, "signals_preprints_name", lambda home=None: "signals-preprint-analysis")
     seen = {}
 
     def execute(name, inputs, *, wait=True, key=None, sleep=None):

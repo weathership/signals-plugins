@@ -117,7 +117,7 @@ def test_workflow_run_sends_the_public_pdf_and_hides_the_credential(monkeypatch,
 def test_workflow_without_a_name_fails(monkeypatch, tmp_path):
     _silence_key(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("MISTRAL_API_KEY=super-secret\n", encoding="utf-8")
-    monkeypatch.setattr(drop, "paper_workflow_name", lambda home=None: "")
+    monkeypatch.setattr(drop, "signals_preprints_name", lambda home=None: "")
     events = list(
         agents.iter_run(apb.RunRequest(agent="mistral-workflow", instruction="analyse this"))
     )

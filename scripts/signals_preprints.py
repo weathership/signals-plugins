@@ -1,14 +1,11 @@
-"""Full preprint analysis as a Mistral Workflow.
+"""signals-preprints worker for the signals-preprint-analysis workflow.
 
-The orchestrator is Mistral's. A managed deployment runs this worker on
-Mistral Cloud (``nl-north-1``). The AgentRTC process only starts the
-execution and, when it completes, writes the wiki note. This file is the
-worker. It imports ``mistralai.workflows``, which wants Python 3.12, so
-the Hermes 3.11 environment does not load it.
+The orchestrator is Mistral's. This process registers the workflow on the
+``signals-preprints`` deployment and runs its activities. The engine starts
+each execution and writes the wiki note when the result returns.
 
-Register the worker with ``run_worker([PaperAnalysis])`` under the name
-``signals-preprint-analysis``, then set ``mistral.paper_workflow`` in Hermes
-config.yaml to that name.
+The class is defined at module scope because Temporal's sandbox imports it
+by name. The SDK is not in the Hermes lock.
 """
 from __future__ import annotations
 
@@ -22,8 +19,8 @@ _OCR_URL = "https://api.mistral.ai/v1/ocr"
 _MODEL = "mistral-ocr-latest"
 
 
-def analyze_pdf(url: str, kind: str) -> dict:
-    """Same call as ``mistral_analyze`` for an image that does not import Hermes."""
+def signals_preprints_fetch(url: str, kind: str) -> dict:
+    """OCR one public preprint. Same shape as the engine's ``mistral_analyze``."""
     key = os.environ.get("MISTRAL_API_KEY", "").strip()
     if not key:
         token = os.environ.get("MISTRAL_SA_TOKEN", "").strip()
@@ -32,7 +29,7 @@ def analyze_pdf(url: str, kind: str) -> dict:
             token = open(path, encoding="utf-8").read().strip()
         key = token
     if not key:
-        raise RuntimeError("no Mistral credential for the paper workflow")
+        raise RuntimeError("no Mistral credential for signals-preprints")
     payload = {
         "model": _MODEL,
         "document": {"type": "document_url", "document_url": url},
@@ -48,7 +45,7 @@ def analyze_pdf(url: str, kind: str) -> dict:
         "document_annotation_format": {
             "type": "json_schema",
             "json_schema": {
-                "name": "paper_analysis",
+                "name": "preprint_analysis",
                 "strict": True,
                 "schema": {
                     "type": "object",
@@ -107,20 +104,18 @@ def analyze_pdf(url: str, kind: str) -> dict:
     }
 
 
-# Temporal's sandbox re-imports this module and looks the class up by name.
-# The class has to be defined here, not inside a function.
 import mistralai.workflows as workflows
 from pydantic import BaseModel
 
 
-class PaperInput(BaseModel):
+class SignalsPreprintsInput(BaseModel):
     url: str
     kind: str
 
 
 @workflows.activity()
-async def analyze(url: str, kind: str) -> dict:
-    return analyze_pdf(url, kind)
+async def signals_preprints_analyze(url: str, kind: str) -> dict:
+    return signals_preprints_fetch(url, kind)
 
 
 @workflows.workflow.define(
@@ -129,16 +124,16 @@ async def analyze(url: str, kind: str) -> dict:
     workflow_description="OCR and structured summary of an arXiv, bioRxiv, or medRxiv PDF.",
     search_keys=["url", "kind"],
 )
-class PaperAnalysis:
+class SignalsPreprints:
     @workflows.workflow.entrypoint
-    async def run(self, paper: PaperInput) -> dict:
-        return await analyze(paper.url, paper.kind)
+    async def run(self, paper: SignalsPreprintsInput) -> dict:
+        return await signals_preprints_analyze(paper.url, paper.kind)
 
 
 def main() -> None:
     import asyncio
 
-    asyncio.run(workflows.run_worker([PaperAnalysis]))
+    asyncio.run(workflows.run_worker([SignalsPreprints]))
 
 
 if __name__ == "__main__":

@@ -133,7 +133,7 @@ def fulfil(agent_id: str, *, instruction: str, kwargs_json: str) -> str:
         analysis = drop.mistral_analyze(url, kind=kind, key=secret)
         return json.dumps(analysis, ensure_ascii=False)
     if agent_id == _agent_id(WORKFLOW) or agent_id.endswith(f"/{WORKFLOW}"):
-        name = str(kwargs.get("workflow") or "").strip() or drop.paper_workflow_name()
+        name = str(kwargs.get("workflow") or "").strip() or drop.signals_preprints_name()
         if not name:
             raise ValueError(
                 "no Mistral workflow is configured; set kwargs_json.workflow "

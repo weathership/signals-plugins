@@ -445,8 +445,8 @@ def test_named_workflow_writes_the_kb_note_from_the_execution(monkeypatch):
         assert execution_id == "exec-1"
         return _analysis("https://arxiv.org/abs/2402.03300", kind="arxiv")
 
-    monkeypatch.setattr(drop, "start_paper_workflow", start)
-    monkeypatch.setattr(drop, "await_paper_workflow", wait)
+    monkeypatch.setattr(drop, "start_signals_preprints", start)
+    monkeypatch.setattr(drop, "await_signals_preprints", wait)
     filed = drop.enqueue(
         url="https://arxiv.org/abs/2402.03300",
         spawn=lambda fn: fn(),
@@ -478,7 +478,7 @@ def test_workflow_execute_sends_the_public_pdf(monkeypatch):
         return 200, {"execution_id": "exec-9", "status": "RUNNING"}
 
     monkeypatch.setattr(drop, "_mistral_json", send)
-    assert drop.start_paper_workflow("signals-preprint-analysis", "https://arxiv.org/abs/2402.03300", "arxiv") == "exec-9"
+    assert drop.start_signals_preprints("signals-preprint-analysis", "https://arxiv.org/abs/2402.03300", "arxiv") == "exec-9"
     assert seen["payload"]["input"]["url"] == "https://arxiv.org/pdf/2402.03300.pdf"
     assert seen["payload"]["wait_for_result"] is False
     assert "test-key" not in str(seen["payload"])
@@ -490,7 +490,7 @@ def test_missing_workflow_falls_back_to_inline_ocr(monkeypatch):
     def start(name, url, kind):
         raise RuntimeError(f"workflow {name} HTTP 404")
 
-    monkeypatch.setattr(drop, "start_paper_workflow", start)
+    monkeypatch.setattr(drop, "start_signals_preprints", start)
     filed = drop.enqueue(
         url="https://arxiv.org/abs/2402.03300",
         spawn=lambda fn: fn(),

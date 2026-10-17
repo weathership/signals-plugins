@@ -418,14 +418,17 @@ def pdf_url_for(url: str, kind: str) -> str:
     )
 
 
-def paper_workflow_name(home: Path | None = None) -> str:
+def signals_preprints_name(home: Path | None = None) -> str:
     """Name of the deployed Mistral workflow, or empty when unset.
 
     Empty means the full card calls OCR directly. A managed deployment
     runs the worker on Mistral Cloud; this process only starts the
     execution and writes the wiki note when it completes.
     """
-    explicit = os.environ.get("MISTRAL_PAPER_WORKFLOW", "").strip()
+    explicit = (
+        os.environ.get("SIGNALS_PREPRINTS_WORKFLOW", "").strip()
+        or os.environ.get("MISTRAL_PAPER_WORKFLOW", "").strip()
+    )
     if explicit:
         return explicit
     root = home
@@ -446,11 +449,11 @@ def _curated_source(
     analyze: Callable[..., dict[str, Any]],
     task_id: str,
 ) -> dict[str, Any]:
-    name = paper_workflow_name()
+    name = signals_preprints_name()
     if not name:
         return dict(analyze(url, kind=kind))
     try:
-        execution_id = start_paper_workflow(name, url, kind)
+        execution_id = start_signals_preprints(name, url, kind)
     except RuntimeError as exc:
         if "404" in str(exc):
             log.warning("paper workflow %s is not registered; OCR runs here", name)
@@ -458,7 +461,7 @@ def _curated_source(
             return dict(analyze(url, kind=kind))
         raise
     _comment(task_id, f"Mistral workflow {name} execution {execution_id}.")
-    return await_paper_workflow(execution_id)
+    return await_signals_preprints(execution_id)
 
 
 _WORKFLOW_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -498,7 +501,7 @@ def execute_workflow(
     execution_id = str(body["execution_id"])
     if not wait:
         return {"execution_id": execution_id, "workflow": workflow, "status": "started"}
-    result = await_paper_workflow(execution_id, sleep=sleep, key=secret)
+    result = await_signals_preprints(execution_id, sleep=sleep, key=secret)
     return {
         "execution_id": execution_id,
         "workflow": workflow,
@@ -507,7 +510,7 @@ def execute_workflow(
     }
 
 
-def start_paper_workflow(name: str, url: str, kind: str) -> str:
+def start_signals_preprints(name: str, url: str, kind: str) -> str:
     started = execute_workflow(
         name,
         {"url": pdf_url_for(url, kind), "kind": kind},
@@ -516,7 +519,7 @@ def start_paper_workflow(name: str, url: str, kind: str) -> str:
     return str(started["execution_id"])
 
 
-def await_paper_workflow(
+def await_signals_preprints(
     execution_id: str,
     *,
     sleep: Callable[[float], None] | None = None,

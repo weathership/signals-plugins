@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Registers signals-preprint-analysis with Mistral so executions show in Studio.
+# Runs the signals-preprints deployment for signals-preprint-analysis.
 # The SDK lives in its own venv. It is not installed into the Hermes lock:
 # mistralai-workflows needs mistralai>=2.9, and Hermes pins mistralai==2.4.8.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV="${MISTRAL_WORKFLOW_VENV:-${ROOT}/.devenv/mistral-workflow-venv}"
+VENV="${SIGNALS_PREPRINTS_VENV:-${ROOT}/.devenv/signals-preprints-venv}"
 HOME_DIR="${HERMES_HOME:-${HOME}/.hermes}"
 
 if [[ ! -x "${VENV}/bin/python" ]]; then
@@ -28,4 +28,4 @@ fi
 export DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-signals-preprints}"
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 cd "${ROOT}"
-exec "${VENV}/bin/python" "${ROOT}/scripts/hermes_paper_workflow.py"
+exec "${VENV}/bin/python" "${ROOT}/scripts/signals_preprints.py"
