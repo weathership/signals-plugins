@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -51,6 +52,10 @@ _FETCH_TIMEOUT_S = 30
 _FULL_FETCH_TIMEOUT_S = 120
 _MISTRAL_TIMEOUT_S = 180
 _MISTRAL_OCR_URL = "https://api.mistral.ai/v1/ocr"
+_WORKFLOW_EXECUTE = "https://api.mistral.ai/v1/workflows/{name}/execute"
+_WORKFLOW_EXECUTION = "https://api.mistral.ai/v1/workflows/executions/{execution_id}"
+_WORKFLOW_POLL_S = 5
+_WORKFLOW_WAIT_S = 900
 _MISTRAL_MODEL = "mistral-ocr-latest"
 _CURATED = frozenset({"arxiv", "biorxiv", "medrxiv"})
 _APPROVAL_REASON = (
@@ -334,7 +339,7 @@ def _run(
             f"{note} gpu_tokens={GPU_TOKENS}. No extract leaf, no vLLM eviction.",
         )
         if curated:
-            source = dict(analyze(url, kind=kind))
+            source = _curated_source(url, kind, analyze, task_id)
             source["scope"] = "full"
             written = write_kb(source, now=now)
         else:
@@ -411,6 +416,135 @@ def pdf_url_for(url: str, kind: str) -> str:
     raise RuntimeError(
         f"Mistral document analysis is limited to arXiv, bioRxiv, and medRxiv, got {kind}"
     )
+
+
+def paper_workflow_name(home: Path | None = None) -> str:
+    """Name of the deployed Mistral workflow, or empty when unset.
+
+    Empty means the full card calls OCR directly. A managed deployment
+    runs the worker on Mistral Cloud; this process only starts the
+    execution and writes the wiki note when it completes.
+    """
+    explicit = os.environ.get("MISTRAL_PAPER_WORKFLOW", "").strip()
+    if explicit:
+        return explicit
+    root = home
+    if root is None:
+        raw = os.environ.get("HERMES_HOME", "").strip()
+        root = Path(raw).expanduser() if raw else None
+    if root is None:
+        return ""
+    path = root / "config.yaml"
+    if not path.is_file():
+        return ""
+    return _yaml_scalar(path.read_text(encoding="utf-8", errors="replace"), ("mistral", "paper_workflow"))
+
+
+def _curated_source(
+    url: str,
+    kind: str,
+    analyze: Callable[..., dict[str, Any]],
+    task_id: str,
+) -> dict[str, Any]:
+    name = paper_workflow_name()
+    if not name:
+        return dict(analyze(url, kind=kind))
+    try:
+        execution_id = start_paper_workflow(name, url, kind)
+    except RuntimeError as exc:
+        if "404" in str(exc):
+            log.warning("paper workflow %s is not registered; OCR runs here", name)
+            _comment(task_id, f"Workflow {name} is not registered. OCR runs in this process.")
+            return dict(analyze(url, kind=kind))
+        raise
+    _comment(task_id, f"Mistral workflow {name} execution {execution_id}.")
+    return await_paper_workflow(execution_id)
+
+
+def start_paper_workflow(name: str, url: str, kind: str) -> str:
+    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("MISTRAL_API_KEY is unset")
+    status, body = _mistral_json(
+        "POST",
+        _WORKFLOW_EXECUTE.format(name=name),
+        {"input": {"url": pdf_url_for(url, kind), "kind": kind}, "wait_for_result": False},
+        key,
+    )
+    if status == 404:
+        raise RuntimeError(f"workflow {name} HTTP 404")
+    if status >= 300 or not isinstance(body, dict) or not body.get("execution_id"):
+        raise RuntimeError(f"workflow execute HTTP {status}")
+    return str(body["execution_id"])
+
+
+def await_paper_workflow(execution_id: str, *, sleep: Callable[[float], None] | None = None) -> dict[str, Any]:
+    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("MISTRAL_API_KEY is unset")
+    pause = sleep or time.sleep
+    deadline = time.monotonic() + _WORKFLOW_WAIT_S
+    while True:
+        status, body = _mistral_json(
+            "GET",
+            _WORKFLOW_EXECUTION.format(execution_id=execution_id),
+            None,
+            key,
+        )
+        if status >= 300 or not isinstance(body, dict):
+            raise RuntimeError(f"workflow status HTTP {status}")
+        state = str(body.get("status") or "")
+        if state == "COMPLETED":
+            result = body.get("result")
+            if isinstance(result, str):
+                result = json.loads(result)
+            if not isinstance(result, dict):
+                raise RuntimeError("workflow completed without an analysis object")
+            return result
+        if state in {"FAILED", "CANCELED", "TERMINATED", "TIMED_OUT"}:
+            raise RuntimeError(f"workflow {execution_id} {state}")
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"workflow {execution_id} still {state or 'running'}")
+        pause(_WORKFLOW_POLL_S)
+
+
+def _mistral_json(method: str, url: str, payload: dict[str, Any] | None, key: str) -> tuple[int, Any]:
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            raw = response.read()
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        status = exc.code
+    if not raw:
+        return status, None
+    try:
+        return status, json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return status, {"detail": raw.decode("utf-8", "replace")[:300]}
+
+
+def _yaml_scalar(text: str, path: tuple[str, ...]) -> str:
+    want = list(path)
+    depth = 0
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        name, _, value = raw.strip().partition(":")
+        value = value.strip().strip('"').strip("'")
+        if indent == 0:
+            depth = 0
+        if depth < len(want) and name == want[depth] and indent == depth * 2:
+            if depth == len(want) - 1:
+                return value
+            depth += 1
+    return ""
 
 
 def mistral_analyze(url: str, *, kind: str) -> dict[str, Any]:

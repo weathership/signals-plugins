@@ -433,6 +433,77 @@ def test_mistral_request_is_the_public_pdf_and_keeps_the_key_out_of_the_body(mon
         drop.mistral_analyze("https://example.com/note.pdf", kind="web")
 
 
+def test_named_workflow_writes_the_kb_note_from_the_execution(monkeypatch):
+    monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "hermes-paper-analysis")
+    seen = {}
+
+    def start(name, url, kind):
+        seen["start"] = (name, url, kind)
+        return "exec-1"
+
+    def wait(execution_id, sleep=None):
+        assert execution_id == "exec-1"
+        return _analysis("https://arxiv.org/abs/2402.03300", kind="arxiv")
+
+    monkeypatch.setattr(drop, "start_paper_workflow", start)
+    monkeypatch.setattr(drop, "await_paper_workflow", wait)
+    filed = drop.enqueue(
+        url="https://arxiv.org/abs/2402.03300",
+        spawn=lambda fn: fn(),
+        fetch=_fetch,
+        analyze=lambda url, kind="arxiv": (_ for _ in ()).throw(AssertionError("inline ocr")),
+    )
+    assert seen["start"] == (
+        "hermes-paper-analysis",
+        "https://arxiv.org/abs/2402.03300",
+        "arxiv",
+    )
+    assert filed["tasks"][1]["scope"] == "full"
+    from pathlib import Path
+    import os
+
+    notes = list(Path(os.environ["WIKI_PATH"]).glob("current/kb/arXiv/*.md"))
+    assert len(notes) == 1
+    assert "replay unit" in notes[0].read_text().lower()
+
+
+def test_workflow_execute_sends_the_public_pdf(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+    seen = {}
+
+    def send(method, url, payload, key):
+        seen["payload"] = payload
+        seen["url"] = url
+        assert key == "test-key"
+        return 200, {"execution_id": "exec-9", "status": "RUNNING"}
+
+    monkeypatch.setattr(drop, "_mistral_json", send)
+    assert drop.start_paper_workflow("hermes-paper-analysis", "https://arxiv.org/abs/2402.03300", "arxiv") == "exec-9"
+    assert seen["payload"]["input"]["url"] == "https://arxiv.org/pdf/2402.03300.pdf"
+    assert seen["payload"]["wait_for_result"] is False
+    assert "test-key" not in str(seen["payload"])
+
+
+def test_missing_workflow_falls_back_to_inline_ocr(monkeypatch):
+    monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "hermes-paper-analysis")
+
+    def start(name, url, kind):
+        raise RuntimeError(f"workflow {name} HTTP 404")
+
+    monkeypatch.setattr(drop, "start_paper_workflow", start)
+    filed = drop.enqueue(
+        url="https://arxiv.org/abs/2402.03300",
+        spawn=lambda fn: fn(),
+        fetch=_fetch,
+        analyze=_analysis,
+    )
+    assert filed["created"] is True
+    from pathlib import Path
+    import os
+
+    assert list(Path(os.environ["WIKI_PATH"]).glob("current/kb/arXiv/*.md"))
+
+
 def test_dispatch_source_drop_returns_the_card(monkeypatch):
     monkeypatch.setattr(
         drop,
