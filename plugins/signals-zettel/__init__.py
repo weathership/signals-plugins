@@ -110,6 +110,7 @@ def _source_drop_tool(args: dict, **_kw) -> str:
         enqueue(
             url=str(args.get("url") or ""),
             performer=str(args.get("performer") or "hermes"),
+            approve=bool(args.get("approve") or False),
         ),
         default=str,
     )
@@ -118,11 +119,10 @@ def _source_drop_tool(args: dict, **_kw) -> str:
 _SOURCE_DROP = {
     "name": "source_drop",
     "description": (
-        "Drop an arXiv, bioRxiv, medRxiv, or web URL. Files two kanban "
-        "cards: the first 8 PDF pages, and a full extraction plus summary. "
-        "Both run on CPU in the background. Claims no GPU and does not run "
-        "Docling. performer=hermes writes the Hermes wiki. performer=gaius "
-        "writes the Gaius KB scratch."
+        "Drop a URL. arXiv and bioRxiv full analysis is Mistral and lands "
+        "in the Hermes wiki at current/kb/arXiv or current/kb/bioRxiv. "
+        "Any other PDF is blocked until approve=true, which the user must "
+        "say explicitly. Claims no GPU and does not run Docling."
     ),
     "parameters": {
         "type": "object",
@@ -130,7 +130,11 @@ _SOURCE_DROP = {
             "url": {"type": "string", "description": "The dropped http(s) URL."},
             "performer": {
                 "type": "string",
-                "description": "hermes or gaius. Default hermes.",
+                "description": "hermes or gaius. Default hermes. The Mistral note always lands in the Hermes wiki.",
+            },
+            "approve": {
+                "type": "boolean",
+                "description": "True only after the user explicitly approves a non-arXiv, non-bioRxiv PDF.",
             },
         },
         "required": ["url"],

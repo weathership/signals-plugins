@@ -1,18 +1,21 @@
-"""CPU source drop for a live AgentRTC call.
+"""Source drop for a live AgentRTC call.
 
-A dropped arXiv, bioRxiv, medRxiv, or web URL is text for the discussion,
-not a Docling run. Docling's extract leaf wants a GPU and the old runner
-can evict the standing thinking server (GPUs 0–3). This path claims no
-GPU token, does not talk to YuniKorn, and does not load a model.
+A dropped URL is text for the discussion, not a Docling run. Docling's
+extract leaf wants a GPU and the old runner can evict the standing
+thinking server (GPUs 0–3). This path claims no GPU token, does not talk
+to YuniKorn, and does not load a local model.
 
-Two kanban cards are filed before either fetch. One is the first eight
-PDF pages. The other is the full text plus a summary. Each runs on its
-own background thread. Hermes writes the Hermes wiki vault.
-Gaius writes ``GAIUS_KB_PATH`` scratch. The performer is who extracts,
-not the kind of URL.
+Two kanban cards are filed before either fetch. The preview is the first
+eight PDF pages, on CPU, as a scratch zettel. The full card for an arXiv
+or bioRxiv PDF is one Mistral Document AI call (OCR plus a structured
+summary) and lands in the Hermes wiki at
+``current/kb/arXiv`` or ``current/kb/bioRxiv``. Gaius syncs that tree on
+its own schedule. Any other PDF is filed blocked until the user approves
+it; approval runs the CPU path, not Mistral.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -24,7 +27,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -43,6 +46,20 @@ _FULL_CAP = 200_000
 _SUMMARY_INPUT = 24_000
 _FETCH_TIMEOUT_S = 30
 _FULL_FETCH_TIMEOUT_S = 120
+_MISTRAL_TIMEOUT_S = 180
+_MISTRAL_OCR_URL = "https://api.mistral.ai/v1/ocr"
+_MISTRAL_MODEL = "mistral-ocr-latest"
+_CURATED = frozenset({"arxiv", "biorxiv"})
+_APPROVAL_REASON = (
+    "Mistral document analysis is limited to arXiv and bioRxiv PDFs. "
+    "This PDF stays blocked until you explicitly approve it."
+)
+_ANNOTATION_PROMPT = (
+    "Read the paper. short_title is at most eight words in plain language. "
+    "summary is for someone who will discuss the paper before reading it. "
+    "claims are results the paper states. method is how those results were "
+    "produced. limits are what the paper does not show. Do not invent citations."
+)
 
 _URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+")
 _ARXIV_RE = re.compile(
@@ -125,36 +142,83 @@ def file_source_drops(session_id: str, text: str) -> list[dict[str, Any]]:
     return filed
 
 
+def needs_pdf_approval(url: str, kind: str) -> bool:
+    """True for a PDF that is not an arXiv or bioRxiv paper."""
+    if kind in _CURATED:
+        return False
+    if kind == "medrxiv":
+        return True
+    path = urllib.request.urlparse(url or "").path.lower()
+    return path.endswith(".pdf")
+
+
 def enqueue(
     *,
     url: str,
     session_id: str = "",
     performer: str = "hermes",
+    approve: bool = False,
     spawn: SpawnFn | None = None,
     fetch: Callable[..., dict[str, Any]] | None = None,
     summarize: Callable[[dict[str, Any]], str] | None = None,
+    analyze: Callable[..., dict[str, Any]] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """File two cards, then extract off the voice turn.
 
-    ``preview`` is the first eight PDF pages. ``full`` is the whole text
-    plus a summary. Both are filed before either fetch starts. ``spawn``
-    runs the work inline in tests. The default spawn is a daemon thread
-    per card.
+    ``preview`` is the first eight PDF pages. ``full`` for arXiv and bioRxiv
+    is Mistral and lands in ``current/kb``. Any other PDF is blocked until
+    ``approve`` is true, and that approval stays on the CPU path.
+    ``spawn`` runs the work inline in tests.
     """
     target = (url or "").strip()
     if not target:
-        return {"ok": False, "error": "url required", "created": False, "tasks": []}
+        return {
+            "ok": False,
+            "error": "url required",
+            "created": False,
+            "tasks": [],
+            "awaiting_approval": False,
+        }
     who = _performer(performer)
     key = drop_key(target)
     kind = classify(target)
+    gated = needs_pdf_approval(target, kind) and not approve
     jobs: list[tuple[str, str, str]] = []
     tasks: list[dict[str, Any]] = []
+    comments: list[str] = []
     created_any = False
     with _LOCK:
         for scope in SCOPES:
             ikey = f"{key}:{scope}"
             title = _card_title(kind, target, scope)
             existing = _find_card(key, scope)
+            if gated:
+                if existing:
+                    tasks.append(_task_row(existing, scope, title, created=False))
+                    continue
+                tid = _create_card(
+                    key=key,
+                    title=title,
+                    url=target,
+                    kind=kind,
+                    performer=who,
+                    session_id=session_id,
+                    scope=scope,
+                    initial_status="blocked",
+                )
+                created_any = True
+                comments.append(tid)
+                tasks.append(
+                    {
+                        "id": tid,
+                        "scope": scope,
+                        "status": "blocked",
+                        "title": title,
+                        "created": True,
+                    }
+                )
+                continue
             if existing and existing["status"] != "blocked":
                 tasks.append(_task_row(existing, scope, title, created=False))
                 continue
@@ -162,6 +226,7 @@ def enqueue(
                 tasks.append(_task_row(existing, scope, title, created=False))
                 continue
             if existing:
+                _unblock(existing["id"])
                 tid = existing["id"]
             else:
                 tid = _create_card(
@@ -185,11 +250,14 @@ def enqueue(
                     "created": not existing,
                 }
             )
+    for tid in comments:
+        _comment(tid, _APPROVAL_REASON)
     fetcher = fetch or fetch_source
     summarizer = summarize if summarize is not None else summarize_source
+    analyzer = analyze or mistral_analyze
     for tid, scope, ikey in jobs:
         worker = lambda tid=tid, scope=scope, ikey=ikey: _run(
-            tid, target, who, key, scope, fetcher, summarizer
+            tid, target, who, key, scope, kind, fetcher, summarizer, analyzer, now
         )
         if spawn is None:
             threading.Thread(target=worker, daemon=True, name=f"source-drop-{scope}").start()
@@ -206,6 +274,7 @@ def enqueue(
         "kind": kind,
         "performer": who,
         "gpu_tokens": GPU_TOKENS,
+        "awaiting_approval": gated,
         "tasks": tasks,
     }
 
@@ -226,12 +295,18 @@ def _run(
     performer: str,
     key: str,
     scope: str,
+    kind: str,
     fetch: Callable[..., dict[str, Any]],
     summarize: Callable[[dict[str, Any]], str],
+    analyze: Callable[..., dict[str, Any]],
+    now: datetime | None,
 ) -> None:
     ikey = f"{key}:{scope}"
     try:
-        if scope == "preview":
+        curated = scope == "full" and kind in _CURATED
+        if curated:
+            note = f"Mistral document analysis of {url}. The note lands in current/kb."
+        elif scope == "preview":
             note = f"Fetching the first {_PDF_PAGES} PDF pages of {url} on CPU."
         else:
             note = f"Fetching the full text of {url} on CPU, then writing a summary."
@@ -239,11 +314,16 @@ def _run(
             task_id,
             f"{note} gpu_tokens={GPU_TOKENS}. No extract leaf, no vLLM eviction.",
         )
-        source = dict(fetch(url, scope=scope))
-        source["scope"] = scope
-        if scope == "full":
-            source["summary"] = summarize(source)
-        written = write_zettel(source, performer=performer)
+        if curated:
+            source = dict(analyze(url, kind=kind))
+            source["scope"] = "full"
+            written = write_kb(source, now=now)
+        else:
+            source = dict(fetch(url, scope=scope))
+            source["scope"] = scope
+            if scope == "full":
+                source["summary"] = summarize(source)
+            written = write_zettel(source, performer=performer, now=now)
         rel = str(written.get("relpath") or written.get("path") or "")
         _comment(task_id, f"Wrote {rel} ({written.get('bytes') or 0} bytes).")
         _complete(task_id, rel or "written")
@@ -297,6 +377,211 @@ def summarize_source(source: dict[str, Any]) -> str:
     if not text:
         raise RuntimeError("summary came back empty")
     return text
+
+
+def pdf_url_for(url: str, kind: str) -> str:
+    """Public PDF URL Mistral can fetch. arXiv and bioRxiv only."""
+    if kind == "arxiv":
+        match = _ARXIV_RE.search(url or "")
+        if not match:
+            raise RuntimeError(f"not an arXiv url: {url}")
+        return f"https://arxiv.org/pdf/{match.group(1)}.pdf"
+    if kind == "biorxiv":
+        match = _RXIV_RE.search(url or "")
+        if not match:
+            raise RuntimeError(f"not a bioRxiv url: {url}")
+        doi = match.group("doi").rstrip(".")
+        if doi.endswith(".full.pdf"):
+            doi = doi[: -len(".full.pdf")]
+        return f"https://www.biorxiv.org/content/{doi}.full.pdf"
+    raise RuntimeError(f"Mistral document analysis is limited to arXiv and bioRxiv, got {kind}")
+
+
+def mistral_analyze(url: str, *, kind: str) -> dict[str, Any]:
+    """OCR the public PDF and return the structured paper analysis.
+
+    One Document AI call. No local PDF read and no local model.
+    """
+    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("MISTRAL_API_KEY is unset")
+    pdf_url = pdf_url_for(url, kind)
+    payload = {
+        "model": _MISTRAL_MODEL,
+        "document": {"type": "document_url", "document_url": pdf_url},
+        "table_format": "markdown",
+        "extract_header": True,
+        "extract_footer": True,
+        "include_image_base64": False,
+        "document_annotation_prompt": _ANNOTATION_PROMPT,
+        "document_annotation_format": _annotation_format(),
+    }
+    body = _mistral_post(payload, key)
+    pages = body.get("pages") or []
+    text = "\n\n".join(
+        str(page.get("markdown") or "").strip()
+        for page in pages
+        if str(page.get("markdown") or "").strip()
+    )
+    annotation = _annotation_dict(body.get("document_annotation"))
+    short = str(annotation.get("short_title") or "").strip()
+    title = short or pdf_url
+    return {
+        "url": pdf_url,
+        "kind": kind,
+        "scope": "full",
+        "title": title,
+        "short_title": short or title,
+        "summary": str(annotation.get("summary") or "").strip(),
+        "claims": [str(item).strip() for item in (annotation.get("claims") or []) if str(item).strip()],
+        "method": str(annotation.get("method") or "").strip(),
+        "limits": str(annotation.get("limits") or "").strip(),
+        "text": text,
+        "model": str(body.get("model") or _MISTRAL_MODEL),
+    }
+
+
+def write_kb(source: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+    """Curated paper note under ``current/kb/arXiv`` or ``current/kb/bioRxiv``."""
+    kind = str(source.get("kind") or "")
+    collection = _kb_collection(kind)
+    module = _zettel_module()
+    root = module.vault_root()
+    clock = now or datetime.now(timezone.utc)
+    if clock.tzinfo is None:
+        clock = clock.replace(tzinfo=timezone.utc)
+    stamp = clock.astimezone(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+    short = str(source.get("short_title") or source.get("title") or "paper")
+    rel = f"current/kb/{collection}/{stamp}_{module.slugify(short)}.md"
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        raise RuntimeError(f"already exists: {rel}")
+    content = kb_body(source, relpath=rel, created=stamp)
+    path.write_text(content, encoding="utf-8")
+    _append_kb_log(root, str(source.get("title") or short), rel, stamp[:10])
+    return {
+        "ok": True,
+        "path": str(path),
+        "relpath": rel,
+        "resource": f"wiki:{rel}",
+        "bytes": len(content.encode("utf-8")),
+    }
+
+
+def kb_body(source: dict[str, Any], *, relpath: str, created: str) -> str:
+    title = str(source.get("title") or "paper").strip()
+    claims = source.get("claims") or []
+    claim_lines = "\n".join(f"- {item}" for item in claims) or "- (none stated)"
+    lines = [
+        "---",
+        f"title: {json.dumps(title)}",
+        f"created: {created}",
+        "type: kb",
+        f"source: {source.get('url') or ''}",
+        f"source_kind: {source.get('kind') or ''}",
+        "provider: mistral",
+        f"model: {source.get('model') or _MISTRAL_MODEL}",
+        f"about_path: {relpath}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+        "## Summary",
+        "",
+        str(source.get("summary") or "").strip(),
+        "",
+        "## Claims",
+        "",
+        claim_lines,
+        "",
+        "## Method",
+        "",
+        str(source.get("method") or "").strip(),
+        "",
+        "## Limits",
+        "",
+        str(source.get("limits") or "").strip(),
+        "",
+        "## Text",
+        "",
+        str(source.get("text") or "").strip(),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _kb_collection(kind: str) -> str:
+    if kind == "arxiv":
+        return "arXiv"
+    if kind == "biorxiv":
+        return "bioRxiv"
+    raise RuntimeError(f"no curated collection for {kind}")
+
+
+def _annotation_format() -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "paper_analysis",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "short_title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "claims": {"type": "array", "items": {"type": "string"}},
+                    "method": {"type": "string"},
+                    "limits": {"type": "string"},
+                },
+                "required": ["short_title", "summary", "claims", "method", "limits"],
+            },
+        },
+    }
+
+
+def _annotation_dict(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    raise RuntimeError("Mistral document annotation was empty")
+
+
+def _mistral_post(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    request = urllib.request.Request(
+        _MISTRAL_OCR_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=_MISTRAL_TIMEOUT_S) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError(f"Mistral OCR HTTP {exc.code}: {detail}") from exc
+    if not isinstance(body, dict):
+        raise RuntimeError("Mistral OCR returned a non-object")
+    return body
+
+
+def _append_kb_log(root: Path, title: str, rel: str, day: str) -> None:
+    log_path = root / "log.md"
+    if not log_path.is_file():
+        return
+    try:
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"\n## [{day}] kb | {title}\n- Created: {rel} (wiki:{rel})\n")
+    except OSError:
+        return
 
 
 def write_zettel(source: dict[str, Any], *, performer: str, now: datetime | None = None) -> dict[str, Any]:
@@ -531,7 +816,7 @@ def _host_title(url: str) -> str:
     return host
 
 
-def _write_hermes(body: str, *, now: datetime | None) -> dict[str, Any]:
+def _zettel_module() -> Any:
     import importlib.util
 
     path = Path(__file__).resolve().parents[2] / "plugins" / "signals-zettel" / "capture.py"
@@ -540,6 +825,11 @@ def _write_hermes(body: str, *, now: datetime | None) -> dict[str, Any]:
         raise RuntimeError(f"zettel capture missing: {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def _write_hermes(body: str, *, now: datetime | None) -> dict[str, Any]:
+    module = _zettel_module()
     written = module.capture(body=body, now=now)
     if not written.get("ok"):
         raise RuntimeError(str(written.get("error") or "zettel capture failed"))
@@ -648,6 +938,7 @@ def _create_card(
     performer: str,
     session_id: str,
     scope: str,
+    initial_status: str = "running",
 ) -> str:
     kanban_db, conn = _connect()
     if scope == "preview":
@@ -667,11 +958,17 @@ def _create_card(
             body=body,
             created_by="hicks",
             assignee="grok",
-            initial_status="running",
+            initial_status=initial_status,
             workspace_kind="scratch",
             idempotency_key=f"source-drop:{key}:{scope}",
             session_id=_session(session_id),
         )
+
+
+def _unblock(task_id: str) -> None:
+    kanban_db, conn = _connect()
+    with closing(conn):
+        kanban_db.unblock_task(conn, task_id)
 
 
 def _comment(task_id: str, body: str) -> None:

@@ -120,7 +120,23 @@ def _summary(source):
     return "The paper is about the replay unit."
 
 
+def _analysis(url, kind="arxiv"):
+    return {
+        "url": "https://arxiv.org/pdf/2402.03300.pdf",
+        "kind": kind,
+        "title": "Replay units",
+        "short_title": "Replay units",
+        "summary": "The paper is about the replay unit.",
+        "claims": ["The replay unit is the noun."],
+        "method": "Read the paper.",
+        "limits": "One week.",
+        "text": "Full OCR markdown.",
+        "model": "mistral-ocr-latest",
+    }
+
+
 def test_enqueue_files_preview_and_full_cards():
+    when = datetime(2026, 10, 17, 18, 4, 5, tzinfo=timezone.utc)
     filed = drop.enqueue(
         url="https://arxiv.org/abs/2402.03300",
         session_id="cafe",
@@ -128,6 +144,8 @@ def test_enqueue_files_preview_and_full_cards():
         spawn=lambda fn: fn(),
         fetch=_fetch,
         summarize=_summary,
+        analyze=_analysis,
+        now=when,
     )
     assert filed["created"] is True
     assert filed["gpu_tokens"] == 0
@@ -149,29 +167,39 @@ def test_enqueue_files_preview_and_full_cards():
     from pathlib import Path
     import os
 
-    notes = list(Path(os.environ["WIKI_PATH"]).glob("scratch/*/*.md"))
-    assert len(notes) == 2
-    bodies = {path.name: path.read_text() for path in notes}
-    preview = next(text for name, text in bodies.items() if "full" not in name)
-    full = next(text for name, text in bodies.items() if "full" in name)
+    wiki = Path(os.environ["WIKI_PATH"])
+    notes = list(wiki.glob("scratch/*/*.md"))
+    assert len(notes) == 1
+    preview = notes[0].read_text()
     assert "first 8 PDF pages" in preview
     assert "## Summary" not in preview
-    assert "full text and summary" in full
+    curated = list(wiki.glob("current/kb/arXiv/*.md"))
+    assert len(curated) == 1
+    assert curated[0].name == "2026-10-17T180405Z_replay-units.md"
+    full = curated[0].read_text()
+    assert "type: kb" in full
+    assert "provider: mistral" in full
     assert "replay unit" in full.lower()
+    assert "Full OCR markdown." in full
 
 
 def test_second_drop_does_not_start_another_extract():
-    calls = {"n": 0}
+    calls = {"fetch": 0, "analyze": 0}
 
     def fetch(url, scope="preview"):
-        calls["n"] += 1
+        calls["fetch"] += 1
         return _paper(scope=scope)
+
+    def analyze(url, kind="arxiv"):
+        calls["analyze"] += 1
+        return _analysis(url, kind)
 
     first = drop.enqueue(
         url="https://arxiv.org/pdf/2402.03300.pdf",
         performer="hermes",
         spawn=lambda fn: fn(),
         fetch=fetch,
+        analyze=analyze,
         summarize=lambda source: "same paper",
     )
     second = drop.enqueue(
@@ -179,13 +207,15 @@ def test_second_drop_does_not_start_another_extract():
         performer="hermes",
         spawn=lambda fn: (_ for _ in ()).throw(AssertionError("respawned")),
         fetch=fetch,
+        analyze=analyze,
         summarize=lambda source: "same paper",
     )
     assert first["created"] is True
     assert len(first["tasks"]) == 2
     assert second["created"] is False
     assert {row["id"] for row in second["tasks"]} == {row["id"] for row in first["tasks"]}
-    assert calls["n"] == 2
+    assert calls["fetch"] == 1
+    assert calls["analyze"] == 1
 
 
 def test_gaius_performer_writes_kb_scratch(tmp_path, monkeypatch):
@@ -220,6 +250,126 @@ def test_failed_fetch_blocks_the_card():
             for row in conn.execute("SELECT status FROM tasks").fetchall()
         ]
     assert statuses == ["blocked", "blocked"]
+
+
+def test_other_pdf_stays_blocked_until_approved():
+    calls = {"fetch": 0, "analyze": 0}
+
+    def fetch(url, scope="preview"):
+        calls["fetch"] += 1
+        return _paper()
+
+    def analyze(url, kind="arxiv"):
+        calls["analyze"] += 1
+        return _analysis(url, kind)
+
+    filed = drop.enqueue(
+        url="https://example.com/papers/note.pdf",
+        spawn=lambda fn: (_ for _ in ()).throw(AssertionError("ran")),
+        fetch=fetch,
+        analyze=analyze,
+    )
+    assert filed["awaiting_approval"] is True
+    assert [row["status"] for row in filed["tasks"]] == ["blocked", "blocked"]
+    assert calls == {"fetch": 0, "analyze": 0}
+    from hermes_cli import kanban_db
+    from hermes_cli import kanban_db_connect as kbc
+
+    kanban_db.init_db()
+    with kbc.connect() as conn:
+        comments = conn.execute("SELECT body FROM task_comments").fetchall()
+    assert comments
+    assert "explicitly approve" in comments[0]["body"]
+
+
+def test_approved_other_pdf_stays_off_mistral_and_off_the_curated_kb(tmp_path):
+    filed = drop.enqueue(
+        url="https://example.com/papers/note.pdf",
+        approve=True,
+        spawn=lambda fn: fn(),
+        fetch=_fetch,
+        summarize=_summary,
+        analyze=lambda url, kind: (_ for _ in ()).throw(AssertionError("mistral")),
+    )
+    assert filed["awaiting_approval"] is False
+    from hermes_cli import kanban_db
+    from hermes_cli import kanban_db_connect as kbc
+    from pathlib import Path
+    import os
+
+    kanban_db.init_db()
+    with kbc.connect() as conn:
+        statuses = [row["status"] for row in conn.execute("SELECT status FROM tasks")]
+    assert statuses == ["done", "done"]
+    wiki = Path(os.environ["WIKI_PATH"])
+    assert list(wiki.glob("current/kb/*/*.md")) == []
+    assert list(wiki.glob("scratch/*/*.md"))
+
+
+def test_a_second_drop_with_approval_runs_the_blocked_pdf():
+    url = "https://example.com/papers/note.pdf"
+    held = drop.enqueue(
+        url=url,
+        spawn=lambda fn: (_ for _ in ()).throw(AssertionError("ran")),
+    )
+    assert held["awaiting_approval"] is True
+    released = drop.enqueue(
+        url=url,
+        approve=True,
+        spawn=lambda fn: fn(),
+        fetch=_fetch,
+        summarize=_summary,
+        analyze=lambda url, kind: (_ for _ in ()).throw(AssertionError("mistral")),
+    )
+    assert released["awaiting_approval"] is False
+    assert {row["id"] for row in released["tasks"]} == {row["id"] for row in held["tasks"]}
+    from hermes_cli import kanban_db
+    from hermes_cli import kanban_db_connect as kbc
+
+    kanban_db.init_db()
+    with kbc.connect() as conn:
+        statuses = [row["status"] for row in conn.execute("SELECT status FROM tasks")]
+    assert statuses == ["done", "done"]
+
+
+def test_medrxiv_pdf_is_blocked():
+    filed = drop.enqueue(
+        url="https://www.medrxiv.org/content/10.1101/2024.01.01.123456",
+        spawn=lambda fn: (_ for _ in ()).throw(AssertionError("ran")),
+    )
+    assert filed["kind"] == "medrxiv"
+    assert filed["awaiting_approval"] is True
+    assert all(row["status"] == "blocked" for row in filed["tasks"])
+
+
+def test_mistral_request_is_the_public_pdf_and_keeps_the_key_out_of_the_body(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+    seen: dict = {}
+
+    def post(payload, key):
+        seen["payload"] = payload
+        seen["key"] = key
+        return {
+            "model": "mistral-ocr-latest",
+            "pages": [{"index": 0, "markdown": "# Body\n\nThe paper."}],
+            "document_annotation": (
+                '{"short_title":"Replay units","summary":"A summary.",'
+                '"claims":["One claim."],"method":"A method.","limits":"A limit."}'
+            ),
+        }
+
+    monkeypatch.setattr(drop, "_mistral_post", post)
+    source = drop.mistral_analyze("https://arxiv.org/abs/2402.03300", kind="arxiv")
+    payload = seen["payload"]
+    assert seen["key"] == "test-key"
+    assert "test-key" not in json.dumps(payload)
+    assert payload["document"]["document_url"] == "https://arxiv.org/pdf/2402.03300.pdf"
+    assert payload["document_annotation_format"]["type"] == "json_schema"
+    assert payload["include_image_base64"] is False
+    assert source["summary"] == "A summary."
+    assert "The paper." in source["text"]
+    with pytest.raises(RuntimeError):
+        drop.mistral_analyze("https://example.com/note.pdf", kind="web")
 
 
 def test_dispatch_source_drop_returns_the_card(monkeypatch):

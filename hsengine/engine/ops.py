@@ -1106,14 +1106,15 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "source_drop",
             "description": (
-                "File a dropped arXiv, bioRxiv, medRxiv, or web URL as two kanban "
-                "cards: the first 8 PDF pages, and a full extraction plus "
-                "summary. Both run in the background on CPU. Claims no GPU. "
-                "Do not run docling, do not evict thinking, do not use the "
-                "extract leaf. performer=hermes writes the Hermes wiki vault. "
-                "performer=gaius writes the Gaius KB scratch. Default hermes. "
-                "Speak one sentence that both notes are being written on the "
-                "board. Do not say a file is written until that card is done."
+                "File a dropped URL as two kanban cards. The first is 8 PDF pages "
+                "on CPU. For an arXiv or bioRxiv PDF, the full card is a "
+                "Mistral document analysis and lands in the Hermes wiki at "
+                "current/kb/arXiv or current/kb/bioRxiv. Any other PDF is "
+                "blocked until the user explicitly approves it; pass "
+                "approve=true only after they do, and that approval stays "
+                "off Mistral. Claims no GPU. Do not run docling. Speak one "
+                "sentence that the work is on the board. Do not say a file "
+                "is written until that card is done."
             ),
             "parameters": {
                 "type": "object",
@@ -1124,7 +1125,11 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                     },
                     "performer": {
                         "type": "string",
-                        "description": "hermes (wiki scratch) or gaius (KB scratch). Default hermes.",
+                        "description": "hermes (wiki scratch) or gaius (KB scratch). Default hermes. The Mistral note always lands in the Hermes wiki.",
+                    },
+                    "approve": {
+                        "type": "boolean",
+                        "description": "True only after the user explicitly approves a non-arXiv, non-bioRxiv PDF. Default false.",
                     },
                 },
                 "required": ["url"],
@@ -1458,6 +1463,7 @@ def _dispatch_source_drop(args: dict[str, Any]) -> str:
             url=str(args.get("url") or ""),
             session_id=sid,
             performer=str(args.get("performer") or "hermes"),
+            approve=bool(args.get("approve") or False),
         ),
         default=str,
     )
