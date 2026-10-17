@@ -1104,12 +1104,45 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "source_drop",
+            "description": (
+                "File a dropped arXiv, bioRxiv, medRxiv, or web URL. A kanban "
+                "card is created now; CPU text extraction and the scratch "
+                "zettel continue in the background. Claims no GPU. Do not run "
+                "docling, do not evict thinking, do not use the extract leaf. "
+                "performer=hermes writes the Hermes wiki vault. performer=gaius "
+                "writes the Gaius KB scratch. Default hermes. Speak one "
+                "sentence that the note is being written on the board. Do not "
+                "say the file is written until a later turn shows the card done."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The dropped http(s) URL.",
+                    },
+                    "performer": {
+                        "type": "string",
+                        "description": "hermes (wiki scratch) or gaius (KB scratch). Default hermes.",
+                    },
+                },
+                "required": ["url"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "hermes",
             "description": (
                 "Silent Hermes partner (configured Grok / xai-oauth, full "
                 "CLI tools: kanban, skill_manage, cronjob_manage, terminal, "
                 "files, browser, memory, delegate_task). You stay on Cerebras; "
                 "this is not a voice swap. Shares this AgentRTC session. "
+                "A dropped paper or page URL is source_drop, not a Gaius "
+                "docling flow. "
                 "A silent partner: do the work, then speak one natural "
                 "sentence if needed. Never say the word steer. Never read "
                 "STEER or MONOLOGUE labels. Do not dump JSON or name Grok. "
@@ -1411,6 +1444,25 @@ def _dispatch_kb(args: dict[str, Any]) -> str:
     return json.dumps(search(query=str(args.get("query") or ""), stream="kb"), default=str)
 
 
+def _dispatch_source_drop(args: dict[str, Any]) -> str:
+    from hsengine.engine import session_history
+    from hsengine.engine.source_drop import enqueue
+
+    sid = ""
+    try:
+        sid = session_history.live_webrtc_id() or ""
+    except Exception:
+        sid = ""
+    return json.dumps(
+        enqueue(
+            url=str(args.get("url") or ""),
+            session_id=sid,
+            performer=str(args.get("performer") or "hermes"),
+        ),
+        default=str,
+    )
+
+
 def _dispatch_web(args: dict[str, Any]) -> str:
     return json.dumps(search(query=str(args.get("query") or ""), stream="web"), default=str)
 
@@ -1614,6 +1666,7 @@ _DISPATCH = {
     "narrative": _dispatch_narrative,
     "kb_search": _dispatch_kb,
     "web_search": _dispatch_web,
+    "source_drop": _dispatch_source_drop,
     "fmp": _dispatch_fmp,
     "grok_consult": _dispatch_grok_consult,
     "hermes": _dispatch_hermes,

@@ -882,6 +882,12 @@ def schedule_vasquez_glance(
                 file_workflow_if_needed(session_id, narrative, spoken)
             except Exception:
                 log.exception("market briefing card failed")
+            try:
+                from hsengine.engine.source_drop import file_source_drops
+
+                file_source_drops(session_id, narrative)
+            except Exception:
+                log.exception("source drop failed")
         try:
             vasquez_run(
                 session_id=session_id,

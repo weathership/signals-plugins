@@ -21,6 +21,10 @@ the bundled `obsidian` skill, `/paste`, or the OS clipboard.
 
 - User runs `/zettel` with the note text after the command.
 - User asks to file pasted notes into the wiki vault.
+- User drops an arXiv, bioRxiv, medRxiv, or web URL in an AgentRTC session.
+  Call `source_drop` (not Docling, not the extract GPU). The card is filed
+  immediately; CPU extraction writes this scratch zettel in the background.
+  `performer=hermes` is this vault. `performer=gaius` is the Gaius KB scratch.
 
 ## Prerequisites
 

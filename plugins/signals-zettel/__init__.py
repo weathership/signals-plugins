@@ -101,6 +101,44 @@ def _agenda_slash(raw_args: str) -> str:
     return f"  Agenda {out.get('path') or out.get('id')} ({out.get('origin_agent')})"
 
 
+def _source_drop_tool(args: dict, **_kw) -> str:
+    import json
+
+    from hsengine.engine.source_drop import enqueue
+
+    return json.dumps(
+        enqueue(
+            url=str(args.get("url") or ""),
+            performer=str(args.get("performer") or "hermes"),
+        ),
+        default=str,
+    )
+
+
+_SOURCE_DROP = {
+    "name": "source_drop",
+    "description": (
+        "Drop an arXiv, bioRxiv, medRxiv, or web URL. Files a kanban card "
+        "immediately and extracts the text on CPU in the background into a "
+        "scratch zettel. Claims no GPU and does not run Docling. "
+        "performer=hermes writes the Hermes wiki. performer=gaius writes "
+        "the Gaius KB scratch."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "The dropped http(s) URL."},
+            "performer": {
+                "type": "string",
+                "description": "hermes or gaius. Default hermes.",
+            },
+        },
+        "required": ["url"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _tool(args: dict, **_kw) -> str:
     return tool_result(
         capture(
@@ -125,6 +163,14 @@ def register(ctx) -> None:
         handler=_tool,
         description=_TOOL["description"],
         emoji="📝",
+    )
+    ctx.register_tool(
+        name="source_drop",
+        toolset="signals_zettel",
+        schema=_SOURCE_DROP,
+        handler=_source_drop_tool,
+        description=_SOURCE_DROP["description"],
+        emoji="🔗",
     )
     ctx.register_command(
         "rtc-review",
