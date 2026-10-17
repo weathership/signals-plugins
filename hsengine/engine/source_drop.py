@@ -9,9 +9,12 @@ Two kanban cards are filed before either fetch. The preview is the first
 eight PDF pages, on CPU, as a scratch zettel. The full card for an arXiv
 or bioRxiv PDF is one Mistral Document AI call (OCR plus a structured
 summary) and lands in the Hermes wiki at
-``current/kb/arXiv`` or ``current/kb/bioRxiv``. Gaius syncs that tree on
-its own schedule. Any other PDF is filed blocked until the user approves
-it; approval runs the CPU path, not Mistral.
+``current/kb/arXiv``, ``current/kb/bioRxiv``, or ``current/kb/medRxiv``.
+Gaius syncs that tree on its own schedule. URL variants of one preprint
+(abs, pdf, html, ``.full.pdf``, a trailing version) share one card, so
+the analysis does not run again. A different server is a different
+paper. Any other PDF is filed blocked until the user approves it;
+approval runs the CPU path, not Mistral.
 """
 from __future__ import annotations
 
@@ -49,9 +52,9 @@ _FULL_FETCH_TIMEOUT_S = 120
 _MISTRAL_TIMEOUT_S = 180
 _MISTRAL_OCR_URL = "https://api.mistral.ai/v1/ocr"
 _MISTRAL_MODEL = "mistral-ocr-latest"
-_CURATED = frozenset({"arxiv", "biorxiv"})
+_CURATED = frozenset({"arxiv", "biorxiv", "medrxiv"})
 _APPROVAL_REASON = (
-    "Mistral document analysis is limited to arXiv and bioRxiv PDFs. "
+    "Mistral document analysis is limited to arXiv, bioRxiv, and medRxiv PDFs. "
     "This PDF stays blocked until you explicitly approve it."
 )
 _ANNOTATION_PROMPT = (
@@ -115,20 +118,31 @@ def classify(url: str) -> str:
 
 
 def drop_key(url: str) -> str:
-    """Stable card key. A second drop of the same paper is the same card."""
+    """Stable card key for one preprint on one server.
+
+    abs, pdf, html, and a trailing version are the same arXiv paper.
+    A bioRxiv or medRxiv content page, ``.full.pdf``, and a ``vN`` suffix
+    are the same DOI on that server. The key does not cross servers:
+    an arXiv id and a 10.1101 DOI are not the same paper, and a PDF on
+    any other host does not inherit either key.
+    """
     kind = classify(url)
     if kind == "arxiv":
         match = _ARXIV_RE.search(url)
         return f"arxiv:{(match.group(1) if match else url).lower()}"
     if kind in {"biorxiv", "medrxiv"}:
-        match = _RXIV_RE.search(url)
-        doi = (match.group("doi") if match else url).rstrip(".").lower()
-        if doi.endswith(".full.pdf"):
-            doi = doi[: -len(".full.pdf")]
-        return f"{kind}:{doi}"
+        return f"{kind}:{_rxiv_doi(url)}"
     parsed = urllib.request.urlparse(url)
     clean = parsed._replace(fragment="").geturl()
     return f"web:{clean}"
+
+
+def _rxiv_doi(url: str) -> str:
+    match = _RXIV_RE.search(url or "")
+    doi = (match.group("doi") if match else url).rstrip(".").lower()
+    doi = re.sub(r"(?:\.full)?(?:\.pdf)?$", "", doi)
+    doi = re.sub(r"v\d+$", "", doi)
+    return doi
 
 
 def file_source_drops(session_id: str, text: str) -> list[dict[str, Any]]:
@@ -143,11 +157,9 @@ def file_source_drops(session_id: str, text: str) -> list[dict[str, Any]]:
 
 
 def needs_pdf_approval(url: str, kind: str) -> bool:
-    """True for a PDF that is not an arXiv or bioRxiv paper."""
+    """True for a PDF that is not an arXiv, bioRxiv, or medRxiv paper."""
     if kind in _CURATED:
         return False
-    if kind == "medrxiv":
-        return True
     path = urllib.request.urlparse(url or "").path.lower()
     return path.endswith(".pdf")
 
@@ -166,9 +178,9 @@ def enqueue(
 ) -> dict[str, Any]:
     """File two cards, then extract off the voice turn.
 
-    ``preview`` is the first eight PDF pages. ``full`` for arXiv and bioRxiv
-    is Mistral and lands in ``current/kb``. Any other PDF is blocked until
-    ``approve`` is true, and that approval stays on the CPU path.
+    ``preview`` is the first eight PDF pages. ``full`` for arXiv, bioRxiv,
+    and medRxiv is Mistral and lands in ``current/kb``. Any other PDF is
+    blocked until ``approve`` is true, and that approval stays on the CPU path.
     ``spawn`` runs the work inline in tests.
     """
     target = (url or "").strip()
@@ -380,21 +392,18 @@ def summarize_source(source: dict[str, Any]) -> str:
 
 
 def pdf_url_for(url: str, kind: str) -> str:
-    """Public PDF URL Mistral can fetch. arXiv and bioRxiv only."""
+    """Public PDF URL Mistral can fetch. arXiv, bioRxiv, and medRxiv only."""
     if kind == "arxiv":
         match = _ARXIV_RE.search(url or "")
         if not match:
             raise RuntimeError(f"not an arXiv url: {url}")
         return f"https://arxiv.org/pdf/{match.group(1)}.pdf"
-    if kind == "biorxiv":
-        match = _RXIV_RE.search(url or "")
-        if not match:
-            raise RuntimeError(f"not a bioRxiv url: {url}")
-        doi = match.group("doi").rstrip(".")
-        if doi.endswith(".full.pdf"):
-            doi = doi[: -len(".full.pdf")]
-        return f"https://www.biorxiv.org/content/{doi}.full.pdf"
-    raise RuntimeError(f"Mistral document analysis is limited to arXiv and bioRxiv, got {kind}")
+    if kind in {"biorxiv", "medrxiv"}:
+        server = "biorxiv" if kind == "biorxiv" else "medrxiv"
+        return f"https://www.{server}.org/content/{_rxiv_doi(url)}.full.pdf"
+    raise RuntimeError(
+        f"Mistral document analysis is limited to arXiv, bioRxiv, and medRxiv, got {kind}"
+    )
 
 
 def mistral_analyze(url: str, *, kind: str) -> dict[str, Any]:
@@ -442,7 +451,7 @@ def mistral_analyze(url: str, *, kind: str) -> dict[str, Any]:
 
 
 def write_kb(source: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
-    """Curated paper note under ``current/kb/arXiv`` or ``current/kb/bioRxiv``."""
+    """Curated paper note under ``current/kb/{arXiv,bioRxiv,medRxiv}``."""
     kind = str(source.get("kind") or "")
     collection = _kb_collection(kind)
     module = _zettel_module()
@@ -516,6 +525,8 @@ def _kb_collection(kind: str) -> str:
         return "arXiv"
     if kind == "biorxiv":
         return "bioRxiv"
+    if kind == "medrxiv":
+        return "medRxiv"
     raise RuntimeError(f"no curated collection for {kind}")
 
 
@@ -669,12 +680,9 @@ def _fetch_arxiv(url: str, get: GetFn, scope: str) -> dict[str, Any]:
 
 
 def _fetch_rxiv(url: str, kind: str, get: GetFn, scope: str) -> dict[str, Any]:
-    match = _RXIV_RE.search(url)
-    if not match:
+    if not _RXIV_RE.search(url or ""):
         raise RuntimeError(f"not a {kind} url: {url}")
-    doi = match.group("doi").rstrip(".")
-    if doi.endswith(".full.pdf"):
-        doi = doi[: -len(".full.pdf")]
+    doi = _rxiv_doi(url)
     server = "biorxiv" if kind == "biorxiv" else "medrxiv"
     raw = get(f"https://api.biorxiv.org/details/{server}/{doi}")
     title, abstract = _parse_rxiv(raw)
@@ -885,8 +893,7 @@ def _card_title(kind: str, url: str, scope: str) -> str:
         match = _ARXIV_RE.search(url)
         label = match.group(1) if match else url
     elif kind in {"biorxiv", "medrxiv"}:
-        match = _RXIV_RE.search(url)
-        label = (match.group("doi") if match else url)[:48]
+        label = _rxiv_doi(url)[:48]
     else:
         label = _host_title(url)
     prefix = "Extract 8 pages" if scope == "preview" else "Full extract and summary"

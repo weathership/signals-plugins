@@ -119,8 +119,9 @@ def _source_drop_tool(args: dict, **_kw) -> str:
 _SOURCE_DROP = {
     "name": "source_drop",
     "description": (
-        "Drop a URL. arXiv and bioRxiv full analysis is Mistral and lands "
-        "in the Hermes wiki at current/kb/arXiv or current/kb/bioRxiv. "
+        "Drop a URL. arXiv, bioRxiv, and medRxiv full analysis is Mistral "
+        "and lands in the Hermes wiki at current/kb/arXiv, bioRxiv, or "
+        "medRxiv. Another URL for the same preprint reuses that note. "
         "Any other PDF is blocked until approve=true, which the user must "
         "say explicitly. Claims no GPU and does not run Docling."
     ),
@@ -134,7 +135,7 @@ _SOURCE_DROP = {
             },
             "approve": {
                 "type": "boolean",
-                "description": "True only after the user explicitly approves a non-arXiv, non-bioRxiv PDF.",
+                "description": "True only after the user explicitly approves a PDF that is not arXiv, bioRxiv, or medRxiv.",
             },
         },
         "required": ["url"],

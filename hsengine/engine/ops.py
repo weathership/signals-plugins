@@ -1107,12 +1107,13 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
             "name": "source_drop",
             "description": (
                 "File a dropped URL as two kanban cards. The first is 8 PDF pages "
-                "on CPU. For an arXiv or bioRxiv PDF, the full card is a "
-                "Mistral document analysis and lands in the Hermes wiki at "
-                "current/kb/arXiv or current/kb/bioRxiv. Any other PDF is "
-                "blocked until the user explicitly approves it; pass "
-                "approve=true only after they do, and that approval stays "
-                "off Mistral. Claims no GPU. Do not run docling. Speak one "
+                "on CPU. For an arXiv, bioRxiv, or medRxiv PDF, the full card is "
+                "a Mistral document analysis and lands in the Hermes wiki at "
+                "current/kb/arXiv, current/kb/bioRxiv, or current/kb/medRxiv. "
+                "Another URL for the same preprint reuses that card. Any "
+                "other PDF is blocked until the user explicitly approves it; "
+                "pass approve=true only after they do, and that approval "
+                "stays off Mistral. Claims no GPU. Do not run docling. Speak one "
                 "sentence that the work is on the board. Do not say a file "
                 "is written until that card is done."
             ),
@@ -1129,7 +1130,7 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
                     },
                     "approve": {
                         "type": "boolean",
-                        "description": "True only after the user explicitly approves a non-arXiv, non-bioRxiv PDF. Default false.",
+                        "description": "True only after the user explicitly approves a PDF that is not arXiv, bioRxiv, or medRxiv. Default false.",
                     },
                 },
                 "required": ["url"],

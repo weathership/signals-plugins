@@ -81,6 +81,38 @@ def test_urls_in_keeps_papers_and_skips_localhost():
     assert drop.drop_key("https://arxiv.org/pdf/2402.03300.pdf") == "arxiv:2402.03300"
 
 
+def test_preprint_url_variants_share_one_key_and_servers_stay_apart():
+    """abs/pdf/html/version on one server are one paper. Servers are not."""
+    arxiv = [
+        "https://arxiv.org/abs/2402.03300",
+        "https://arxiv.org/pdf/2402.03300",
+        "https://arxiv.org/pdf/2402.03300.pdf",
+        "https://arxiv.org/pdf/2402.03300v2.pdf",
+        "https://arxiv.org/html/2402.03300v3",
+    ]
+    bio = [
+        "https://www.biorxiv.org/content/10.1101/2024.01.01.123456",
+        "https://www.biorxiv.org/content/10.1101/2024.01.01.123456.full.pdf",
+        "https://www.biorxiv.org/content/10.1101/2024.01.01.123456v2.full.pdf",
+    ]
+    med = [
+        "https://www.medrxiv.org/content/10.1101/2024.02.02.654321",
+        "https://www.medrxiv.org/content/10.1101/2024.02.02.654321.full.pdf",
+        "https://www.medrxiv.org/content/10.1101/2024.02.02.654321v1",
+    ]
+    assert len({drop.drop_key(url) for url in arxiv}) == 1
+    assert len({drop.drop_key(url) for url in bio}) == 1
+    assert len({drop.drop_key(url) for url in med}) == 1
+    assert drop.drop_key(arxiv[0]) != drop.drop_key(bio[0])
+    assert drop.drop_key(bio[0]) != drop.drop_key(med[0])
+    assert drop.drop_key("https://example.com/2402.03300.pdf").startswith("web:")
+    assert not drop.needs_pdf_approval(med[0], "medrxiv")
+    assert drop.needs_pdf_approval("https://example.com/2402.03300.pdf", "web")
+    assert drop.pdf_url_for(med[2], "medrxiv") == (
+        "https://www.medrxiv.org/content/10.1101/2024.02.02.654321.full.pdf"
+    )
+
+
 def test_fetch_arxiv_uses_the_api_and_stops_at_abstract_without_pdf(monkeypatch):
     def get(url: str) -> bytes:
         assert "export.arxiv.org" in url
@@ -332,14 +364,42 @@ def test_a_second_drop_with_approval_runs_the_blocked_pdf():
     assert statuses == ["done", "done"]
 
 
-def test_medrxiv_pdf_is_blocked():
-    filed = drop.enqueue(
-        url="https://www.medrxiv.org/content/10.1101/2024.01.01.123456",
-        spawn=lambda fn: (_ for _ in ()).throw(AssertionError("ran")),
+def test_medrxiv_variants_share_one_curated_note():
+    when = datetime(2026, 10, 17, 19, 1, 2, tzinfo=timezone.utc)
+    calls = {"n": 0}
+    page = "https://www.medrxiv.org/content/10.1101/2024.02.02.654321"
+    pdf = page + "v1.full.pdf"
+
+    def analyze(url, kind="medrxiv"):
+        calls["n"] += 1
+        assert kind == "medrxiv"
+        note = _analysis(url, kind)
+        note["short_title"] = "Trial endpoint"
+        return note
+
+    first = drop.enqueue(
+        url=page,
+        spawn=lambda fn: fn(),
+        fetch=_fetch,
+        analyze=analyze,
+        now=when,
     )
-    assert filed["kind"] == "medrxiv"
-    assert filed["awaiting_approval"] is True
-    assert all(row["status"] == "blocked" for row in filed["tasks"])
+    second = drop.enqueue(
+        url=pdf,
+        spawn=lambda fn: (_ for _ in ()).throw(AssertionError("respawned")),
+        fetch=_fetch,
+        analyze=analyze,
+    )
+    assert first["awaiting_approval"] is False
+    assert second["created"] is False
+    assert {row["id"] for row in second["tasks"]} == {row["id"] for row in first["tasks"]}
+    assert calls["n"] == 1
+    from pathlib import Path
+    import os
+
+    notes = list(Path(os.environ["WIKI_PATH"]).glob("current/kb/medRxiv/*.md"))
+    assert len(notes) == 1
+    assert notes[0].name.startswith("2026-10-17T190102Z_trial-endpoint")
 
 
 def test_mistral_request_is_the_public_pdf_and_keeps_the_key_out_of_the_body(monkeypatch):

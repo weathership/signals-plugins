@@ -22,11 +22,12 @@ the bundled `obsidian` skill, `/paste`, or the OS clipboard.
 - User runs `/zettel` with the note text after the command.
 - User asks to file pasted notes into the wiki vault.
 - User drops an arXiv, bioRxiv, medRxiv, or web URL in an AgentRTC session.
-  Call `source_drop` (not Docling, not the extract GPU). arXiv and
-  bioRxiv full analysis is Mistral and is written to
-  `current/kb/arXiv/` or `current/kb/bioRxiv/` as
-  `<iso-datetime>_<short-title>.md`. Any other PDF is a blocked kanban
-  card until the user explicitly approves it (`approve=true`).
+  Call `source_drop` (not Docling, not the extract GPU). arXiv,
+  bioRxiv, and medRxiv full analysis is Mistral and is written to
+  `current/kb/arXiv/`, `current/kb/bioRxiv/`, or `current/kb/medRxiv/`
+  as `<iso-datetime>_<short-title>.md`. Another URL for that same
+  preprint reuses the card. Any other PDF is a blocked kanban card
+  until the user explicitly approves it (`approve=true`).
   `performer=hermes` is this vault. `performer=gaius` is the Gaius KB scratch.
 
 ## Prerequisites
