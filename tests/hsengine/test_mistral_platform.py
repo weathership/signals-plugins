@@ -36,28 +36,36 @@ def test_server_query_lists_mistral_for_every_peer(monkeypatch, tmp_path):
     assert "super-secret" not in str(resp)
 
 
-def test_document_analyze_returns_json_without_the_credential(monkeypatch, tmp_path):
+def test_document_analyze_starts_a_workflow_execution_and_writes_the_wiki(monkeypatch, tmp_path):
     _silence(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("MISTRAL_API_KEY=super-secret\n", encoding="utf-8")
+    monkeypatch.setattr(drop, "paper_workflow_name", lambda home=None: "signals-preprint-analysis")
     seen = {}
 
-    def analyze(url, *, kind, key=None):
-        seen["url"] = url
-        seen["kind"] = kind
+    def execute(name, inputs, *, wait=True, key=None, sleep=None):
+        seen["name"] = name
+        seen["inputs"] = inputs
         seen["key"] = key
         return {
-            "url": "https://arxiv.org/pdf/2402.03300.pdf",
-            "kind": kind,
-            "title": "Replay",
-            "summary": "A summary.",
-            "claims": ["one"],
-            "method": "a method",
-            "limits": "a limit",
-            "text": "The paper.",
-            "model": "mistral-ocr-latest",
+            "execution_id": "exec-doc",
+            "workflow": name,
+            "status": "COMPLETED",
+            "result": {
+                "url": inputs["url"],
+                "kind": inputs["kind"],
+                "title": "Replay",
+                "short_title": "Replay",
+                "summary": "A summary.",
+                "claims": ["one"],
+                "method": "a method",
+                "limits": "a limit",
+                "text": "The paper.",
+                "model": "mistral-ocr-latest",
+            },
         }
 
-    monkeypatch.setattr(drop, "mistral_analyze", analyze)
+    monkeypatch.setattr(drop, "execute_workflow", execute)
+    monkeypatch.setattr(drop, "write_kb", lambda source, now=None: {"relpath": "current/kb/arXiv/note.md"})
     events = list(
         plat.iter_call(
             ppb.PlatformCall(
@@ -69,10 +77,12 @@ def test_document_analyze_returns_json_without_the_credential(monkeypatch, tmp_p
         )
     )
     assert [ev.WhichOneof("event") for ev in events] == ["accepted", "deliverable", "done"]
-    assert events[0].accepted.billing == "token-metered"
-    assert seen == {"url": _URL, "kind": "arxiv", "key": "super-secret"}
+    assert seen["name"] == "signals-preprint-analysis"
+    assert seen["inputs"]["url"] == "https://arxiv.org/pdf/2402.03300.pdf"
+    assert seen["key"] == "super-secret"
     body = json.loads(events[1].deliverable.json)
-    assert body["summary"] == "A summary."
+    assert body["execution_id"] == "exec-doc"
+    assert body["wiki"] == "current/kb/arXiv/note.md"
     assert "super-secret" not in events[1].deliverable.json
     assert events[2].done.state == ppb.CALL_COMPLETED
 
@@ -111,7 +121,7 @@ def test_workflow_execute_sends_the_public_pdf(monkeypatch, tmp_path):
             ppb.PlatformCall(
                 product="workflow",
                 verb="execute",
-                input_json=json.dumps({"name": "hermes-paper-analysis", "url": _URL, "wait": False}),
+                input_json=json.dumps({"name": "signals-preprint-analysis", "url": _URL, "wait": False}),
             )
         )
     )

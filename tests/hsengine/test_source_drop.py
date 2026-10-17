@@ -434,7 +434,7 @@ def test_mistral_request_is_the_public_pdf_and_keeps_the_key_out_of_the_body(mon
 
 
 def test_named_workflow_writes_the_kb_note_from_the_execution(monkeypatch):
-    monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "hermes-paper-analysis")
+    monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "signals-preprint-analysis")
     seen = {}
 
     def start(name, url, kind):
@@ -454,7 +454,7 @@ def test_named_workflow_writes_the_kb_note_from_the_execution(monkeypatch):
         analyze=lambda url, kind="arxiv": (_ for _ in ()).throw(AssertionError("inline ocr")),
     )
     assert seen["start"] == (
-        "hermes-paper-analysis",
+        "signals-preprint-analysis",
         "https://arxiv.org/abs/2402.03300",
         "arxiv",
     )
@@ -478,14 +478,14 @@ def test_workflow_execute_sends_the_public_pdf(monkeypatch):
         return 200, {"execution_id": "exec-9", "status": "RUNNING"}
 
     monkeypatch.setattr(drop, "_mistral_json", send)
-    assert drop.start_paper_workflow("hermes-paper-analysis", "https://arxiv.org/abs/2402.03300", "arxiv") == "exec-9"
+    assert drop.start_paper_workflow("signals-preprint-analysis", "https://arxiv.org/abs/2402.03300", "arxiv") == "exec-9"
     assert seen["payload"]["input"]["url"] == "https://arxiv.org/pdf/2402.03300.pdf"
     assert seen["payload"]["wait_for_result"] is False
     assert "test-key" not in str(seen["payload"])
 
 
 def test_missing_workflow_falls_back_to_inline_ocr(monkeypatch):
-    monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "hermes-paper-analysis")
+    monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "signals-preprint-analysis")
 
     def start(name, url, kind):
         raise RuntimeError(f"workflow {name} HTTP 404")

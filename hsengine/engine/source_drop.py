@@ -543,6 +543,10 @@ def await_paper_workflow(
                 result = json.loads(result)
             if not isinstance(result, dict):
                 raise RuntimeError("workflow completed without an analysis object")
+            # The orchestrator stores the entrypoint return under result.result.
+            inner = result.get("result")
+            if "kind" not in result and isinstance(inner, dict) and "kind" in inner:
+                result = inner
             return result
         if state in {"FAILED", "CANCELED", "TERMINATED", "TIMED_OUT"}:
             raise RuntimeError(f"workflow {execution_id} {state}")

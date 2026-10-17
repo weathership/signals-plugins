@@ -100,11 +100,11 @@ def test_workflow_run_sends_the_public_pdf_and_hides_the_credential(monkeypatch,
             apb.RunRequest(
                 agent="hermes/mistral-workflow",
                 instruction=_URL,
-                kwargs_json='{"workflow":"hermes-paper-analysis"}',
+                kwargs_json='{"workflow":"signals-preprint-analysis"}',
             )
         )
     )
-    assert seen["name"] == "hermes-paper-analysis"
+    assert seen["name"] == "signals-preprint-analysis"
     assert seen["inputs"]["url"] == "https://arxiv.org/pdf/2402.03300.pdf"
     assert seen["inputs"]["kind"] == "arxiv"
     assert seen["key"] == "super-secret"

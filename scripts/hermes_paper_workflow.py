@@ -7,7 +7,7 @@ worker. It imports ``mistralai.workflows``, which wants Python 3.12, so
 the Hermes 3.11 environment does not load it.
 
 Register the worker with ``run_worker([PaperAnalysis])`` under the name
-``hermes-paper-analysis``, then set ``mistral.paper_workflow`` in Hermes
+``signals-preprint-analysis``, then set ``mistral.paper_workflow`` in Hermes
 config.yaml to that name.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import os
 import urllib.error
 import urllib.request
 
-WORKFLOW_NAME = "hermes-paper-analysis"
+WORKFLOW_NAME = "signals-preprint-analysis"
 _OCR_URL = "https://api.mistral.ai/v1/ocr"
 _MODEL = "mistral-ocr-latest"
 
@@ -107,39 +107,38 @@ def analyze_pdf(url: str, kind: str) -> dict:
     }
 
 
-def build():
-    """Return the workflow class. Import of the SDK happens here."""
-    import mistralai.workflows as workflows
-    from pydantic import BaseModel
+# Temporal's sandbox re-imports this module and looks the class up by name.
+# The class has to be defined here, not inside a function.
+import mistralai.workflows as workflows
+from pydantic import BaseModel
 
-    class PaperInput(BaseModel):
-        url: str
-        kind: str
 
-    @workflows.activity()
-    async def analyze(url: str, kind: str) -> dict:
-        return analyze_pdf(url, kind)
+class PaperInput(BaseModel):
+    url: str
+    kind: str
 
-    @workflows.workflow.define(
-        name=WORKFLOW_NAME,
-        workflow_display_name="Hermes paper analysis",
-        workflow_description="OCR and structured summary of an arXiv, bioRxiv, or medRxiv PDF.",
-        search_keys=["url", "kind"],
-    )
-    class PaperAnalysis:
-        @workflows.workflow.entrypoint
-        async def run(self, paper: PaperInput) -> dict:
-            return await analyze(paper.url, paper.kind)
 
-    return PaperAnalysis
+@workflows.activity()
+async def analyze(url: str, kind: str) -> dict:
+    return analyze_pdf(url, kind)
+
+
+@workflows.workflow.define(
+    name=WORKFLOW_NAME,
+    workflow_display_name="Signals preprint analysis",
+    workflow_description="OCR and structured summary of an arXiv, bioRxiv, or medRxiv PDF.",
+    search_keys=["url", "kind"],
+)
+class PaperAnalysis:
+    @workflows.workflow.entrypoint
+    async def run(self, paper: PaperInput) -> dict:
+        return await analyze(paper.url, paper.kind)
 
 
 def main() -> None:
     import asyncio
 
-    import mistralai.workflows as workflows
-
-    asyncio.run(workflows.run_worker([build()]))
+    asyncio.run(workflows.run_worker([PaperAnalysis]))
 
 
 if __name__ == "__main__":

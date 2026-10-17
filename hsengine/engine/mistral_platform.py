@@ -109,7 +109,25 @@ def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any])
             raise ValueError(
                 "document.analyze accepts an arXiv, bioRxiv, or medRxiv URL"
             )
-        return drop.mistral_analyze(url, kind=kind, key=secret)
+        # The execution is what Studio lists under Executions. Inline OCR
+        # never creates one.
+        name = str(payload.get("name") or "").strip() or drop.paper_workflow_name() or "signals-preprint-analysis"
+        started = drop.execute_workflow(
+            name,
+            {"url": drop.pdf_url_for(url, kind), "kind": kind},
+            wait=True,
+            key=secret,
+        )
+        analysis = started.get("result")
+        if not isinstance(analysis, dict):
+            raise RuntimeError("workflow completed without an analysis object")
+        written = drop.write_kb(analysis)
+        return {
+            **analysis,
+            "execution_id": started.get("execution_id") or "",
+            "workflow": name,
+            "wiki": written.get("relpath") or "",
+        }
     if product == "workflow" and verb == "execute":
         name = str(payload.get("name") or "").strip() or drop.paper_workflow_name()
         if not name:
