@@ -7,7 +7,7 @@ name = "signals-hsengine"
 version = "0.1.0"
 description = "Signals lattice engine sidecar for Hermes (AgentRTC, Engine/Complete, zndx.agent.v1)"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
 dependencies = [
   "grpcio>=1.81.1,<2",
