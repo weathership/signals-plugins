@@ -5,8 +5,9 @@ not a Docling run. Docling's extract leaf wants a GPU and the old runner
 can evict the standing thinking server (GPUs 0–3). This path claims no
 GPU token, does not talk to YuniKorn, and does not load a model.
 
-The kanban card is filed before the fetch. Extraction and the scratch
-zettel run on a background thread. Hermes writes the Hermes wiki vault.
+Two kanban cards are filed before either fetch. One is the first eight
+PDF pages. The other is the full text plus a summary. Each runs on its
+own background thread. Hermes writes the Hermes wiki vault.
 Gaius writes ``GAIUS_KB_PATH`` scratch. The performer is who extracts,
 not the kind of URL.
 """
@@ -32,10 +33,16 @@ log = logging.getLogger("hsengine.engine.source_drop")
 # Zero on purpose. Do not raise this to borrow extract, light, or heavy.
 GPU_TOKENS = 0
 
+# A drop is two cards: the pages the room can read now, and the whole source.
+SCOPES = ("preview", "full")
+
 _MAX_PER_TURN = 3
 _PDF_PAGES = 8
-_TEXT_CAP = 48_000
+_PREVIEW_CAP = 48_000
+_FULL_CAP = 200_000
+_SUMMARY_INPUT = 24_000
 _FETCH_TIMEOUT_S = 30
+_FULL_FETCH_TIMEOUT_S = 120
 
 _URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+")
 _ARXIV_RE = re.compile(
@@ -124,73 +131,92 @@ def enqueue(
     session_id: str = "",
     performer: str = "hermes",
     spawn: SpawnFn | None = None,
-    fetch: Callable[[str], dict[str, Any]] | None = None,
+    fetch: Callable[..., dict[str, Any]] | None = None,
+    summarize: Callable[[dict[str, Any]], str] | None = None,
 ) -> dict[str, Any]:
-    """File the card, then extract off the voice turn.
+    """File two cards, then extract off the voice turn.
 
-    Returns as soon as the card exists. ``spawn`` runs the work inline in
-    tests. The default spawn is a daemon thread.
+    ``preview`` is the first eight PDF pages. ``full`` is the whole text
+    plus a summary. Both are filed before either fetch starts. ``spawn``
+    runs the work inline in tests. The default spawn is a daemon thread
+    per card.
     """
     target = (url or "").strip()
     if not target:
-        return {"ok": False, "error": "url required", "created": False}
+        return {"ok": False, "error": "url required", "created": False, "tasks": []}
     who = _performer(performer)
     key = drop_key(target)
     kind = classify(target)
-    title = _card_title(kind, target)
+    jobs: list[tuple[str, str, str]] = []
+    tasks: list[dict[str, Any]] = []
+    created_any = False
     with _LOCK:
-        existing = _find_card(key)
-        if existing and existing["status"] != "blocked":
-            return {
-                "ok": True,
-                "created": False,
-                "id": existing["id"],
-                "status": existing["status"],
-                "title": existing["title"] or title,
-                "url": target,
-                "kind": kind,
-                "performer": who,
-                "gpu_tokens": GPU_TOKENS,
-            }
-        if existing and key in _INFLIGHT:
-            return {
-                "ok": True,
-                "created": False,
-                "id": existing["id"],
-                "status": existing["status"],
-                "title": existing["title"] or title,
-                "url": target,
-                "kind": kind,
-                "performer": who,
-                "gpu_tokens": GPU_TOKENS,
-            }
-        if existing:
-            tid = existing["id"]
-        else:
-            tid = _create_card(
-                key=key,
-                title=title,
-                url=target,
-                kind=kind,
-                performer=who,
-                session_id=session_id,
+        for scope in SCOPES:
+            ikey = f"{key}:{scope}"
+            title = _card_title(kind, target, scope)
+            existing = _find_card(key, scope)
+            if existing and existing["status"] != "blocked":
+                tasks.append(_task_row(existing, scope, title, created=False))
+                continue
+            if existing and ikey in _INFLIGHT:
+                tasks.append(_task_row(existing, scope, title, created=False))
+                continue
+            if existing:
+                tid = existing["id"]
+            else:
+                tid = _create_card(
+                    key=key,
+                    title=title,
+                    url=target,
+                    kind=kind,
+                    performer=who,
+                    session_id=session_id,
+                    scope=scope,
+                )
+                created_any = True
+            _INFLIGHT.add(ikey)
+            jobs.append((tid, scope, ikey))
+            tasks.append(
+                {
+                    "id": tid,
+                    "scope": scope,
+                    "status": "running",
+                    "title": title,
+                    "created": not existing,
+                }
             )
-        _INFLIGHT.add(key)
-    worker = lambda: _run(tid, target, who, key, fetch or fetch_source)
-    if spawn is None:
-        threading.Thread(target=worker, daemon=True, name="source-drop").start()
-    else:
-        spawn(worker)
+    fetcher = fetch or fetch_source
+    summarizer = summarize if summarize is not None else summarize_source
+    for tid, scope, ikey in jobs:
+        worker = lambda tid=tid, scope=scope, ikey=ikey: _run(
+            tid, target, who, key, scope, fetcher, summarizer
+        )
+        if spawn is None:
+            threading.Thread(target=worker, daemon=True, name=f"source-drop-{scope}").start()
+        else:
+            spawn(worker)
+    preview = next(row for row in tasks if row["scope"] == "preview")
     return {
         "ok": True,
-        "created": True,
-        "id": tid,
-        "status": "running",
-        "title": title,
+        "created": created_any,
+        "id": preview["id"],
+        "status": preview["status"],
+        "title": preview["title"],
         "url": target,
         "kind": kind,
         "performer": who,
         "gpu_tokens": GPU_TOKENS,
+        "tasks": tasks,
+    }
+
+
+def _task_row(existing: dict[str, str], scope: str, title: str, *, created: bool) -> dict[str, Any]:
+    return {
+        "id": existing["id"],
+        "scope": scope,
+        "status": existing["status"],
+        "title": existing["title"] or title,
+        "created": created,
     }
 
 
@@ -199,18 +225,31 @@ def _run(
     url: str,
     performer: str,
     key: str,
-    fetch: Callable[[str], dict[str, Any]],
+    scope: str,
+    fetch: Callable[..., dict[str, Any]],
+    summarize: Callable[[dict[str, Any]], str],
 ) -> None:
+    ikey = f"{key}:{scope}"
     try:
-        _comment(task_id, f"Fetching {url} on CPU. gpu_tokens={GPU_TOKENS}. No extract leaf, no vLLM eviction.")
-        source = fetch(url)
+        if scope == "preview":
+            note = f"Fetching the first {_PDF_PAGES} PDF pages of {url} on CPU."
+        else:
+            note = f"Fetching the full text of {url} on CPU, then writing a summary."
+        _comment(
+            task_id,
+            f"{note} gpu_tokens={GPU_TOKENS}. No extract leaf, no vLLM eviction.",
+        )
+        source = dict(fetch(url, scope=scope))
+        source["scope"] = scope
+        if scope == "full":
+            source["summary"] = summarize(source)
         written = write_zettel(source, performer=performer)
         rel = str(written.get("relpath") or written.get("path") or "")
         _comment(task_id, f"Wrote {rel} ({written.get('bytes') or 0} bytes).")
         _complete(task_id, rel or "written")
-        log.info("source drop %s %s -> %s", performer, key, rel)
+        log.info("source drop %s %s %s -> %s", performer, scope, key, rel)
     except Exception as exc:
-        log.warning("source drop %s failed", key, exc_info=True)
+        log.warning("source drop %s %s failed", scope, key, exc_info=True)
         try:
             _comment(task_id, f"Extract failed: {exc}")
             _block(task_id, str(exc))
@@ -218,19 +257,46 @@ def _run(
             log.debug("source drop could not block %s", task_id, exc_info=True)
     finally:
         with _LOCK:
-            _INFLIGHT.discard(key)
+            _INFLIGHT.discard(ikey)
         _refresh()
 
 
-def fetch_source(url: str, *, get: GetFn | None = None) -> dict[str, Any]:
-    """Metadata plus as much prose as a CPU fetch can hold. No model."""
+def fetch_source(url: str, *, get: GetFn | None = None, scope: str = "preview") -> dict[str, Any]:
+    """Metadata plus PDF or page text. ``preview`` stops at eight pages."""
     kind = classify(url)
     getter = get or _http_get
+    window = _scope(scope)
     if kind == "arxiv":
-        return _fetch_arxiv(url, getter)
+        return _fetch_arxiv(url, getter, window)
     if kind in {"biorxiv", "medrxiv"}:
-        return _fetch_rxiv(url, kind, getter)
-    return _fetch_web(url, getter)
+        return _fetch_rxiv(url, kind, getter, window)
+    return _fetch_web(url, getter, window)
+
+
+def summarize_source(source: dict[str, Any]) -> str:
+    """Discussion summary. Cerebras while a call is up; no extract GPU."""
+    body = str(source.get("text") or source.get("abstract") or "").strip()
+    if not body:
+        raise RuntimeError("nothing to summarize")
+    title = str(source.get("title") or source.get("url") or "source")
+    abstract = str(source.get("abstract") or "").strip()
+    prompt = f"Title: {title}\n\nAbstract:\n{abstract}\n\nText:\n{body[:_SUMMARY_INPUT]}"
+    from hsengine.engine.complete import complete
+
+    result = complete(
+        capability="agent",
+        system_prompt=(
+            "Write a discussion summary of this source in a few paragraphs "
+            "of plain prose. Do not invent citations. This is not a GPU extract."
+        ),
+        prompt=prompt,
+        max_tokens=900,
+        temperature=0.2,
+    )
+    text = (result.text or "").strip()
+    if not text:
+        raise RuntimeError("summary came back empty")
+    return text
 
 
 def write_zettel(source: dict[str, Any], *, performer: str, now: datetime | None = None) -> dict[str, Any]:
@@ -243,20 +309,31 @@ def write_zettel(source: dict[str, Any], *, performer: str, now: datetime | None
 
 def zettel_body(source: dict[str, Any], *, performer: str) -> str:
     title = str(source.get("title") or source.get("url") or "source").strip()
+    scope = _scope(str(source.get("scope") or "preview"))
+    heading = title if scope == "preview" else f"{title} (full)"
     url = str(source.get("url") or "")
     kind = str(source.get("kind") or "web")
     abstract = str(source.get("abstract") or "").strip()
     text = str(source.get("text") or "").strip()
+    summary = str(source.get("summary") or "").strip()
     note = str(source.get("note") or "").strip()
+    scope_line = (
+        f"Scope: first {_PDF_PAGES} PDF pages."
+        if scope == "preview"
+        else "Scope: full text and summary."
+    )
     lines = [
-        f"# {title}",
+        f"# {heading}",
         "",
         f"Source: {url}",
         f"Kind: {kind}",
         f"Performer: {performer}",
+        scope_line,
         "Extract: CPU text. Not the Docling extract leaf.",
         "",
     ]
+    if summary:
+        lines.extend(["## Summary", "", summary, ""])
     if abstract:
         lines.extend(["## Abstract", "", abstract, ""])
     if text:
@@ -266,7 +343,18 @@ def zettel_body(source: dict[str, Any], *, performer: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _fetch_arxiv(url: str, get: GetFn) -> dict[str, Any]:
+def _scope(scope: str) -> str:
+    name = (scope or "preview").strip().lower()
+    if name not in SCOPES:
+        raise RuntimeError(f"scope must be preview or full, got {scope!r}")
+    return name
+
+
+def _text_cap(scope: str) -> int:
+    return _PREVIEW_CAP if scope == "preview" else _FULL_CAP
+
+
+def _fetch_arxiv(url: str, get: GetFn, scope: str) -> dict[str, Any]:
     match = _ARXIV_RE.search(url)
     if not match:
         raise RuntimeError(f"not an arXiv url: {url}")
@@ -278,7 +366,7 @@ def _fetch_arxiv(url: str, get: GetFn) -> dict[str, Any]:
     note = ""
     try:
         pdf = get(f"https://arxiv.org/pdf/{paper_id}.pdf")
-        text = _pdf_to_text(pdf)
+        text = _pdf_to_text(pdf, last_page=_PDF_PAGES if scope == "preview" else None)
     except Exception as exc:
         note = f"PDF text unavailable: {exc}"
     if not text:
@@ -286,15 +374,16 @@ def _fetch_arxiv(url: str, get: GetFn) -> dict[str, Any]:
     return {
         "url": abs_url,
         "kind": "arxiv",
+        "scope": scope,
         "title": title or f"arXiv {paper_id}",
         "authors": authors,
         "abstract": abstract,
-        "text": text[:_TEXT_CAP],
+        "text": text[: _text_cap(scope)],
         "note": note,
     }
 
 
-def _fetch_rxiv(url: str, kind: str, get: GetFn) -> dict[str, Any]:
+def _fetch_rxiv(url: str, kind: str, get: GetFn, scope: str) -> dict[str, Any]:
     match = _RXIV_RE.search(url)
     if not match:
         raise RuntimeError(f"not a {kind} url: {url}")
@@ -308,7 +397,7 @@ def _fetch_rxiv(url: str, kind: str, get: GetFn) -> dict[str, Any]:
     note = ""
     try:
         pdf = get(f"https://www.{server}.org/content/{doi}.full.pdf")
-        text = _pdf_to_text(pdf)
+        text = _pdf_to_text(pdf, last_page=_PDF_PAGES if scope == "preview" else None)
     except Exception as exc:
         note = f"PDF text unavailable: {exc}"
     if not text:
@@ -316,35 +405,43 @@ def _fetch_rxiv(url: str, kind: str, get: GetFn) -> dict[str, Any]:
     return {
         "url": f"https://www.{server}.org/content/{doi}",
         "kind": kind,
+        "scope": scope,
         "title": title or doi,
         "abstract": abstract,
-        "text": text[:_TEXT_CAP],
+        "text": text[: _text_cap(scope)],
         "note": note,
     }
 
 
-def _fetch_web(url: str, get: GetFn) -> dict[str, Any]:
+def _fetch_web(url: str, get: GetFn, scope: str) -> dict[str, Any]:
     raw = get(url)
     if raw[:5] == b"%PDF-":
-        text = _pdf_to_text(raw)
+        text = _pdf_to_text(raw, last_page=_PDF_PAGES if scope == "preview" else None)
         return {
             "url": url,
             "kind": "web",
+            "scope": scope,
             "title": _host_title(url),
             "abstract": "",
-            "text": text[:_TEXT_CAP],
+            "text": text[: _text_cap(scope)],
             "note": "" if text else "PDF had no extractable text.",
         }
     html = raw.decode("utf-8", "replace")
     title = _html_title(html) or _host_title(url)
     text = _html_text(html)
+    note = ""
+    if scope == "preview":
+        note = "Not a PDF. The short card is the opening of the page, not eight pages."
+    if not text:
+        note = "Page had no extractable text."
     return {
         "url": url,
         "kind": "web",
+        "scope": scope,
         "title": title,
         "abstract": "",
-        "text": text[:_TEXT_CAP],
-        "note": "" if text else "Page had no extractable text.",
+        "text": text[: _text_cap(scope)],
+        "note": note,
     }
 
 
@@ -391,28 +488,22 @@ def _parse_rxiv(raw: bytes) -> tuple[str, str]:
     return title, abstract
 
 
-def _pdf_to_text(data: bytes) -> str:
+def _pdf_to_text(data: bytes, *, last_page: int | None = _PDF_PAGES) -> str:
     if not data or shutil.which("pdftotext") is None:
         return ""
+    command = ["pdftotext", "-q", "-f", "1"]
+    if last_page is not None:
+        command.extend(["-l", str(last_page)])
+    timeout = _FETCH_TIMEOUT_S if last_page is not None else _FULL_FETCH_TIMEOUT_S
     with tempfile.TemporaryDirectory() as directory:
         pdf = Path(directory) / "source.pdf"
         pdf.write_bytes(data)
+        command.extend(["-enc", "UTF-8", str(pdf), "-"])
         try:
             proc = subprocess.run(
-                [
-                    "pdftotext",
-                    "-q",
-                    "-f",
-                    "1",
-                    "-l",
-                    str(_PDF_PAGES),
-                    "-enc",
-                    "UTF-8",
-                    str(pdf),
-                    "-",
-                ],
+                command,
                 capture_output=True,
-                timeout=_FETCH_TIMEOUT_S,
+                timeout=timeout,
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired):
@@ -499,7 +590,7 @@ def _performer(name: str) -> str:
     return who
 
 
-def _card_title(kind: str, url: str) -> str:
+def _card_title(kind: str, url: str, scope: str) -> str:
     if kind == "arxiv":
         match = _ARXIV_RE.search(url)
         label = match.group(1) if match else url
@@ -508,7 +599,8 @@ def _card_title(kind: str, url: str) -> str:
         label = (match.group("doi") if match else url)[:48]
     else:
         label = _host_title(url)
-    return f"Extract {kind}: {label}"[:80]
+    prefix = "Extract 8 pages" if scope == "preview" else "Full extract and summary"
+    return f"{prefix}: {label}"[:80]
 
 
 def _session(session_id: str) -> str | None:
@@ -530,14 +622,14 @@ def _connect():
     return kanban_db, kbc.connect()
 
 
-def _find_card(key: str) -> dict[str, str] | None:
+def _find_card(key: str, scope: str) -> dict[str, str] | None:
     kanban_db, conn = _connect()
     try:
         with closing(conn):
             row = conn.execute(
                 "SELECT id, status, title FROM tasks WHERE idempotency_key = ? "
                 "AND status != 'archived' ORDER BY created_at DESC LIMIT 1",
-                (f"source-drop:{key}",),
+                (f"source-drop:{key}:{scope}",),
             ).fetchone()
         if row is None:
             return None
@@ -547,12 +639,25 @@ def _find_card(key: str) -> dict[str, str] | None:
         return None
 
 
-def _create_card(*, key: str, title: str, url: str, kind: str, performer: str, session_id: str) -> str:
+def _create_card(
+    *,
+    key: str,
+    title: str,
+    url: str,
+    kind: str,
+    performer: str,
+    session_id: str,
+    scope: str,
+) -> str:
     kanban_db, conn = _connect()
+    if scope == "preview":
+        job = f"First {_PDF_PAGES} PDF pages into a scratch zettel."
+    else:
+        job = "Full text extraction and a discussion summary into a scratch zettel."
     body = (
-        "Source drop from the live call. CPU text extraction into a scratch "
-        "zettel. Does not claim the extract GPU and does not evict thinking.\n\n"
-        f"URL: {url}\nKind: {kind}\nPerformer: {performer}\n"
+        "Source drop from the live call. "
+        f"{job} Does not claim the extract GPU and does not evict thinking.\n\n"
+        f"URL: {url}\nKind: {kind}\nScope: {scope}\nPerformer: {performer}\n"
         f"gpu_tokens: {GPU_TOKENS}\n"
     )
     with closing(conn):
@@ -564,7 +669,7 @@ def _create_card(*, key: str, title: str, url: str, kind: str, performer: str, s
             assignee="grok",
             initial_status="running",
             workspace_kind="scratch",
-            idempotency_key=f"source-drop:{key}",
+            idempotency_key=f"source-drop:{key}:{scope}",
             session_id=_session(session_id),
         )
 

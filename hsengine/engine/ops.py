@@ -1106,14 +1106,14 @@ CEREBRAS_TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "source_drop",
             "description": (
-                "File a dropped arXiv, bioRxiv, medRxiv, or web URL. A kanban "
-                "card is created now; CPU text extraction and the scratch "
-                "zettel continue in the background. Claims no GPU. Do not run "
-                "docling, do not evict thinking, do not use the extract leaf. "
-                "performer=hermes writes the Hermes wiki vault. performer=gaius "
-                "writes the Gaius KB scratch. Default hermes. Speak one "
-                "sentence that the note is being written on the board. Do not "
-                "say the file is written until a later turn shows the card done."
+                "File a dropped arXiv, bioRxiv, medRxiv, or web URL as two kanban "
+                "cards: the first 8 PDF pages, and a full extraction plus "
+                "summary. Both run in the background on CPU. Claims no GPU. "
+                "Do not run docling, do not evict thinking, do not use the "
+                "extract leaf. performer=hermes writes the Hermes wiki vault. "
+                "performer=gaius writes the Gaius KB scratch. Default hermes. "
+                "Speak one sentence that both notes are being written on the "
+                "board. Do not say a file is written until that card is done."
             ),
             "parameters": {
                 "type": "object",

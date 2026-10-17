@@ -47,6 +47,24 @@ def test_gpu_tokens_stay_zero():
     assert drop.GPU_TOKENS == 0
 
 
+def test_preview_pdf_stops_at_eight_pages_and_full_does_not(monkeypatch):
+    seen: dict[str, list[str]] = {}
+
+    def run(cmd, **kwargs):
+        seen["cmd"] = list(cmd)
+        class Proc:
+            returncode = 0
+            stdout = b"page text"
+        return Proc()
+
+    monkeypatch.setattr(drop.subprocess, "run", run)
+    monkeypatch.setattr(drop.shutil, "which", lambda name: "/usr/bin/pdftotext")
+    assert drop._pdf_to_text(b"%PDF-1.4") == "page text"
+    assert seen["cmd"][seen["cmd"].index("-l") + 1] == "8"
+    drop._pdf_to_text(b"%PDF-1.4", last_page=None)
+    assert "-l" not in seen["cmd"]
+
+
 def test_urls_in_keeps_papers_and_skips_localhost():
     text = (
         "look at https://arxiv.org/abs/2402.03300 and "
@@ -89,66 +107,85 @@ def test_fetch_arxiv_uses_the_api_and_stops_at_abstract_without_pdf(monkeypatch)
     assert "PDF" in source["note"]
 
 
-def test_enqueue_writes_hermes_zettel_and_closes_the_card():
+def _fetch(url, scope="preview"):
+    paper = _paper()
+    paper["scope"] = scope
+    if scope == "full":
+        paper["text"] = paper["text"] + " The rest of the paper."
+    return paper
+
+
+def _summary(source):
+    assert source["scope"] == "full"
+    return "The paper is about the replay unit."
+
+
+def test_enqueue_files_preview_and_full_cards():
     filed = drop.enqueue(
         url="https://arxiv.org/abs/2402.03300",
         session_id="cafe",
         performer="hermes",
         spawn=lambda fn: fn(),
-        fetch=lambda url: _paper(),
+        fetch=_fetch,
+        summarize=_summary,
     )
     assert filed["created"] is True
-    assert filed["status"] == "running"
     assert filed["gpu_tokens"] == 0
+    assert [row["scope"] for row in filed["tasks"]] == ["preview", "full"]
+    assert all(row["created"] for row in filed["tasks"])
     from hermes_cli import kanban_db
     from hermes_cli import kanban_db_connect as kbc
 
     kanban_db.init_db()
     with kbc.connect() as conn:
-        row = conn.execute(
-            "SELECT status, result FROM tasks WHERE id = ?", (filed["id"],)
-        ).fetchone()
-        comments = conn.execute(
-            "SELECT body FROM task_comments WHERE task_id = ? ORDER BY id",
-            (filed["id"],),
+        rows = conn.execute(
+            "SELECT id, title, status, result FROM tasks ORDER BY created_at"
         ).fetchall()
-    assert row["status"] == "done"
-    assert "scratch/" in (row["result"] or "")
-    assert any("gpu_tokens=0" in c["body"] for c in comments)
+    assert len(rows) == 2
+    by_title = {row["title"]: row for row in rows}
+    assert any(title.startswith("Extract 8 pages:") for title in by_title)
+    assert any(title.startswith("Full extract and summary:") for title in by_title)
+    assert all(row["status"] == "done" for row in rows)
     from pathlib import Path
     import os
 
-    wiki = Path(os.environ["WIKI_PATH"])
-    notes = list(wiki.glob("scratch/*/*.md"))
-    assert len(notes) == 1
-    body = notes[0].read_text()
-    assert "Replay" in body or "small paper" in body
-    assert "Not the Docling extract leaf" in body
+    notes = list(Path(os.environ["WIKI_PATH"]).glob("scratch/*/*.md"))
+    assert len(notes) == 2
+    bodies = {path.name: path.read_text() for path in notes}
+    preview = next(text for name, text in bodies.items() if "full" not in name)
+    full = next(text for name, text in bodies.items() if "full" in name)
+    assert "first 8 PDF pages" in preview
+    assert "## Summary" not in preview
+    assert "full text and summary" in full
+    assert "replay unit" in full.lower()
 
 
 def test_second_drop_does_not_start_another_extract():
     calls = {"n": 0}
 
-    def fetch(url: str):
+    def fetch(url, scope="preview"):
         calls["n"] += 1
-        return _paper()
+        return _paper(scope=scope)
 
     first = drop.enqueue(
         url="https://arxiv.org/pdf/2402.03300.pdf",
         performer="hermes",
         spawn=lambda fn: fn(),
         fetch=fetch,
+        summarize=lambda source: "same paper",
     )
     second = drop.enqueue(
         url="https://arxiv.org/abs/2402.03300",
         performer="hermes",
         spawn=lambda fn: (_ for _ in ()).throw(AssertionError("respawned")),
         fetch=fetch,
+        summarize=lambda source: "same paper",
     )
     assert first["created"] is True
+    assert len(first["tasks"]) == 2
     assert second["created"] is False
-    assert second["id"] == first["id"]
-    assert calls["n"] == 1
+    assert {row["id"] for row in second["tasks"]} == {row["id"] for row in first["tasks"]}
+    assert calls["n"] == 2
 
 
 def test_gaius_performer_writes_kb_scratch(tmp_path, monkeypatch):
@@ -170,17 +207,19 @@ def test_failed_fetch_blocks_the_card():
         url="https://example.com/paper",
         performer="hermes",
         spawn=lambda fn: fn(),
-        fetch=lambda url: (_ for _ in ()).throw(RuntimeError("origin down")),
+        fetch=lambda url, scope="preview": (_ for _ in ()).throw(RuntimeError("origin down")),
+        summarize=lambda source: "unused",
     )
     from hermes_cli import kanban_db
     from hermes_cli import kanban_db_connect as kbc
 
     kanban_db.init_db()
     with kbc.connect() as conn:
-        status = conn.execute(
-            "SELECT status FROM tasks WHERE id = ?", (filed["id"],)
-        ).fetchone()["status"]
-    assert status == "blocked"
+        statuses = [
+            row["status"]
+            for row in conn.execute("SELECT status FROM tasks").fetchall()
+        ]
+    assert statuses == ["blocked", "blocked"]
 
 
 def test_dispatch_source_drop_returns_the_card(monkeypatch):
