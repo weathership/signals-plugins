@@ -109,8 +109,9 @@ def test_preprint_url_variants_share_one_key_and_servers_stay_apart():
     assert not drop.needs_pdf_approval(med[0], "medrxiv")
     assert drop.needs_pdf_approval("https://example.com/2402.03300.pdf", "web")
     assert drop.pdf_url_for(med[2], "medrxiv") == (
-        "https://www.medrxiv.org/content/10.1101/2024.02.02.654321.full.pdf"
+        "https://www.medrxiv.org/content/10.1101/2024.02.02.654321v1.full.pdf"
     )
+    assert drop.drop_key(med[2]) == drop.drop_key(med[0])
 
 
 def test_fetch_arxiv_uses_the_api_and_stops_at_abstract_without_pdf(monkeypatch):

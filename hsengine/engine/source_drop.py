@@ -137,11 +137,18 @@ def drop_key(url: str) -> str:
     return f"web:{clean}"
 
 
-def _rxiv_doi(url: str) -> str:
+def _rxiv_doi(url: str, *, keep_version: bool = False) -> str:
+    """DOI for a card key, or with its ``vN`` kept for the PDF fetch.
+
+    bioRxiv and medRxiv serve the file at ``.../<doi>vN.full.pdf``. The
+    unversioned URL redirects, and Mistral will not follow that redirect.
+    The card key still drops the version so v1 and v2 are one preprint.
+    """
     match = _RXIV_RE.search(url or "")
     doi = (match.group("doi") if match else url).rstrip(".").lower()
-    doi = re.sub(r"(?:\.full)?(?:\.pdf)?$", "", doi)
-    doi = re.sub(r"v\d+$", "", doi)
+    doi = re.sub(r"(?:\.full)?(?:[-_]text)?(?:\.pdf)?$", "", doi)
+    if not keep_version:
+        doi = re.sub(r"v\d+$", "", doi)
     return doi
 
 
@@ -400,7 +407,7 @@ def pdf_url_for(url: str, kind: str) -> str:
         return f"https://arxiv.org/pdf/{match.group(1)}.pdf"
     if kind in {"biorxiv", "medrxiv"}:
         server = "biorxiv" if kind == "biorxiv" else "medrxiv"
-        return f"https://www.{server}.org/content/{_rxiv_doi(url)}.full.pdf"
+        return f"https://www.{server}.org/content/{_rxiv_doi(url, keep_version=True)}.full.pdf"
     raise RuntimeError(
         f"Mistral document analysis is limited to arXiv, bioRxiv, and medRxiv, got {kind}"
     )
@@ -682,7 +689,7 @@ def _fetch_arxiv(url: str, get: GetFn, scope: str) -> dict[str, Any]:
 def _fetch_rxiv(url: str, kind: str, get: GetFn, scope: str) -> dict[str, Any]:
     if not _RXIV_RE.search(url or ""):
         raise RuntimeError(f"not a {kind} url: {url}")
-    doi = _rxiv_doi(url)
+    doi = _rxiv_doi(url, keep_version=True)
     server = "biorxiv" if kind == "biorxiv" else "medrxiv"
     raw = get(f"https://api.biorxiv.org/details/{server}/{doi}")
     title, abstract = _parse_rxiv(raw)
