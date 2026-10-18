@@ -541,6 +541,7 @@ def mistral_preprint_postures() -> dict[str, str]:
     """Lattice sees the vendor; the Mistral UI sees the Signals names."""
     return {
         "mistral.paper_workflow": "signals-preprint-analysis",
+        "mistral.system_one_workflow": "signals-system-one",
         "signals.deployment": "signals-preprints",
         "signals.workflow": "signals-preprint-analysis",
     }

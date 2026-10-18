@@ -271,6 +271,8 @@ def test_offer_answers_a_recvonly_peer(tmp_path, monkeypatch):
     monkeypatch.setattr("hsengine.engine.interactive.enter_async", _noop)
     monkeypatch.setattr("hsengine.engine.interactive.leave_async", _noop)
     monkeypatch.setattr("hsengine.engine.webrtc_stt.stt_available", lambda: True)
+    monkeypatch.setattr("hsengine.engine.sdg_session.begin", lambda *a, **k: None)
+    monkeypatch.setattr("hsengine.engine.sdg_session.end", lambda *a, **k: None)
 
     async def _run():
         from aiortc import RTCConfiguration, RTCPeerConnection

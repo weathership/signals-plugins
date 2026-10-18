@@ -194,6 +194,9 @@ class WebRtcHub:
         from hsengine.engine import session_history
 
         session_history.open_session(session_id)
+        from hsengine.engine.sdg_session import begin
+
+        begin(session_id, session_history.hermes_session_id(session_id))
         aid = (agenda_id or "").strip()
         if aid:
             self._agenda[session_id] = aid
@@ -543,6 +546,9 @@ class WebRtcHub:
         return True
 
     async def _drop(self, session_id: str) -> None:
+        from hsengine.engine.sdg_session import end
+
+        end(session_id)
         for task in self._tasks.pop(session_id, []):
             task.cancel()
         from hsengine.engine import webrtc_viz

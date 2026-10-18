@@ -66,14 +66,14 @@ def attach(message_text: str, links: list[dict], *, workflow_name: str = "", del
     return {"links": stamped, "text_len": len(message_text or "")}
 
 
-def stamp_message(db: Any, session_id: str, content: str, metadata: dict) -> bool:
-    """Write the links onto the assistant row. A missing writer returns false."""
+def stamp_message(db: Any, session_id: str, content: str, metadata: dict, *, role: str = "assistant") -> bool:
+    """Write the links onto the row that holds this text. A missing writer returns false."""
 
     writer = getattr(db, "set_latest_matching_message_display_kind", None)
     if writer is None:
         return False
     try:
-        return bool(writer(session_id, role="assistant", content=content, display_kind=DISPLAY_KIND, display_metadata=metadata))
+        return bool(writer(session_id, role=role, content=content, display_kind=DISPLAY_KIND, display_metadata=metadata))
     except Exception:
         log.warning("sdg link stamp failed", exc_info=True)
         return False

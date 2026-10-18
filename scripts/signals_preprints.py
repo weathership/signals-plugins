@@ -130,10 +130,110 @@ class SignalsPreprints:
         return await signals_preprints_analyze(paper.url, paper.kind)
 
 
+SYSTEM_ONE_NAME = "signals-system-one"
+_CHAT_URL = "https://api.mistral.ai/v1/chat/completions"
+_SYSTEM_ONE_MODEL = "mistral-small-latest"
+
+
+def signals_system_one_read(text: str, genus_iri: str, genus_code: str, genus_label: str) -> dict:
+    """Confirm the aperture genus for one span. A different IRI is not invented."""
+    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("no Mistral credential for signals-system-one")
+    payload = {
+        "model": _SYSTEM_ONE_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "The aperture admitted this span under one genus. "
+                    "If the span is about that genus, sdg_iri is the genus IRI and "
+                    "confidence is between 0 and 1. If it is not, sdg_iri is empty and "
+                    "confidence is 0. note is one sentence. Do not invent a different IRI.\n\n"
+                    f"genus_iri: {genus_iri}\n"
+                    f"genus_code: {genus_code}\n"
+                    f"genus_label: {genus_label}\n"
+                    f"span:\n{text}"
+                ),
+            }
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "system_one",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "sdg_iri": {"type": "string"},
+                        "confidence": {"type": "number"},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["sdg_iri", "confidence", "note"],
+                },
+            },
+        },
+    }
+    request = urllib.request.Request(
+        _CHAT_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError(f"Mistral chat HTTP {exc.code}: {detail}") from exc
+    content = str(((body.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+    try:
+        parsed = json.loads(content) if content.strip() else {}
+    except json.JSONDecodeError:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    return {
+        "sdg_iri": str(parsed.get("sdg_iri") or ""),
+        "confidence": parsed.get("confidence"),
+        "note": str(parsed.get("note") or ""),
+        "offered": [genus_iri] if genus_iri else [],
+    }
+
+
+class SignalsSystemOneInput(BaseModel):
+    text: str
+    genus_iri: str
+    genus_code: str = ""
+    genus_label: str = ""
+
+
+@workflows.activity()
+async def signals_system_one_analyze(text: str, genus_iri: str, genus_code: str, genus_label: str) -> dict:
+    return signals_system_one_read(text, genus_iri, genus_code, genus_label)
+
+
+@workflows.workflow.define(
+    name=SYSTEM_ONE_NAME,
+    workflow_display_name="Signals system one",
+    workflow_description="Confirm an aperture genus for one AgentRTC span.",
+    search_keys=["genus_iri", "genus_code"],
+)
+class SignalsSystemOne:
+    @workflows.workflow.entrypoint
+    async def run(self, item: SignalsSystemOneInput) -> dict:
+        return await signals_system_one_analyze(item.text, item.genus_iri, item.genus_code, item.genus_label)
+
+
 def main() -> None:
     import asyncio
 
-    asyncio.run(workflows.run_worker([SignalsPreprints]))
+    asyncio.run(workflows.run_worker([SignalsPreprints, SignalsSystemOne]))
 
 
 if __name__ == "__main__":

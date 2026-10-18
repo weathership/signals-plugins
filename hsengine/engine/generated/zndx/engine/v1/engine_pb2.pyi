@@ -1359,3 +1359,37 @@ class AnnounceAck(_message.Message):
     ttl_seconds: int
     error: str
     def __init__(self, accepted: _Optional[bool] = ..., ttl_seconds: _Optional[int] = ..., error: _Optional[str] = ...) -> None: ...
+
+class SessionText(_message.Message):
+    __slots__ = ("session_id", "seq", "text", "end")
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    SEQ_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    END_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    seq: int
+    text: str
+    end: bool
+    def __init__(self, session_id: _Optional[str] = ..., seq: _Optional[int] = ..., text: _Optional[str] = ..., end: _Optional[bool] = ...) -> None: ...
+
+class SegmentAdmission(_message.Message):
+    __slots__ = ("session_id", "seq", "start", "end", "genus_iri", "genus_code", "genus_label", "rel_margin_h", "tau")
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    SEQ_FIELD_NUMBER: _ClassVar[int]
+    START_FIELD_NUMBER: _ClassVar[int]
+    END_FIELD_NUMBER: _ClassVar[int]
+    GENUS_IRI_FIELD_NUMBER: _ClassVar[int]
+    GENUS_CODE_FIELD_NUMBER: _ClassVar[int]
+    GENUS_LABEL_FIELD_NUMBER: _ClassVar[int]
+    REL_MARGIN_H_FIELD_NUMBER: _ClassVar[int]
+    TAU_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    seq: int
+    start: int
+    end: int
+    genus_iri: str
+    genus_code: str
+    genus_label: str
+    rel_margin_h: float
+    tau: float
+    def __init__(self, session_id: _Optional[str] = ..., seq: _Optional[int] = ..., start: _Optional[int] = ..., end: _Optional[int] = ..., genus_iri: _Optional[str] = ..., genus_code: _Optional[str] = ..., genus_label: _Optional[str] = ..., rel_margin_h: _Optional[float] = ..., tau: _Optional[float] = ...) -> None: ...

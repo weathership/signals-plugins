@@ -426,6 +426,62 @@ def pdf_url_for(url: str, kind: str) -> str:
     )
 
 
+SYSTEM_ONE_WORKFLOW = "signals-system-one"
+
+
+def system_one_name(home: Path | None = None) -> str:
+    """Mistral workflow that confirms an aperture genus. Empty disables the call."""
+    explicit = os.environ.get("SIGNALS_SYSTEM_ONE_WORKFLOW", "").strip()
+    if explicit:
+        return explicit
+    root = home
+    if root is None:
+        raw = os.environ.get("HERMES_HOME", "").strip()
+        root = Path(raw).expanduser() if raw else None
+    if root is None:
+        return SYSTEM_ONE_WORKFLOW
+    path = root / "config.yaml"
+    if not path.is_file():
+        return SYSTEM_ONE_WORKFLOW
+    found = _yaml_scalar(path.read_text(encoding="utf-8", errors="replace"), ("mistral", "system_one_workflow"))
+    return found or SYSTEM_ONE_WORKFLOW
+
+
+def run_system_one(text: str, link: dict[str, Any]) -> dict[str, Any] | None:
+    """Execute signals-system-one on one admitted slice. The genus is the only offered IRI."""
+    if not mistral_preprint_urgent():
+        return None
+    genus = str(link.get("genus_iri") or "")
+    if not text or not genus:
+        return None
+    name = system_one_name()
+    if not name:
+        return None
+    try:
+        done = execute_workflow(
+            name,
+            {
+                "text": text,
+                "genus_iri": genus,
+                "genus_code": str(link.get("genus_code") or ""),
+                "genus_label": str(link.get("genus_label") or ""),
+            },
+            wait=True,
+        )
+    except Exception:
+        log.warning("system-one workflow %s failed", name, exc_info=True)
+        return None
+    result = done.get("result") if isinstance(done, dict) else None
+    if not isinstance(result, dict):
+        return None
+    confidence = result.get("confidence")
+    return {
+        "sdg_iri": str(result.get("sdg_iri") or ""),
+        "confidence": confidence,
+        "offered": [genus],
+    }
+
+
 def signals_preprints_name(home: Path | None = None) -> str:
     """Name of the deployed Mistral workflow, or empty when unset.
 

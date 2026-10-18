@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs the signals-preprints deployment for signals-preprint-analysis.
+# Runs the signals-preprints deployment for signals-preprint-analysis
+# and signals-system-one.
 # The SDK lives in its own venv. It is not installed into the Hermes lock:
 # mistralai-workflows needs mistralai>=2.9, and Hermes pins mistralai==2.4.8.
 set -euo pipefail

@@ -44,6 +44,11 @@ class EngineStub:
                 request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideRequest.SerializeToString,
                 response_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideResponse.FromString,
                 _registered_method=True)
+        self.AdmitSession = channel.stream_stream(
+                '/zndx.engine.v1.Engine/AdmitSession',
+                request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.SessionText.SerializeToString,
+                response_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.SegmentAdmission.FromString,
+                _registered_method=True)
         self.Status = channel.unary_unary(
                 '/zndx.engine.v1.Engine/Status',
                 request_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.StatusRequest.SerializeToString,
@@ -106,6 +111,17 @@ class EngineServicer:
         and calling Complete with capability "decisions" is FAILED_PRECONDITION
         #EP.00000022.NOTTEXT. The caller does not name a model.
         (added 2026-10-11, gaius — additive v1.)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AdmitSession(self, request_iterator, context):
+        """Stream an AgentRTC transcript. The caller appends new characters.
+        This engine windows them and streams back only the qualified genus
+        spans, as character offsets into the concatenation. The text is not
+        echoed. Engines that do not hold the aperture return UNIMPLEMENTED.
+        (added 2026-10-18, aegir — additive v1.)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -217,6 +233,11 @@ def add_EngineServicer_to_server(servicer, server):
                     request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideRequest.FromString,
                     response_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.DecideResponse.SerializeToString,
             ),
+            'AdmitSession': grpc.stream_stream_rpc_method_handler(
+                    servicer.AdmitSession,
+                    request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.SessionText.FromString,
+                    response_serializer=zndx_dot_engine_dot_v1_dot_engine__pb2.SegmentAdmission.SerializeToString,
+            ),
             'Status': grpc.unary_unary_rpc_method_handler(
                     servicer.Status,
                     request_deserializer=zndx_dot_engine_dot_v1_dot_engine__pb2.StatusRequest.FromString,
@@ -312,6 +333,33 @@ class Engine:
             '/zndx.engine.v1.Engine/Decide',
             zndx_dot_engine_dot_v1_dot_engine__pb2.DecideRequest.SerializeToString,
             zndx_dot_engine_dot_v1_dot_engine__pb2.DecideResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AdmitSession(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_stream(
+            request_iterator,
+            target,
+            '/zndx.engine.v1.Engine/AdmitSession',
+            zndx_dot_engine_dot_v1_dot_engine__pb2.SessionText.SerializeToString,
+            zndx_dot_engine_dot_v1_dot_engine__pb2.SegmentAdmission.FromString,
             options,
             channel_credentials,
             insecure,

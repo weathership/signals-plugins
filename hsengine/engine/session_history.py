@@ -145,6 +145,21 @@ def record_turn(
             db.append_message(sid, "assistant", asst_text, finish_reason="stop")
     except Exception:
         log.warning("agent-rtc history record failed", exc_info=True)
+        return
+    _note_aperture(webrtc_id, sid, user_text, asst_text)
+
+
+def _note_aperture(webrtc_id: str, hermes_id: str, user_text: str, asst_text: str) -> None:
+    """Hand new characters to an open aperture stream. A missing stream is a no-op."""
+    try:
+        from hsengine.engine.sdg_session import note
+
+        if user_text:
+            note(webrtc_id, hermes_id, "user", user_text)
+        if asst_text:
+            note(webrtc_id, hermes_id, "assistant", asst_text)
+    except Exception:
+        log.debug("aperture note skipped", exc_info=True)
 
 
 def _clip(text: str, n: int) -> str:

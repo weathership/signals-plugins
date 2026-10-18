@@ -104,6 +104,7 @@ def test_catalogue_is_the_interactive_workflow_declared_by_the_engine():
     assert coordination.MISTRAL_QUEUE == "root.external.token-metered"
     assert mistral.postures["signals.deployment"] == "signals-preprints"
     assert mistral.postures["mistral.paper_workflow"] == "signals-preprint-analysis"
+    assert mistral.postures["mistral.system_one_workflow"] == "signals-system-one"
     assert e.kind == coordination.KIND_INTERACTIVE == "interactive_session"
     assert e.source == "engine" and e.runner == "interactive"
     assert e.cron == "" and e.airflow_dag_id == "" and e.enabled is True
@@ -130,6 +131,7 @@ def test_mistral_catalogue_matches_the_declared_activity(signals):
     assert list(req.precludes) == []
     assert dict(req.postures)["signals.deployment"] == "signals-preprints"
     assert dict(req.postures)["mistral.paper_workflow"] == "signals-preprint-analysis"
+    assert dict(req.postures)["mistral.system_one_workflow"] == "signals-system-one"
 
 
 def test_catalogue_claims_match_what_declare_interactive_puts_on_the_activity(signals):
