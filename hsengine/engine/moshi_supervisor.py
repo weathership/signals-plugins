@@ -71,6 +71,23 @@ def _wrap_bin() -> Path:
     return devenv_root() / ".devenv" / "profile" / "bin" / "moshi-server"
 
 
+def python311_lib(python: Path) -> Path | None:
+    """Directory of libpython3.11.so.1.0 next to a Nix Python 3.11 interpreter."""
+    try:
+        lib = python.resolve().parent.parent / "lib"
+    except OSError:
+        return None
+    if (lib / "libpython3.11.so.1.0").is_file():
+        return lib
+    return None
+
+
+def _has_libpython311(text: str) -> bool:
+    # `python3.11` is also the TTS site-packages directory and does not
+    # contain libpython3.11.so.1.0. Match the SONAME or the Nix package.
+    return "libpython3.11" in text or "python3-3.11" in text
+
+
 def _ld_library_path(torch_lib: Path | None) -> str:
     """Same layout as the devenv moshi-server wrap: nvidia + CUDA + Nix libs + torch."""
     nvidia = devenv_root() / ".devenv" / "nvidia-libs"
@@ -89,6 +106,12 @@ def _ld_library_path(torch_lib: Path | None) -> str:
         pass
     if torch_lib is not None and torch_lib.is_dir():
         parts.append(str(torch_lib))
+    # A wrap generated before python311 was restored only has libpython3.14.
+    # The TTS venv's interpreter is the Nix 3.11 the ELF was linked against.
+    if not _has_libpython311(":".join(parts)):
+        lib = python311_lib(devenv_root() / ".devenv" / "state" / "tts-venv" / "bin" / "python3.11")
+        if lib is not None:
+            parts.append(str(lib))
     return ":".join(parts)
 
 _mu = threading.Lock()
