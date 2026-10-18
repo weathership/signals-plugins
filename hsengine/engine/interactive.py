@@ -609,6 +609,9 @@ def enter(owner: str = "webrtc") -> None:
         "agent-rtc interactive posture on (activity %s declared; YK claims asserted while RUNNING)",
         lease.activity_id,
     )
+    from hsengine.engine.signals_preprints_session import reconcile
+
+    reconcile()
 
 
 def leave(outcome: str = "hangup") -> None:
@@ -623,6 +626,9 @@ def leave(outcome: str = "hangup") -> None:
     if lease is not None:
         lease.release(outcome)
     log.info("agent-rtc interactive posture off; activity released — peers restore their desired sets")
+    from hsengine.engine.signals_preprints_session import reconcile
+
+    reconcile()
 
 
 async def enter_async(owner: str = "webrtc") -> None:

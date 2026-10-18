@@ -38,6 +38,10 @@ def test_server_query_lists_mistral_for_every_peer(monkeypatch, tmp_path):
 
 def test_document_analyze_starts_a_workflow_execution_and_writes_the_wiki(monkeypatch, tmp_path):
     _silence(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "hsengine.engine.signals_preprints_session.urgent",
+        lambda: True,
+    )
     (tmp_path / ".env").write_text("MISTRAL_API_KEY=super-secret\n", encoding="utf-8")
     monkeypatch.setattr(drop, "signals_preprints_name", lambda home=None: "signals-preprint-analysis")
     seen = {}
@@ -106,6 +110,10 @@ def test_other_pdf_fails_the_call(monkeypatch, tmp_path):
 
 def test_workflow_execute_sends_the_public_pdf(monkeypatch, tmp_path):
     _silence(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "hsengine.engine.signals_preprints_session.urgent",
+        lambda: True,
+    )
     (tmp_path / ".env").write_text("MISTRAL_API_KEY=super-secret\n", encoding="utf-8")
     seen = {}
 

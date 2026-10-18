@@ -168,7 +168,8 @@ def _analysis(url, kind="arxiv"):
     }
 
 
-def test_enqueue_files_preview_and_full_cards():
+def test_enqueue_files_preview_and_full_cards(monkeypatch):
+    monkeypatch.setattr(drop, "mistral_preprint_urgent", lambda: True)
     when = datetime(2026, 10, 17, 18, 4, 5, tzinfo=timezone.utc)
     filed = drop.enqueue(
         url="https://arxiv.org/abs/2402.03300",
@@ -216,7 +217,8 @@ def test_enqueue_files_preview_and_full_cards():
     assert "Full OCR markdown." in full
 
 
-def test_second_drop_does_not_start_another_extract():
+def test_second_drop_does_not_start_another_extract(monkeypatch):
+    monkeypatch.setattr(drop, "mistral_preprint_urgent", lambda: True)
     calls = {"fetch": 0, "analyze": 0}
 
     def fetch(url, scope="preview"):
@@ -365,7 +367,8 @@ def test_a_second_drop_with_approval_runs_the_blocked_pdf():
     assert statuses == ["done", "done"]
 
 
-def test_medrxiv_variants_share_one_curated_note():
+def test_medrxiv_variants_share_one_curated_note(monkeypatch):
+    monkeypatch.setattr(drop, "mistral_preprint_urgent", lambda: True)
     when = datetime(2026, 10, 17, 19, 1, 2, tzinfo=timezone.utc)
     calls = {"n": 0}
     page = "https://www.medrxiv.org/content/10.1101/2024.02.02.654321"
@@ -433,7 +436,37 @@ def test_mistral_request_is_the_public_pdf_and_keeps_the_key_out_of_the_body(mon
         drop.mistral_analyze("https://example.com/note.pdf", kind="web")
 
 
+def test_quiet_preprint_goes_to_gaius_not_mistral(monkeypatch):
+    monkeypatch.setattr(drop, "mistral_preprint_urgent", lambda: False)
+    seen = {}
+
+    def handoff(url, kind):
+        seen["url"] = url
+        seen["kind"] = kind
+        return {"provider": "gaius", "resource": "gaius-docling:2402.03300", "kind": kind, "url": url}
+
+    monkeypatch.setattr(drop, "gaius_preprint", handoff)
+    monkeypatch.setattr(
+        drop,
+        "start_signals_preprints",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("mistral")),
+    )
+    filed = drop.enqueue(
+        url="https://arxiv.org/abs/2402.03300",
+        spawn=lambda fn: fn(),
+        fetch=_fetch,
+        analyze=_analysis,
+    )
+    assert seen == {"url": "https://arxiv.org/abs/2402.03300", "kind": "arxiv"}
+    assert filed["tasks"][1]["scope"] == "full"
+    from pathlib import Path
+    import os
+
+    assert list(Path(os.environ["WIKI_PATH"]).glob("current/kb/arXiv/*.md")) == []
+
+
 def test_named_workflow_writes_the_kb_note_from_the_execution(monkeypatch):
+    monkeypatch.setattr(drop, "mistral_preprint_urgent", lambda: True)
     monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "signals-preprint-analysis")
     seen = {}
 
@@ -485,6 +518,7 @@ def test_workflow_execute_sends_the_public_pdf(monkeypatch):
 
 
 def test_missing_workflow_falls_back_to_inline_ocr(monkeypatch):
+    monkeypatch.setattr(drop, "mistral_preprint_urgent", lambda: True)
     monkeypatch.setenv("MISTRAL_PAPER_WORKFLOW", "signals-preprint-analysis")
 
     def start(name, url, kind):

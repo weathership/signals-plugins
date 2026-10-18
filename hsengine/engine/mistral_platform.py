@@ -97,6 +97,19 @@ def _event(call_id: str, seq: int, **fields: Any) -> ppb.PlatformEvent:
 def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     from hsengine.engine import source_drop as drop
 
+    from hsengine.engine.signals_preprints_session import urgent
+
+    if product == "document" and verb == "analyze" and not urgent():
+        url = str(payload.get("url") or "").strip()
+        if not url:
+            raise ValueError("document.analyze requires input_json.url")
+        kind = str(payload.get("kind") or "").strip() or drop.classify(url)
+        if kind not in drop._CURATED:
+            raise ValueError(
+                "document.analyze accepts an arXiv, bioRxiv, or medRxiv URL"
+            )
+        handed = drop.gaius_preprint(url, kind)
+        return handed
     secret = api_key()
     if not secret:
         raise RuntimeError("MISTRAL_API_KEY is unset")
@@ -129,6 +142,10 @@ def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any])
             "wiki": written.get("relpath") or "",
         }
     if product == "workflow" and verb == "execute":
+        if not urgent():
+            raise RuntimeError(
+                "Mistral preprint workflow runs only during an active AgentRTC session"
+            )
         name = str(payload.get("name") or "").strip() or drop.signals_preprints_name()
         if not name:
             raise ValueError("workflow.execute requires input_json.name")
@@ -162,10 +179,13 @@ def _dispatch(product: str, verb: str, foreign_id: str, payload: dict[str, Any])
 
 def iter_call(request: ppb.PlatformCall) -> Iterator[ppb.PlatformEvent]:
     """One platform call. Yields accepted, deliverable, done. No credential."""
-    if not hosted():
-        raise RuntimeError("MISTRAL_API_KEY is unset")
+    from hsengine.engine.signals_preprints_session import urgent
+
     product = (request.product or "").strip()
     verb = (request.verb or "").strip()
+    quiet_gaius = product == "document" and verb == "analyze" and not urgent()
+    if not quiet_gaius and not hosted():
+        raise RuntimeError("MISTRAL_API_KEY is unset")
     if not product or not verb:
         raise ValueError("product and verb are required")
     call_id = (request.call_id or "").strip() or f"call-{_now_ms()}"

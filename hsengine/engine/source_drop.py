@@ -328,8 +328,10 @@ def _run(
     ikey = f"{key}:{scope}"
     try:
         curated = scope == "full" and kind in _CURATED
-        if curated:
+        if curated and mistral_preprint_urgent():
             note = f"Mistral document analysis of {url}. The note lands in current/kb."
+        elif curated:
+            note = f"Gaius docling of {url} on local GPUs. No Mistral call."
         elif scope == "preview":
             note = f"Fetching the first {_PDF_PAGES} PDF pages of {url} on CPU."
         else:
@@ -340,6 +342,12 @@ def _run(
         )
         if curated:
             source = _curated_source(url, kind, analyze, task_id)
+            if source.get("provider") == "gaius":
+                rel = str(source.get("resource") or "")
+                _comment(task_id, f"Gaius owns {rel}.")
+                _complete(task_id, rel or "gaius")
+                log.info("source drop %s %s %s -> %s", performer, scope, key, rel)
+                return
             source["scope"] = "full"
             written = write_kb(source, now=now)
         else:
@@ -443,12 +451,64 @@ def signals_preprints_name(home: Path | None = None) -> str:
     return _yaml_scalar(path.read_text(encoding="utf-8", errors="replace"), ("mistral", "paper_workflow"))
 
 
+def mistral_preprint_urgent() -> bool:
+    """True only while an AgentRTC session is up. That is the Mistral window."""
+    from hsengine.engine.signals_preprints_session import urgent
+
+    return urgent()
+
+
+def gaius_preprint(url: str, kind: str) -> dict[str, Any]:
+    """Hand the preprint to Gaius docling on local GPUs. No Mistral call."""
+    root = Path(os.environ.get("GAIUS_ROOT", "")).expanduser()
+    if not str(root):
+        raise RuntimeError("GAIUS_ROOT is unset; Gaius preprint extract has nowhere to run")
+    python = next(
+        (root / rel for rel in (".venv/bin/python", "venv/bin/python") if (root / rel).is_file()),
+        None,
+    )
+    if python is None:
+        raise RuntimeError(f"no Gaius interpreter under {root}")
+    pdf = pdf_url_for(url, kind) if kind != "arxiv" else url
+    flag = "--arxiv_url" if kind == "arxiv" else "--source_url"
+    cmd = [
+        str(python),
+        "-m",
+        "gaius.flows.docling.flow",
+        "run",
+        flag,
+        pdf,
+        "--enable_topics",
+        "False",
+        "--enable_scoring",
+        "False",
+    ]
+    log.info("gaius preprint %s %s", kind, pdf)
+    completed = subprocess.run(cmd, cwd=str(root), check=False, capture_output=True, text=True)
+    if completed.returncode != 0:
+        tail = (completed.stderr or completed.stdout or "")[-400:]
+        raise RuntimeError(f"Gaius docling exited {completed.returncode}: {tail}")
+    return {
+        "provider": "gaius",
+        "url": pdf,
+        "kind": kind,
+        "resource": f"gaius-docling:{pdf}",
+    }
+
+
 def _curated_source(
     url: str,
     kind: str,
     analyze: Callable[..., dict[str, Any]],
     task_id: str,
 ) -> dict[str, Any]:
+    if not mistral_preprint_urgent():
+        _comment(
+            task_id,
+            "No AgentRTC session. Gaius extracts this preprint on local GPUs. "
+            "Mistral runs only while a call is up.",
+        )
+        return gaius_preprint(url, kind)
     name = signals_preprints_name()
     if not name:
         return dict(analyze(url, kind=kind))

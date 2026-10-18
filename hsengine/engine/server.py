@@ -332,6 +332,9 @@ async def serve() -> None:
     host = get_str("hermes.engine.grpc.host")
     port = get_int("hermes.engine.grpc.port")
     s2s.stamp_running_sha()
+    from hsengine.engine.signals_preprints_session import reconcile
+
+    reconcile()
 
     server = grpc.aio.server()
     init_bus()
