@@ -324,7 +324,9 @@ async def _run_user_utterance(
             spoken=spoken or "",
         )
         return spoken or ""
-    system_prompt = apply_steer_system(ripley_spoken_system(), pending_steer)
+    from hsengine.engine.sdg_session import with_grounded
+
+    system_prompt = with_grounded(apply_steer_system(ripley_spoken_system(), pending_steer), session_id)
     try:
         from hsengine.engine.hicks import board_aside
 

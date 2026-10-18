@@ -72,6 +72,12 @@ def apply_span(span: dict, admission: dict, *, workflow_name: str, run: Callable
     except Exception:
         log.warning("system-one workflow failed", exc_info=True)
     fresh = attach(span["text"], links, workflow_name=name, deliverable=deliverable)["links"]
+    if deliverable is None:
+        for row in fresh:
+            row["aperture_only"] = True
+    elif not any(row.get("sdg.iri") for row in fresh):
+        for row in fresh:
+            row["declined"] = True
     merged = list(span.get("links") or []) + fresh
     return {"links": merged, "text_len": len(span["text"])}
 
@@ -153,7 +159,10 @@ class _Stream:
             try:
                 channel, stub = dial_fn(chosen)
                 for row in stub.AdmitSession(self.frames()):
-                    self._apply(_admission(row))
+                    # Mistral runs beside the stream so the next frame is not stuck behind it.
+                    threading.Thread(
+                        target=self._apply, args=(_admission(row),), name=f"system-one-{self.webrtc_id}", daemon=True,
+                    ).start()
             except Exception as exc:
                 self.error = None if unimplemented(exc) else exc
                 if self.error is not None:
@@ -182,6 +191,40 @@ class _Stream:
                 span["links"] = meta["links"]
                 stamped = {"links": list(span["links"]), "text_len": len(span["text"])}
             _stamp(self.hermes_id, span["role"], span["text"], stamped)
+
+
+def grounded_text(webrtc_id: str) -> str:
+    """Terms the live turn should consider. A declined genus is left out."""
+
+    stream = _LIVE.get(webrtc_id)
+    if stream is None:
+        return ""
+    with stream._mu:
+        spans = [dict(span) for span in stream.spans]
+    lines: list[str] = []
+    for span in spans:
+        for link in span.get("links") or []:
+            if link.get("declined"):
+                continue
+            if not link.get("sdg.iri") and not link.get("aperture_only"):
+                continue
+            label = str(link.get("genus_label") or "").strip()
+            if not label:
+                continue
+            piece = slice_for_mistral(str(span.get("text") or ""), link).strip()
+            if not piece:
+                continue
+            lines.append(f"- {label}: {piece}")
+    if not lines:
+        return ""
+    return "Ontology terms grounded in this call:\n" + "\n".join(lines[:8])
+
+
+def with_grounded(system_prompt: str, webrtc_id: str) -> str:
+    extra = grounded_text(webrtc_id)
+    if not extra:
+        return system_prompt
+    return (system_prompt or "").rstrip() + "\n\n" + extra
 
 
 def begin(webrtc_id: str, hermes_id: str, *, target: str = "", dial_fn: Callable[[str], Any] | None = None) -> None:

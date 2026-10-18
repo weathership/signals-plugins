@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import time
+
 import grpc
 from hermes_state import SessionDB
 
@@ -63,6 +65,10 @@ def test_new_characters_keep_rising_seq_and_end_flushes() -> None:
         sdg_session.end("call")
         assert stream.thread is not None
         stream.thread.join(timeout=2)
+        for _ in range(40):
+            if calls:
+                break
+            time.sleep(0.05)
         assert seen == [(1, "xxxx", False), (2, "HELLO", False), (3, "", True)]
         assert calls == ["HELLO"]
     finally:
@@ -114,6 +120,52 @@ def test_a_refused_genus_does_not_invent_an_iri() -> None:
     span = {"start": 0, "end": 5, "text": "HELLO", "links": []}
     meta = sdg_session.apply_span(span, _genus(0, 5), workflow_name="signals-system-one", run=lambda *_a: None)
     assert "sdg.iri" not in meta["links"][0]
+
+
+def test_a_confirmed_term_is_text_the_next_turn_can_read() -> None:
+    class _Quiet:
+        def AdmitSession(self, frames):
+            for _frame in frames:
+                if _frame.end:
+                    break
+            return
+            yield  # pragma: no cover
+
+    sdg_session.begin("ground", "agent-rtc-ground", target="127.0.0.1:1", dial_fn=lambda _t: (None, _Quiet()))
+    stream = sdg_session._LIVE["ground"]
+    try:
+        stream.spans.append({
+            "start": 0,
+            "end": 5,
+            "role": "user",
+            "text": "HELLO",
+            "links": [{
+                "start": 0,
+                "end": 5,
+                "genus_iri": "https://signals.zndx.org/sdg#LIMS",
+                "genus_label": "LIMS",
+                "sdg.iri": "https://signals.zndx.org/sdg#LIMS",
+            }],
+        })
+        stream.spans.append({
+            "start": 5,
+            "end": 9,
+            "role": "user",
+            "text": "nope",
+            "links": [{
+                "start": 0,
+                "end": 4,
+                "genus_label": "Other",
+                "genus_iri": "https://signals.zndx.org/sdg#OTHER",
+                "declined": True,
+            }],
+        })
+        text = sdg_session.grounded_text("ground")
+        assert "LIMS: HELLO" in text
+        assert "Other" not in text
+        assert sdg_session.with_grounded("Speak.", "ground").endswith(text)
+    finally:
+        sdg_session.end("ground")
 
 
 def test_stored_turn_is_handed_to_an_open_stream(tmp_path, monkeypatch) -> None:
