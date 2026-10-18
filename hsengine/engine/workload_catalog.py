@@ -17,10 +17,10 @@ Cerebras dialog on token-metered (GPU 0), CPU search on compute (GPU 0).
 Gaius thinking on heavy is not claimed.
 
 ``mistral.signals_preprints`` is declared for the same lifetime. It is the
-urgent Mistral preprint window (deployment ``signals-preprints``). The claim
-is token-metered at GPU 0, and it precludes the extract leaf so Gaius does
-not start a local GPU extract while the call is up. With no session, that
-activity is released and Gaius docling is the extract path.
+urgent Mistral preprint window (deployment ``signals-preprints``). It
+surfaces as an external inference queue workload
+(``root.external.token-metered``, GPU 0). Mistral holds the model. With no
+session the activity is released and Gaius docling uses the local extract GPU.
 
 Two hops, never one: this ENGINE submits to the Signals engine; local processes
 read the catalogue from this engine (``Engine/ServerQuery kind=SCHEDULES``).
@@ -94,10 +94,10 @@ MISTRAL_CATALOG_ID = "mistral.signals_preprints"
 RUNNER_MISTRAL = "signals_preprints"
 MISTRAL_DESCRIPTION = (
     "Mistral preprint analysis on deployment signals-preprints, workflow "
-    "signals-preprint-analysis. Declared only while an AgentRTC session runs. "
-    "Token-metered, no local GPU. Precludes root.internal.inference.extract "
-    "so Gaius docling waits. With no session the activity is released and "
-    "Gaius extracts on local GPUs."
+    "signals-preprint-analysis. External inference queue "
+    "root.external.token-metered, GPU 0. Declared only while an AgentRTC "
+    "session runs. No local GPU. With no session the activity is released "
+    "and Gaius docling uses the local extract GPU."
 )
 
 
@@ -113,7 +113,6 @@ def mistral_entry() -> zpb.ScheduleHint:
         timezone="UTC",
         description=MISTRAL_DESCRIPTION,
         runner=RUNNER_MISTRAL,
-        precludes=[coordination.MISTRAL_PRECLUDES_EXTRACT],
     )
     hint.claims.append(zpb.ActivityClaim(leaf=coordination.MISTRAL_QUEUE, gpu=0))
     for k, v in coordination.mistral_preprint_postures().items():

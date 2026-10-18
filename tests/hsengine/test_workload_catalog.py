@@ -100,7 +100,8 @@ def test_catalogue_is_the_interactive_workflow_declared_by_the_engine():
     assert mistral.source == "engine" and mistral.runner == "signals_preprints"
     assert mistral.cron == "" and mistral.airflow_dag_id == ""
     assert [(c.leaf, c.gpu) for c in mistral.claims] == [(coordination.MISTRAL_QUEUE, 0)]
-    assert list(mistral.precludes) == [coordination.MISTRAL_PRECLUDES_EXTRACT]
+    assert list(mistral.precludes) == []
+    assert coordination.MISTRAL_QUEUE == "root.external.token-metered"
     assert mistral.postures["signals.deployment"] == "signals-preprints"
     assert mistral.postures["mistral.paper_workflow"] == "signals-preprint-analysis"
     assert e.kind == coordination.KIND_INTERACTIVE == "interactive_session"
@@ -126,7 +127,7 @@ def test_mistral_catalogue_matches_the_declared_activity(signals):
     declared = [(c.leaf, c.gpu) for c in req.claims]
     catalogued = [(c.leaf, c.gpu) for c in wc.mistral_entry().claims]
     assert declared == catalogued == [(coordination.MISTRAL_QUEUE, 0)]
-    assert list(req.precludes) == [coordination.MISTRAL_PRECLUDES_EXTRACT]
+    assert list(req.precludes) == []
     assert dict(req.postures)["signals.deployment"] == "signals-preprints"
     assert dict(req.postures)["mistral.paper_workflow"] == "signals-preprint-analysis"
 

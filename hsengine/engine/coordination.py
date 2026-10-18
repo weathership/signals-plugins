@@ -35,10 +35,9 @@ log = logging.getLogger("hsengine.engine.coordination")
 PEER = "hermes"
 KIND_INTERACTIVE = "interactive_session"
 KIND_MISTRAL_PREPRINT = "mistral_preprint"
-# External token-metered leaf. Mistral holds the model; this claim is GPU 0.
+# External inference queue. Pay-per-token, apps only, no local GPU.
+# The live leaf is root.external.token-metered (federation-queues.yaml).
 MISTRAL_QUEUE = "root.external.token-metered"
-# While this activity RUNS, peers must not admit new extract work.
-MISTRAL_PRECLUDES_EXTRACT = "root.internal.inference.extract"
 KIND_ACTIVITY = "activity"  # supervision bus kind (mirrored in supervision_bus)
 # A foreign RUNNING activity with this posture is the federation handover.
 # Hermes stops its own moshi worker. It does not dial Engine/Yield.
@@ -556,8 +555,9 @@ def declare_mistral_preprint(
     """Declare the urgent Mistral preprint window. Signals materialises it as
     ``coord_activity`` so Airflow shows the same lifetime as the call.
 
-    Claims are the token-metered leaf at GPU 0. ``precludes`` holds the
-    extract leaf so Gaius does not start a local GPU extract while this runs.
+    The only claim is the external inference queue at GPU 0. Mistral holds
+    the model. This activity does not take a local GPU and does not preclude
+    one.
     """
     addr = addr or target()
     h = int(horizon_s or interactive_horizon_s())
@@ -568,7 +568,6 @@ def declare_mistral_preprint(
         kind=KIND_MISTRAL_PREPRINT,
         owner=owner or "webrtc",
         horizon_ns=now_ns() + h * 1_000_000_000,
-        precludes=[MISTRAL_PRECLUDES_EXTRACT],
         reason=(
             "Mistral preprint analysis on deployment signals-preprints "
             "(workflow signals-preprint-analysis) while an AgentRTC session runs"
