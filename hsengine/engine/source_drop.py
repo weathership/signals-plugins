@@ -447,8 +447,23 @@ def system_one_name(home: Path | None = None) -> str:
     return found or SYSTEM_ONE_WORKFLOW
 
 
+def _workflow_payload(result: dict) -> dict:
+    """The entrypoint return. Mistral stores it under ``result.result``."""
+
+    inner = result.get("result")
+    if not isinstance(inner, dict):
+        return result
+    if "kind" not in result and "kind" in inner:
+        return inner
+    if "sdg_iri" not in result and "sdg_iri" in inner:
+        return inner
+    return result
+
+
 def run_system_one(text: str, link: dict[str, Any]) -> dict[str, Any] | None:
-    """Execute signals-system-one on one admitted slice. The genus is the only offered IRI."""
+    """Assign one aperture IRI under the genus Aegir admitted."""
+    from hsengine.engine.sdg_iris import resolve_sdg_iri, subtree
+
     if not mistral_preprint_urgent():
         return None
     genus = str(link.get("genus_iri") or "")
@@ -457,6 +472,7 @@ def run_system_one(text: str, link: dict[str, Any]) -> dict[str, Any] | None:
     name = system_one_name()
     if not name:
         return None
+    offered = subtree(genus)
     try:
         done = execute_workflow(
             name,
@@ -465,6 +481,10 @@ def run_system_one(text: str, link: dict[str, Any]) -> dict[str, Any] | None:
                 "genus_iri": genus,
                 "genus_code": str(link.get("genus_code") or ""),
                 "genus_label": str(link.get("genus_label") or ""),
+                "offered": [
+                    {"iri": point["iri"], "code": point.get("code") or "", "label": point.get("label") or ""}
+                    for point in offered
+                ],
             },
             wait=True,
         )
@@ -474,11 +494,12 @@ def run_system_one(text: str, link: dict[str, Any]) -> dict[str, Any] | None:
     result = done.get("result") if isinstance(done, dict) else None
     if not isinstance(result, dict):
         return None
-    confidence = result.get("confidence")
+    result = _workflow_payload(result)
+    iri = resolve_sdg_iri(str(result.get("sdg_iri") or ""), offered)
     return {
-        "sdg_iri": str(result.get("sdg_iri") or ""),
-        "confidence": confidence,
-        "offered": [genus],
+        "sdg_iri": iri,
+        "confidence": result.get("confidence"),
+        "offered": [point["iri"] for point in offered],
     }
 
 
@@ -662,11 +683,7 @@ def await_signals_preprints(
                 result = json.loads(result)
             if not isinstance(result, dict):
                 raise RuntimeError("workflow completed without an analysis object")
-            # The orchestrator stores the entrypoint return under result.result.
-            inner = result.get("result")
-            if "kind" not in result and isinstance(inner, dict) and "kind" in inner:
-                result = inner
-            return result
+            return _workflow_payload(result)
         if state in {"FAILED", "CANCELED", "TERMINATED", "TIMED_OUT"}:
             raise RuntimeError(f"workflow {execution_id} {state}")
         if time.monotonic() >= deadline:

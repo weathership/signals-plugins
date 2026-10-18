@@ -135,24 +135,45 @@ _CHAT_URL = "https://api.mistral.ai/v1/chat/completions"
 _SYSTEM_ONE_MODEL = "mistral-small-latest"
 
 
-def signals_system_one_read(text: str, genus_iri: str, genus_code: str, genus_label: str) -> dict:
-    """Confirm the aperture genus for one span. A different IRI is not invented."""
+def _offered_lines(offered: list[dict], genus_iri: str, genus_code: str, genus_label: str) -> str:
+    rows = list(offered or [])
+    if not rows and genus_iri:
+        rows = [{"iri": genus_iri, "code": genus_code, "label": genus_label}]
+    lines = []
+    for point in rows:
+        iri = str(point.get("iri") or "")
+        if not iri:
+            continue
+        lines.append(f"- {iri} | {point.get('code') or ''} | {point.get('label') or ''}")
+    return "\n".join(lines)
+
+
+def signals_system_one_read(
+    text: str,
+    genus_iri: str,
+    genus_code: str,
+    genus_label: str,
+    offered: list[dict] | None = None,
+) -> dict:
+    """Pick one aperture IRI for the span. An IRI outside that list is dropped."""
+    from hsengine.engine.sdg_iris import resolve_sdg_iri
+
     key = os.environ.get("MISTRAL_API_KEY", "").strip()
     if not key:
         raise RuntimeError("no Mistral credential for signals-system-one")
+    catalog = _offered_lines(offered or [], genus_iri, genus_code, genus_label)
     payload = {
         "model": _SYSTEM_ONE_MODEL,
         "messages": [
             {
                 "role": "user",
                 "content": (
-                    "The aperture admitted this span under one genus. "
-                    "If the span is about that genus, sdg_iri is the genus IRI and "
-                    "confidence is between 0 and 1. If it is not, sdg_iri is empty and "
-                    "confidence is 0. note is one sentence. Do not invent a different IRI.\n\n"
-                    f"genus_iri: {genus_iri}\n"
-                    f"genus_code: {genus_code}\n"
-                    f"genus_label: {genus_label}\n"
+                    "Assign this span to one SDG ontology IRI from the list. "
+                    "sdg_iri must be copied exactly from the list. "
+                    "If none of the IRIs is warranted, sdg_iri is empty and confidence is 0. "
+                    "Do not invent an IRI. note is one sentence.\n\n"
+                    f"admitted: {genus_iri} | {genus_code} | {genus_label}\n"
+                    f"iris:\n{catalog}\n\n"
                     f"span:\n{text}"
                 ),
             }
@@ -198,12 +219,22 @@ def signals_system_one_read(text: str, genus_iri: str, genus_code: str, genus_la
         parsed = {}
     if not isinstance(parsed, dict):
         parsed = {}
+    pool = list(offered or [])
+    if not pool and genus_iri:
+        pool = [{"iri": genus_iri, "code": genus_code, "label": genus_label}]
+    iri = resolve_sdg_iri(str(parsed.get("sdg_iri") or ""), pool)
     return {
-        "sdg_iri": str(parsed.get("sdg_iri") or ""),
-        "confidence": parsed.get("confidence"),
+        "sdg_iri": iri,
+        "confidence": parsed.get("confidence") if iri else 0,
         "note": str(parsed.get("note") or ""),
-        "offered": [genus_iri] if genus_iri else [],
+        "offered": [str(point.get("iri") or "") for point in pool if point.get("iri")],
     }
+
+
+class OfferedIri(BaseModel):
+    iri: str
+    code: str = ""
+    label: str = ""
 
 
 class SignalsSystemOneInput(BaseModel):
@@ -211,23 +242,38 @@ class SignalsSystemOneInput(BaseModel):
     genus_iri: str
     genus_code: str = ""
     genus_label: str = ""
+    offered: list[OfferedIri] = []
 
 
 @workflows.activity()
-async def signals_system_one_analyze(text: str, genus_iri: str, genus_code: str, genus_label: str) -> dict:
-    return signals_system_one_read(text, genus_iri, genus_code, genus_label)
+async def signals_system_one_analyze(
+    text: str,
+    genus_iri: str,
+    genus_code: str,
+    genus_label: str,
+    offered: list[OfferedIri] | None = None,
+) -> dict:
+    rows = []
+    for item in offered or []:
+        if hasattr(item, "model_dump"):
+            rows.append(item.model_dump())
+        else:
+            rows.append(item.dict())
+    return signals_system_one_read(text, genus_iri, genus_code, genus_label, rows)
 
 
 @workflows.workflow.define(
     name=SYSTEM_ONE_NAME,
     workflow_display_name="Signals system one",
-    workflow_description="Confirm an aperture genus for one AgentRTC span.",
+    workflow_description="Assign an SDG IRI under the genus Aegir admitted.",
     search_keys=["genus_iri", "genus_code"],
 )
 class SignalsSystemOne:
     @workflows.workflow.entrypoint
     async def run(self, item: SignalsSystemOneInput) -> dict:
-        return await signals_system_one_analyze(item.text, item.genus_iri, item.genus_code, item.genus_label)
+        return await signals_system_one_analyze(
+            item.text, item.genus_iri, item.genus_code, item.genus_label, item.offered,
+        )
 
 
 def main() -> None:

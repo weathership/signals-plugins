@@ -1,0 +1,206 @@
+[
+  {
+    "iri": "https://signals.zndx.org/sdg#BIOTECH",
+    "code": "16.1",
+    "label": "BioTech",
+    "broader": "https://signals.zndx.org/sdg#Healthcare"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#CSG",
+    "code": "18.2",
+    "label": "Solid Geometry Design for Consumer Electronics",
+    "broader": "https://signals.zndx.org/sdg#Engineering"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#CSG_BOOLEAN",
+    "code": "18.2.2",
+    "label": "Constructive Solid Geometry and Boolean Composition",
+    "broader": "https://signals.zndx.org/sdg#CSG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#CSG_BREP",
+    "code": "18.2.3",
+    "label": "Boundary Representation, Meshes and NURBS",
+    "broader": "https://signals.zndx.org/sdg#CSG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#CSG_FABRICATION",
+    "code": "18.2.4",
+    "label": "Design for Fabrication of Electronic Products",
+    "broader": "https://signals.zndx.org/sdg#CSG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#CSG_PRIMITIVE",
+    "code": "18.2.1",
+    "label": "Solid Primitives and Shapes",
+    "broader": "https://signals.zndx.org/sdg#CSG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#DATAENG",
+    "code": "18.3",
+    "label": "Data Engineering, Metadata and Lineage",
+    "broader": "https://signals.zndx.org/sdg#Engineering"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#DATAENG_CATALOG",
+    "code": "18.3.3",
+    "label": "Metadata Cataloging and Semantic Annotation",
+    "broader": "https://signals.zndx.org/sdg#DATAENG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#DATAENG_LINEAGE",
+    "code": "18.3.2",
+    "label": "Data Lineage and Provenance",
+    "broader": "https://signals.zndx.org/sdg#DATAENG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#DATAENG_MODELING",
+    "code": "18.3.1",
+    "label": "Relational and Schema Modeling",
+    "broader": "https://signals.zndx.org/sdg#DATAENG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#DATAENG_QUALITY",
+    "code": "18.3.4",
+    "label": "Data Profiling, Quality and Observability",
+    "broader": "https://signals.zndx.org/sdg#DATAENG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#ENERGY",
+    "code": "17.1",
+    "label": "Energy and Well Drilling",
+    "broader": "https://signals.zndx.org/sdg#HeavyIndustries"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#ENERGY_LOGGING",
+    "code": "17.1.2",
+    "label": "Well Logging and Downhole Measurement",
+    "broader": "https://signals.zndx.org/sdg#ENERGY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#ENERGY_OPERATIONS",
+    "code": "17.1.4",
+    "label": "Drilling Operations and Rig Equipment",
+    "broader": "https://signals.zndx.org/sdg#ENERGY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#ENERGY_TRAJECTORY",
+    "code": "17.1.3",
+    "label": "Wellbore Trajectory and Survey",
+    "broader": "https://signals.zndx.org/sdg#ENERGY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#ENERGY_WELLBORE",
+    "code": "17.1.1",
+    "label": "Wells, Wellbores and Subsurface Targets",
+    "broader": "https://signals.zndx.org/sdg#ENERGY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#FINTECH",
+    "code": "15.1",
+    "label": "FinTech",
+    "broader": "https://signals.zndx.org/sdg#FinancialSector"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#LIMS",
+    "code": "16.2",
+    "label": "Laboratory Information Management",
+    "broader": "https://signals.zndx.org/sdg#Healthcare"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#LIMS_ASSAY_EXECUTION",
+    "code": "16.2.2",
+    "label": "Assay and Method Execution",
+    "broader": "https://signals.zndx.org/sdg#LIMS"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#LIMS_QUALITY_TRACEABILITY",
+    "code": "16.2.4",
+    "label": "Quality, Compliance and Traceability",
+    "broader": "https://signals.zndx.org/sdg#LIMS"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#LIMS_RESULT_INTERPRETATION",
+    "code": "16.2.3",
+    "label": "Result Capture and Interpretation",
+    "broader": "https://signals.zndx.org/sdg#LIMS"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#LIMS_SPECIMEN_LIFECYCLE",
+    "code": "16.2.1",
+    "label": "Specimen Lifecycle Management",
+    "broader": "https://signals.zndx.org/sdg#LIMS"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MBSE",
+    "code": "18.1",
+    "label": "Model-Based Systems Engineering",
+    "broader": "https://signals.zndx.org/sdg#Engineering"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MFG",
+    "code": "19.1",
+    "label": "Manufacturing Operations",
+    "broader": "https://signals.zndx.org/sdg#Manufacturing"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MFG_INTERFACE",
+    "code": "19.1.2",
+    "label": "Physical Interfaces and Connections",
+    "broader": "https://signals.zndx.org/sdg#MFG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MFG_LOGISTICS",
+    "code": "19.1.5",
+    "label": "Inventory, Warehousing and Fulfillment",
+    "broader": "https://signals.zndx.org/sdg#MFG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MFG_PROCESS",
+    "code": "19.1.4",
+    "label": "Manufacturing Processes and Execution",
+    "broader": "https://signals.zndx.org/sdg#MFG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MFG_REQUIREMENT",
+    "code": "19.1.3",
+    "label": "Specifications, Tolerances and Quality",
+    "broader": "https://signals.zndx.org/sdg#MFG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#MFG_STRUCTURE",
+    "code": "19.1.1",
+    "label": "Parts, Assemblies and Bills of Material",
+    "broader": "https://signals.zndx.org/sdg#MFG"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#UTILITY",
+    "code": "17.2",
+    "label": "Utility-Scale Networks",
+    "broader": "https://signals.zndx.org/sdg#HeavyIndustries"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#UTILITY_POWER",
+    "code": "17.2.1",
+    "label": "Electric Power Transmission and Distribution",
+    "broader": "https://signals.zndx.org/sdg#UTILITY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#UTILITY_TELECOM",
+    "code": "17.2.3",
+    "label": "Carrier-Grade Telecommunications Networks",
+    "broader": "https://signals.zndx.org/sdg#UTILITY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#UTILITY_WATER",
+    "code": "17.2.2",
+    "label": "Water and Wastewater Networks",
+    "broader": "https://signals.zndx.org/sdg#UTILITY"
+  },
+  {
+    "iri": "https://signals.zndx.org/sdg#AGENTMESH",
+    "code": "20.1",
+    "label": "Agent Mesh Operations",
+    "broader": ""
+  }
+]
