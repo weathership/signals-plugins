@@ -1,8 +1,9 @@
 # Copyright 2026 zndx
 # SPDX-License-Identifier: Apache-2.0
 
-from hsengine.engine.sdg_iris import resolve_sdg_iri, subtree
+from hsengine.engine.sdg_iris import genus_of, resolve_sdg_iri, subtree
 from hsengine.engine.source_drop import _workflow_payload, run_system_one
+from hsengine.engine.system_one import assignments_from, word_sequences
 
 SPECIMEN = "https://signals.zndx.org/sdg#LIMS_SPECIMEN_LIFECYCLE"
 LIMS = "https://signals.zndx.org/sdg#LIMS"
@@ -37,18 +38,51 @@ def test_a_nested_workflow_result_keeps_the_assigned_iri() -> None:
     assert payload["sdg_iri"] == SPECIMEN
 
 
-def test_run_system_one_accepts_a_child_iri_under_the_genus(monkeypatch) -> None:
-    captured = {}
+def test_a_leaf_hit_rolls_up_to_the_aperture_genus() -> None:
+    genus = genus_of(SPECIMEN)
+    assert genus is not None
+    assert genus["iri"] == LIMS
+    assert genus["code"] == "16.2"
 
-    def execute(name, payload, *, wait, sleep=None, key=None):
-        captured["payload"] = payload
-        return {"result": {"result": {"sdg_iri": "16.2.1", "confidence": 0.7, "note": "cells"}}}
+
+def test_word_sequences_are_contiguous_slices() -> None:
+    text = "one two three four five six seven eight nine ten"
+    spans = word_sequences(text, sizes=(4,), stride=4, limit=4)
+    assert spans
+    assert spans[0]["text"] == "one two three four"
+    assert text[spans[0]["start"] : spans[0]["end"]] == spans[0]["text"]
+
+
+def test_a_none_choice_is_not_an_assignment() -> None:
+    sequences = [{"start": 0, "end": 4, "text": "cells"}]
+    points = subtree(LIMS)
+    body = {"answers": {"w0": {"choice": "none", "confidence": 0.9}}}
+    assert assignments_from(body, sequences, points) == []
+    body = {"answers": {"w0": {"choice": "LIMS_SPECIMEN_LIFECYCLE", "confidence": 0.8}}}
+    found = assignments_from(body, sequences, points)
+    assert found[0]["iri"] == SPECIMEN
+
+
+def test_run_system_one_assigns_inside_the_genus_subtree(monkeypatch) -> None:
+    def assign(text, points):
+        assert any(point["iri"] == SPECIMEN for point in points)
+        assert all(point["iri"] != FINTECH for point in points)
+        return [{
+            "start": 0,
+            "end": 8,
+            "text": text[:8],
+            "iri": SPECIMEN,
+            "label": "Specimen Lifecycle Management",
+            "confidence": 0.8,
+        }]
 
     monkeypatch.setattr("hsengine.engine.source_drop.mistral_preprint_urgent", lambda: True)
-    monkeypatch.setattr("hsengine.engine.source_drop.system_one_name", lambda home=None: "signals-system-one")
-    monkeypatch.setattr("hsengine.engine.source_drop.execute_workflow", execute)
-    done = run_system_one("the specimen is accessioned", {"genus_iri": LIMS, "genus_code": "16.2", "genus_label": "Laboratory Information Management"})
+    monkeypatch.setattr("hsengine.engine.system_one.assign_word_sequences", assign)
+    done = run_system_one(
+        "the specimen is accessioned",
+        {"genus_iri": SPECIMEN, "genus_code": "16.2.1", "genus_label": "Specimen Lifecycle Management"},
+    )
     assert done["sdg_iri"] == SPECIMEN
-    assert SPECIMEN in done["offered"]
+    assert LIMS in done["offered"]
     assert FINTECH not in done["offered"]
-    assert captured["payload"]["offered"][0]["iri"] == LIMS
+    assert done["assignments"][0]["text"] == "the spec"

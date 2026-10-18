@@ -21,6 +21,26 @@ def aperture_points() -> tuple[dict, ...]:
     return tuple(raw)
 
 
+def genus_of(iri: str) -> dict | None:
+    """Roll a point up to the aperture genus.
+
+    A genus is an aperture point whose broader concept is not itself an
+    aperture point. A leaf hit such as 16.2.1 rolls up to 16.2.
+    """
+
+    points = list(aperture_points())
+    by_iri = {str(point["iri"]): point for point in points}
+    hit = by_iri.get(iri or "")
+    if hit is None:
+        fragment = (iri or "").rsplit("#", 1)[-1]
+        hit = next((point for point in points if point["iri"].rsplit("#", 1)[-1] == fragment), None)
+    if hit is None:
+        return None
+    while str(hit.get("broader") or "") in by_iri:
+        hit = by_iri[str(hit["broader"])]
+    return hit
+
+
 def subtree(genus_iri: str) -> list[dict]:
     """The admitted genus and the aperture points narrower than it.
 

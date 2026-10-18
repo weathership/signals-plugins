@@ -461,45 +461,30 @@ def _workflow_payload(result: dict) -> dict:
 
 
 def run_system_one(text: str, link: dict[str, Any]) -> dict[str, Any] | None:
-    """Assign one aperture IRI under the genus Aegir admitted."""
-    from hsengine.engine.sdg_iris import resolve_sdg_iri, subtree
+    """Assign subtree IRIs to word sequences. Development calls TypeSafe, not Mistral."""
+    from hsengine.engine.sdg_iris import genus_of, subtree
+    from hsengine.engine.system_one import assign_word_sequences
 
     if not mistral_preprint_urgent():
         return None
-    genus = str(link.get("genus_iri") or "")
-    if not text or not genus:
+    admitted = str(link.get("genus_iri") or "")
+    if not text or not admitted:
         return None
-    name = system_one_name()
-    if not name:
+    genus = genus_of(admitted)
+    if genus is None:
         return None
-    offered = subtree(genus)
+    offered = subtree(str(genus["iri"]))
     try:
-        done = execute_workflow(
-            name,
-            {
-                "text": text,
-                "genus_iri": genus,
-                "genus_code": str(link.get("genus_code") or ""),
-                "genus_label": str(link.get("genus_label") or ""),
-                "offered": [
-                    {"iri": point["iri"], "code": point.get("code") or "", "label": point.get("label") or ""}
-                    for point in offered
-                ],
-            },
-            wait=True,
-        )
+        found = assign_word_sequences(text, offered)
     except Exception:
-        log.warning("system-one workflow %s failed", name, exc_info=True)
+        log.warning("system-one assignment failed", exc_info=True)
         return None
-    result = done.get("result") if isinstance(done, dict) else None
-    if not isinstance(result, dict):
-        return None
-    result = _workflow_payload(result)
-    iri = resolve_sdg_iri(str(result.get("sdg_iri") or ""), offered)
+    best = max(found, key=lambda row: float(row.get("confidence") or 0.0)) if found else None
     return {
-        "sdg_iri": iri,
-        "confidence": result.get("confidence"),
+        "sdg_iri": "" if best is None else str(best["iri"]),
+        "confidence": None if best is None else best.get("confidence"),
         "offered": [point["iri"] for point in offered],
+        "assignments": found,
     }
 
 

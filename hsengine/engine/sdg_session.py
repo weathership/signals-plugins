@@ -78,6 +78,9 @@ def apply_span(span: dict, admission: dict, *, workflow_name: str, run: Callable
     elif not any(row.get("sdg.iri") for row in fresh):
         for row in fresh:
             row["declined"] = True
+    if deliverable and deliverable.get("assignments"):
+        for row in fresh:
+            row["assignments"] = deliverable["assignments"]
     merged = list(span.get("links") or []) + fresh
     return {"links": merged, "text_len": len(span["text"])}
 
@@ -205,6 +208,14 @@ def grounded_text(webrtc_id: str) -> str:
     for span in spans:
         for link in span.get("links") or []:
             if link.get("declined"):
+                continue
+            assignments = link.get("assignments") or []
+            if assignments:
+                for item in assignments:
+                    label = str(item.get("label") or "").strip()
+                    piece = str(item.get("text") or "").strip()
+                    if label and piece:
+                        lines.append(f"- {label}: {piece}")
                 continue
             if not link.get("sdg.iri") and not link.get("aperture_only"):
                 continue
