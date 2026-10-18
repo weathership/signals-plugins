@@ -7,14 +7,20 @@ per workload) so Signals can materialise them in its Airflow and apply each
 workload's YuniKorn configuration (the entry's ``claims``) for exactly the
 duration of the active run.
 
-Hermes runs ONE workload: the interactive agent-rtc WebRTC session. It is not
-scheduled — this engine declares it at session start
-(``coordination.declare_interactive`` → ``Scheduler/DeclareActivity``) — so it is
-catalogued with ``source = "engine"``: Signals lists it for federation
-visibility, materialises no DAG for it, and the arbiter asserts its claims
-only while a session's Activity RUNS: moshi on agent-rtc (GPU 1), Cerebras
-dialog on token-metered (GPU 0), CPU search/Qdrant on compute (GPU 0).
-Gaius thinking on heavy is not claimed and not ceded.
+Hermes runs two engine-declared workloads. Neither is cron-scheduled.
+Signals lists them for the federation and Airflow shows each as a
+coordination run only while this engine holds the Activity.
+
+The interactive agent-rtc session is declared at session start
+(``coordination.declare_interactive``). Claims: moshi on agent-rtc (GPU 1),
+Cerebras dialog on token-metered (GPU 0), CPU search on compute (GPU 0).
+Gaius thinking on heavy is not claimed.
+
+``mistral.signals_preprints`` is declared for the same lifetime. It is the
+urgent Mistral preprint window (deployment ``signals-preprints``). The claim
+is token-metered at GPU 0, and it precludes the extract leaf so Gaius does
+not start a local GPU extract while the call is up. With no session, that
+activity is released and Gaius docling is the extract path.
 
 Two hops, never one: this ENGINE submits to the Signals engine; local processes
 read the catalogue from this engine (``Engine/ServerQuery kind=SCHEDULES``).
@@ -84,9 +90,40 @@ def interactive_entry() -> zpb.ScheduleHint:
     return hint
 
 
+MISTRAL_CATALOG_ID = "mistral.signals_preprints"
+RUNNER_MISTRAL = "signals_preprints"
+MISTRAL_DESCRIPTION = (
+    "Mistral preprint analysis on deployment signals-preprints, workflow "
+    "signals-preprint-analysis. Declared only while an AgentRTC session runs. "
+    "Token-metered, no local GPU. Precludes root.internal.inference.extract "
+    "so Gaius docling waits. With no session the activity is released and "
+    "Gaius extracts on local GPUs."
+)
+
+
+def mistral_entry() -> zpb.ScheduleHint:
+    hint = zpb.ScheduleHint(
+        id=MISTRAL_CATALOG_ID,
+        cron="",
+        airflow_dag_id="",
+        source=SOURCE_ENGINE,
+        enabled=True,
+        kind=coordination.KIND_MISTRAL_PREPRINT,
+        horizon_s=int(coordination.interactive_horizon_s()),
+        timezone="UTC",
+        description=MISTRAL_DESCRIPTION,
+        runner=RUNNER_MISTRAL,
+        precludes=[coordination.MISTRAL_PRECLUDES_EXTRACT],
+    )
+    hint.claims.append(zpb.ActivityClaim(leaf=coordination.MISTRAL_QUEUE, gpu=0))
+    for k, v in coordination.mistral_preprint_postures().items():
+        hint.postures[k] = v
+    return hint
+
+
 def catalog() -> list[zpb.ScheduleHint]:
     """Everything this engine runs — for ServerQuery kind=SCHEDULES and SyncWorkloads."""
-    return [interactive_entry()]
+    return [interactive_entry(), mistral_entry()]
 
 
 def catalog_summary() -> list[dict[str, Any]]:

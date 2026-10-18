@@ -155,8 +155,8 @@ def local_response(
             resp.platforms.append(platform_hint())
     if kind == zpb.SERVER_QUERY_KIND_SCHEDULES:
         # This engine's WORKLOAD CATALOGUE — the same entries it submits to
-        # Signals (Scheduler/SyncWorkloads): the interactive agent-rtc workflow,
-        # source=engine (declared at session start, not scheduled).
+        # Signals (Scheduler/SyncWorkloads). Both are source=engine: declared
+        # while a session runs, not cron. Airflow shows them as coordination runs.
         from hsengine.engine import workload_catalog
 
         resp.schedules.extend(workload_catalog.catalog())

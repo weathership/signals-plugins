@@ -34,6 +34,11 @@ log = logging.getLogger("hsengine.engine.coordination")
 
 PEER = "hermes"
 KIND_INTERACTIVE = "interactive_session"
+KIND_MISTRAL_PREPRINT = "mistral_preprint"
+# External token-metered leaf. Mistral holds the model; this claim is GPU 0.
+MISTRAL_QUEUE = "root.external.token-metered"
+# While this activity RUNS, peers must not admit new extract work.
+MISTRAL_PRECLUDES_EXTRACT = "root.internal.inference.extract"
 KIND_ACTIVITY = "activity"  # supervision bus kind (mirrored in supervision_bus)
 # A foreign RUNNING activity with this posture is the federation handover.
 # Hermes stops its own moshi worker. It does not dial Engine/Yield.
@@ -531,6 +536,94 @@ def declare_interactive(
         lease.activity.get("run_id"),
     )
     return lease
+
+
+def mistral_preprint_postures() -> dict[str, str]:
+    """Lattice sees the vendor; the Mistral UI sees the Signals names."""
+    return {
+        "mistral.paper_workflow": "signals-preprint-analysis",
+        "signals.deployment": "signals-preprints",
+        "signals.workflow": "signals-preprint-analysis",
+    }
+
+
+def declare_mistral_preprint(
+    owner: str = "webrtc",
+    horizon_s: int | None = None,
+    *,
+    addr: str | None = None,
+) -> ActivityLease:
+    """Declare the urgent Mistral preprint window. Signals materialises it as
+    ``coord_activity`` so Airflow shows the same lifetime as the call.
+
+    Claims are the token-metered leaf at GPU 0. ``precludes`` holds the
+    extract leaf so Gaius does not start a local GPU extract while this runs.
+    """
+    addr = addr or target()
+    h = int(horizon_s or interactive_horizon_s())
+    release_stale_kind(KIND_MISTRAL_PREPRINT, addr=addr)
+    req = spb.DeclareActivityRequest(
+        peer=PEER,
+        request_id=uuid7(),
+        kind=KIND_MISTRAL_PREPRINT,
+        owner=owner or "webrtc",
+        horizon_ns=now_ns() + h * 1_000_000_000,
+        precludes=[MISTRAL_PRECLUDES_EXTRACT],
+        reason=(
+            "Mistral preprint analysis on deployment signals-preprints "
+            "(workflow signals-preprint-analysis) while an AgentRTC session runs"
+        ),
+    )
+    req.claims.append(zpb.ActivityClaim(leaf=MISTRAL_QUEUE, gpu=0))
+    for k, v in mistral_preprint_postures().items():
+        req.postures[k] = v
+    channel, stub = _stub(addr)
+    try:
+        resp = stub.DeclareActivity(req, timeout=RPC_TIMEOUT_S)
+    except grpc.RpcError as e:
+        raise _rpc_error(GURU_DECLAREFAIL, "DeclareActivity", addr, e) from e
+    finally:
+        channel.close()
+    if not resp.accepted:
+        raise RuntimeError(
+            f"{GURU_DECLAREFAIL} DeclareActivity refused by Signals: {resp.error or 'no reason given'}"
+        )
+    lease = ActivityLease(
+        activity=activity_to_dict(resp.activity),
+        horizon_s=h,
+        addr=addr,
+        heartbeat_s=interactive_heartbeat_s(),
+    )
+    publish_activity(lease.activity, "declared")
+    log.info(
+        "activity %s declared: mistral_preprint owner=%s horizon=%ss run=%s",
+        lease.activity_id, owner, h, lease.activity.get("run_id"),
+    )
+    return lease
+
+
+def release_stale_kind(kind: str, *, addr: str | None = None) -> int:
+    """Release this peer's in-force activities of one kind. Used on reconnect."""
+    try:
+        acts = list_activities(kind=kind, active_only=True, addr=addr)
+    except Exception as e:
+        log.warning("could not list %s activities: %s", kind, e)
+        return 0
+    n = 0
+    for a in acts:
+        if a.get("state") not in IN_FORCE:
+            continue
+        aid = str(a.get("activity_id") or "")
+        if not aid:
+            continue
+        try:
+            release_activity(aid, "reconnect", addr=addr)
+            n += 1
+        except Exception as e:
+            log.warning("release stale %s failed: %s", aid, e)
+    if n:
+        log.info("released %s stale %s activities", n, kind)
+    return n
 
 
 # ── the watcher (engine-side view of every peer's activities) ─────────────────

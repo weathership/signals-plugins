@@ -93,8 +93,16 @@ def _reset():
 
 def test_catalogue_is_the_interactive_workflow_declared_by_the_engine():
     entries = wc.catalog()
-    assert [e.id for e in entries] == ["interactive.agent_rtc"]
+    assert [e.id for e in entries] == ["interactive.agent_rtc", "mistral.signals_preprints"]
     e = entries[0]
+    mistral = entries[1]
+    assert mistral.kind == coordination.KIND_MISTRAL_PREPRINT == "mistral_preprint"
+    assert mistral.source == "engine" and mistral.runner == "signals_preprints"
+    assert mistral.cron == "" and mistral.airflow_dag_id == ""
+    assert [(c.leaf, c.gpu) for c in mistral.claims] == [(coordination.MISTRAL_QUEUE, 0)]
+    assert list(mistral.precludes) == [coordination.MISTRAL_PRECLUDES_EXTRACT]
+    assert mistral.postures["signals.deployment"] == "signals-preprints"
+    assert mistral.postures["mistral.paper_workflow"] == "signals-preprint-analysis"
     assert e.kind == coordination.KIND_INTERACTIVE == "interactive_session"
     assert e.source == "engine" and e.runner == "interactive"
     assert e.cron == "" and e.airflow_dag_id == "" and e.enabled is True
@@ -108,6 +116,19 @@ def test_catalogue_is_the_interactive_workflow_declared_by_the_engine():
     assert all(c.gpu == 0 for c in e.claims if c.leaf != AGENT_RTC_QUEUE)
     assert dict(e.postures) == coordination.interactive_postures() == {}
     assert list(e.precludes) == coordination.interactive_precludes() == []
+
+
+def test_mistral_catalogue_matches_the_declared_activity(signals):
+    lease = coordination.declare_mistral_preprint("webrtc", horizon_s=60, addr=signals.addr)
+    assert lease is not None
+    req = signals.declares[0]
+    assert req.kind == "mistral_preprint"
+    declared = [(c.leaf, c.gpu) for c in req.claims]
+    catalogued = [(c.leaf, c.gpu) for c in wc.mistral_entry().claims]
+    assert declared == catalogued == [(coordination.MISTRAL_QUEUE, 0)]
+    assert list(req.precludes) == [coordination.MISTRAL_PRECLUDES_EXTRACT]
+    assert dict(req.postures)["signals.deployment"] == "signals-preprints"
+    assert dict(req.postures)["mistral.paper_workflow"] == "signals-preprint-analysis"
 
 
 def test_catalogue_claims_match_what_declare_interactive_puts_on_the_activity(signals):
@@ -125,7 +146,8 @@ def test_server_query_schedules_serves_the_catalogue():
     resp = s2s.local_response(zpb.SERVER_QUERY_KIND_SCHEDULES)
     assert resp.project == "hermes"
     assert [(s.id, s.kind, s.source, s.runner) for s in resp.schedules] == [
-        ("interactive.agent_rtc", "interactive_session", "engine", "interactive")
+        ("interactive.agent_rtc", "interactive_session", "engine", "interactive"),
+        ("mistral.signals_preprints", "mistral_preprint", "engine", "signals_preprints"),
     ]
     assert [(c.leaf, c.gpu) for c in resp.schedules[0].claims] == list(interactive_yk_claims())
     # other kinds do not carry schedules
@@ -140,8 +162,11 @@ def test_sync_once_submits_the_whole_catalogue_as_a_replace(signals):
     assert len(signals.syncs) == 1
     req = signals.syncs[0]
     assert req.peer == "hermes" and req.replace is True and req.engine_build == "abc123"
-    assert [w.id for w in req.workloads] == ["interactive.agent_rtc"]
-    assert [(r.workload.id, r.state) for r in resp.records] == [("interactive.agent_rtc", "engine_declared")]
+    assert [w.id for w in req.workloads] == ["interactive.agent_rtc", "mistral.signals_preprints"]
+    assert [(r.workload.id, r.state) for r in resp.records] == [
+        ("interactive.agent_rtc", "engine_declared"),
+        ("mistral.signals_preprints", "engine_declared"),
+    ]
 
 
 def test_sync_refused_and_unreachable_carry_the_guru(signals):
@@ -164,7 +189,10 @@ def test_sync_loop_step_paces_success_and_failures(signals, monkeypatch):
     s = wc.WorkloadSync(signals.addr)
     assert asyncio.run(s.step()) == wc.SYNC_INTERVAL_S == 1800.0
     assert s.synced_at > 0 and s.last_error == ""
-    assert [r.workload.id for r in s.records] == ["interactive.agent_rtc"]
+    assert [r.workload.id for r in s.records] == [
+        "interactive.agent_rtc",
+        "mistral.signals_preprints",
+    ]
     assert signals.syncs[-1].engine_build == "deadbeef"
     assert s.status()["records"][0]["state"] == "engine_declared"
     # an older Signals: UNIMPLEMENTED → retry cadence, logged once

@@ -125,12 +125,50 @@ def stop() -> None:
         path.unlink()
 
 
+_LEASE = None
+
+
+def _ensure_declared() -> None:
+    """Declare the Mistral window at Signals. The worker starts only after."""
+    global _LEASE
+    if _LEASE is not None:
+        return
+    from hsengine.engine.coordination import declare_mistral_preprint
+
+    _LEASE = declare_mistral_preprint("webrtc")
+    _LEASE.start_renewing()
+
+
+def _release_declared(outcome: str) -> None:
+    global _LEASE
+    lease, _LEASE = _LEASE, None
+    if lease is not None:
+        lease.release(outcome)
+        return
+    from hsengine.engine.coordination import KIND_MISTRAL_PREPRINT, release_stale_kind
+
+    release_stale_kind(KIND_MISTRAL_PREPRINT)
+
+
 def reconcile() -> None:
-    """Match the worker to the posture. Called on enter, leave, and boot."""
+    """Match the worker and the Signals activity to the AgentRTC posture.
+
+    Airflow sees the activity because Signals materialises every Declare.
+    This process never talks to Airflow.
+    """
     if urgent():
+        try:
+            _ensure_declared()
+        except Exception:
+            log.warning("mistral_preprint activity was not declared", exc_info=True)
+            return
         try:
             start()
         except Exception:
             log.warning("signals-preprints worker did not start", exc_info=True)
         return
+    try:
+        _release_declared("hangup")
+    except Exception:
+        log.warning("mistral_preprint activity was not released", exc_info=True)
     stop()

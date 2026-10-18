@@ -155,7 +155,8 @@ def test_server_query_schedules_is_the_workload_catalogue():
             )
         )
     assert [(s.id, s.kind, s.source) for s in resp.schedules] == [
-        ("interactive.agent_rtc", "interactive_session", "engine")
+        ("interactive.agent_rtc", "interactive_session", "engine"),
+        ("mistral.signals_preprints", "mistral_preprint", "engine"),
     ]
     assert not resp.remotes and not resp.surfaces and not resp.peers
 
