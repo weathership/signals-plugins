@@ -10,7 +10,6 @@ from hsengine.engine.webrtc_activity import (
     bind,
     format_line,
     heartbeat,
-    mistral_deploy,
     mistral_workflow,
     paint_activity,
     pulse,
@@ -32,18 +31,14 @@ def test_format_line_names_the_persona():
     assert "workflow" in format_line("mistral")
 
 
-def test_mistral_workflow_chip_outranks_the_deployment():
+def test_mistral_chip_is_only_the_in_flight_workflow():
     board = ActivityBoard()
     bind(board)
     try:
-        mistral_deploy(True)
-        assert "Mistral" in board.get()
-        assert "deploy" in board.get()
         mistral_workflow(True)
+        assert "Mistral" in board.get()
         assert "workflow" in board.get()
         mistral_workflow(False)
-        assert "deploy" in board.get()
-        mistral_deploy(False)
         assert board._slots["mistral"].done
     finally:
         unbind(board)

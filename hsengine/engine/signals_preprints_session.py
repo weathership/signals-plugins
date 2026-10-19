@@ -62,7 +62,6 @@ def start() -> int:
     global _PROC
     pid = _recorded_pid()
     if _alive(pid):
-        _chip(True)
         return pid
     script = _script()
     if not script.is_file():
@@ -74,7 +73,6 @@ def start() -> int:
     )
     _pidfile().write_text(str(_PROC.pid), encoding="utf-8")
     log.info("signals-preprints worker started pid=%s", _PROC.pid)
-    _chip(True)
     return _PROC.pid
 
 
@@ -125,19 +123,9 @@ def stop() -> None:
     path = _pidfile()
     if path.is_file():
         path.unlink()
-    _chip(False)
 
 
 _LEASE = None
-
-
-def _chip(up: bool) -> None:
-    try:
-        from hsengine.engine.webrtc_activity import mistral_deploy
-
-        mistral_deploy(up)
-    except Exception:
-        log.debug("mistral deploy chip skipped", exc_info=True)
 
 
 def _ensure_declared() -> None:

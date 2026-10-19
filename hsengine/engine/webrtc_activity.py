@@ -222,7 +222,7 @@ def mistral_workflow(active: bool) -> None:
 
 
 def mistral_deploy(up: bool) -> None:
-    """Hold the chip while the signals-preprints deployment process is up."""
+    """Optional. An idle deployment is not progress, so the session does not call this."""
     global _mistral_deploy
     with _mu:
         _mistral_deploy = bool(up)
