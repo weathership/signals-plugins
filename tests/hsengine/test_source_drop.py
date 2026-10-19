@@ -43,6 +43,14 @@ def _paper(**overrides):
     return base
 
 
+def test_mistral_key_comes_from_the_profile_env_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    (tmp_path / ".env").write_text('MISTRAL_API_KEY="from-file"\n', encoding="utf-8")
+    assert drop._mistral_key(None) == "from-file"
+    assert drop._mistral_key("explicit") == "explicit"
+
+
 def test_gpu_tokens_stay_zero():
     assert drop.GPU_TOKENS == 0
 

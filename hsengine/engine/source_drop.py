@@ -607,7 +607,7 @@ def execute_workflow(
         raise RuntimeError("workflow name is empty or not a single token")
     if not isinstance(inputs, dict):
         raise RuntimeError("workflow input must be an object")
-    secret = (key if key is not None else os.environ.get("MISTRAL_API_KEY", "")).strip()
+    secret = _mistral_key(key)
     if not secret:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     status, body = _mistral_json(
@@ -647,7 +647,7 @@ def await_signals_preprints(
     sleep: Callable[[float], None] | None = None,
     key: str | None = None,
 ) -> dict[str, Any]:
-    key = (key if key is not None else os.environ.get("MISTRAL_API_KEY", "")).strip()
+    key = _mistral_key(key)
     if not key:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     pause = sleep or time.sleep
@@ -697,6 +697,20 @@ def _mistral_json(method: str, url: str, payload: dict[str, Any] | None, key: st
         return status, {"detail": raw.decode("utf-8", "replace")[:300]}
 
 
+def _mistral_key(explicit: str | None) -> str:
+    """Process environment, else HERMES_HOME/.env.
+
+    Kanban workers and other children have MISTRAL_API_KEY scrubbed. ACP
+    loads the dotenv. The engine process does neither, so the file is the
+    shared source for every path.
+    """
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()
+    from hsengine.engine.mistral_agents import api_key
+
+    return api_key()
+
+
 def _yaml_scalar(text: str, path: tuple[str, ...]) -> str:
     want = list(path)
     depth = 0
@@ -720,7 +734,7 @@ def mistral_analyze(url: str, *, kind: str, key: str | None = None) -> dict[str,
 
     One Document AI call. No local PDF read and no local model.
     """
-    key = (key if key is not None else os.environ.get("MISTRAL_API_KEY", "")).strip()
+    key = _mistral_key(key)
     if not key:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     pdf_url = pdf_url_for(url, kind)
@@ -1265,7 +1279,11 @@ def _create_card(
         "Source drop from the live call. "
         f"{job} Does not claim the extract GPU and does not evict thinking.\n\n"
         f"URL: {url}\nKind: {kind}\nScope: {scope}\nPerformer: {performer}\n"
-        f"gpu_tokens: {GPU_TOKENS}\n"
+        f"gpu_tokens: {GPU_TOKENS}\n\n"
+        "The hsengine source-drop thread performs a Mistral extract. "
+        "A kanban or ACP worker does not get MISTRAL_API_KEY in its environment. "
+        "Re-run from that path with scripts/mistral_board.py, which reads "
+        "HERMES_HOME/.env.\n"
     )
     with closing(conn):
         return kanban_db.create_task(
