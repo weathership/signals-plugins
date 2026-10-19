@@ -19,8 +19,8 @@ _OCR_URL = "https://api.mistral.ai/v1/ocr"
 _MODEL = "mistral-ocr-latest"
 
 
-def signals_preprints_fetch(url: str, kind: str) -> dict:
-    """OCR one public preprint. Same shape as the engine's ``mistral_analyze``."""
+def signals_preprints_ocr(url: str, kind: str) -> dict:
+    """Read the public PDF into markdown. The summary is a later activity."""
     key = os.environ.get("MISTRAL_API_KEY", "").strip()
     if not key:
         token = os.environ.get("MISTRAL_SA_TOKEN", "").strip()
@@ -37,30 +37,6 @@ def signals_preprints_fetch(url: str, kind: str) -> dict:
         "extract_header": True,
         "extract_footer": True,
         "include_image_base64": False,
-        "document_annotation_prompt": (
-            "Read the paper. short_title is at most eight words. "
-            "summary is for a discussion. claims are stated results. "
-            "method is how they were produced. limits are what is not shown."
-        ),
-        "document_annotation_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "preprint_analysis",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "short_title": {"type": "string"},
-                        "summary": {"type": "string"},
-                        "claims": {"type": "array", "items": {"type": "string"}},
-                        "method": {"type": "string"},
-                        "limits": {"type": "string"},
-                    },
-                    "required": ["short_title", "summary", "claims", "method", "limits"],
-                },
-            },
-        },
     }
     request = urllib.request.Request(
         _OCR_URL,
@@ -84,23 +60,88 @@ def signals_preprints_fetch(url: str, kind: str) -> dict:
         for page in pages
         if str(page.get("markdown") or "").strip()
     )
-    raw = body.get("document_annotation")
-    annotation = json.loads(raw) if isinstance(raw, str) and raw.strip() else raw
-    if not isinstance(annotation, dict):
-        annotation = {}
-    short = str(annotation.get("short_title") or "").strip() or url
     return {
         "url": url,
         "kind": kind,
+        "text": text,
+        "model": str(body.get("model") or _MODEL),
+    }
+
+
+_SUMMARY_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "short_title": {"type": "string"},
+        "summary": {"type": "string"},
+        "claims": {"type": "array", "items": {"type": "string"}},
+        "method": {"type": "string"},
+        "limits": {"type": "string"},
+    },
+    "required": ["short_title", "summary", "claims", "method", "limits"],
+}
+
+
+def signals_preprints_summarize(paper: dict) -> dict:
+    """Turn the OCR markdown into the structured note fields."""
+    key = os.environ.get("MISTRAL_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("no Mistral credential for signals-preprints")
+    excerpt = str(paper.get("text") or "")[:14000]
+    payload = {
+        "model": "mistral-small-latest",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "Read this preprint markdown. short_title is at most eight words. "
+                    "summary is for a discussion. claims are stated results. "
+                    "method is how they were produced. limits are what is not shown.\n\n"
+                    + excerpt
+                ),
+            }
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "preprint_analysis", "strict": True, "schema": _SUMMARY_SCHEMA},
+        },
+    }
+    request = urllib.request.Request(
+        "https://api.mistral.ai/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError(f"Mistral summary HTTP {exc.code}: {detail}") from exc
+    content = str(((body.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+    try:
+        parsed = json.loads(content) if content.strip() else {}
+    except json.JSONDecodeError:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    short = str(parsed.get("short_title") or "").strip() or str(paper.get("url") or "paper")
+    return {
+        "url": paper.get("url") or "",
+        "kind": paper.get("kind") or "",
         "scope": "full",
         "title": short,
         "short_title": short,
-        "summary": str(annotation.get("summary") or "").strip(),
-        "claims": [str(item).strip() for item in (annotation.get("claims") or []) if str(item).strip()],
-        "method": str(annotation.get("method") or "").strip(),
-        "limits": str(annotation.get("limits") or "").strip(),
-        "text": text,
-        "model": str(body.get("model") or _MODEL),
+        "summary": str(parsed.get("summary") or "").strip(),
+        "claims": [str(item).strip() for item in (parsed.get("claims") or []) if str(item).strip()],
+        "method": str(parsed.get("method") or "").strip(),
+        "limits": str(parsed.get("limits") or "").strip(),
+        "text": str(paper.get("text") or ""),
+        "model": str(paper.get("model") or _MODEL),
     }
 
 
@@ -114,20 +155,35 @@ class SignalsPreprintsInput(BaseModel):
 
 
 @workflows.activity()
-async def signals_preprints_analyze(url: str, kind: str) -> dict:
-    return signals_preprints_fetch(url, kind)
+async def signals_preprints_read(url: str, kind: str) -> dict:
+    return signals_preprints_ocr(url, kind)
+
+
+@workflows.activity()
+async def signals_preprints_note(paper: dict) -> dict:
+    return signals_preprints_summarize(paper)
 
 
 @workflows.workflow.define(
     name=WORKFLOW_NAME,
     workflow_display_name="Signals preprint analysis",
-    workflow_description="OCR and structured summary of an arXiv, bioRxiv, or medRxiv PDF.",
+    workflow_description="OCR a preprint, then write the structured note.",
     search_keys=["url", "kind"],
 )
 class SignalsPreprints:
+    def __init__(self) -> None:
+        self.stage = "queued"
+
+    @workflows.workflow.query(name="progress")
+    def progress(self) -> dict:
+        return {"stage": self.stage, "workflow": WORKFLOW_NAME}
+
     @workflows.workflow.entrypoint
     async def run(self, paper: SignalsPreprintsInput) -> dict:
-        return await signals_preprints_analyze(paper.url, paper.kind)
+        self.stage = "ocr"
+        fetched = await signals_preprints_read(paper.url, paper.kind)
+        self.stage = "summary"
+        return await signals_preprints_note(fetched)
 
 
 SYSTEM_ONE_NAME = "signals-system-one"

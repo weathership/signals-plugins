@@ -91,6 +91,7 @@ _mu = threading.Lock()
 _board: "ActivityBoard | None" = None
 _mistral_deploy = False
 _mistral_workflows = 0
+_mistral_stage = "workflow"
 
 
 @dataclass
@@ -201,13 +202,20 @@ def format_line(kind: str) -> str:
 
 
 def _mistral_paint() -> None:
-    """One Mistral chip. A running workflow wins over an idle deployment."""
+    """One Mistral chip. The verb is the preprint stage Mistral last reported."""
     if _mistral_workflows:
-        begin("mistral", "workflow")
+        begin("mistral", _mistral_stage or "workflow")
     elif _mistral_deploy:
         begin("mistral", "deploy")
     else:
         end("mistral")
+
+
+def mistral_note(stage: str) -> None:
+    """Replace the chip verb with the current signals-preprint-analysis stage."""
+    global _mistral_stage
+    _mistral_stage = " ".join((stage or "workflow").split())[:22] or "workflow"
+    _mistral_paint()
 
 
 def mistral_workflow(active: bool) -> None:

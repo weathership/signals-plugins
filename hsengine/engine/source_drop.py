@@ -54,6 +54,7 @@ _MISTRAL_TIMEOUT_S = 180
 _MISTRAL_OCR_URL = "https://api.mistral.ai/v1/ocr"
 _WORKFLOW_EXECUTE = "https://api.mistral.ai/v1/workflows/{name}/execute"
 _WORKFLOW_EXECUTION = "https://api.mistral.ai/v1/workflows/executions/{execution_id}"
+_WORKFLOW_QUERY = "https://api.mistral.ai/v1/workflows/executions/{execution_id}/queries"
 _WORKFLOW_POLL_S = 5
 _WORKFLOW_WAIT_S = 900
 _MISTRAL_MODEL = "mistral-ocr-latest"
@@ -369,6 +370,8 @@ def _run(
             _block(task_id, str(exc))
         except Exception:
             log.debug("source drop could not block %s", task_id, exc_info=True)
+        if scope == "full" and kind in _CURATED:
+            _tell_call(f"The Mistral extract of {url} stopped. {exc}")
     finally:
         with _LOCK:
             _INFLIGHT.discard(ikey)
@@ -586,8 +589,16 @@ def _curated_source(
             return dict(analyze(url, kind=kind))
         raise
     try:
-        _comment(task_id, f"Mistral workflow {name} execution {execution_id}.")
-        return await_signals_preprints(execution_id)
+        _comment(task_id, f"signals-preprint-analysis started {execution_id}.")
+
+        def _stage(stage: str) -> None:
+            _comment(task_id, f"signals-preprint-analysis: {stage}.")
+
+        def _stuck(stage: str) -> None:
+            _comment(task_id, f"signals-preprint-analysis is not progressing ({stage}).")
+            _tell_call(f"The Mistral extract of {url} is not progressing. It is stuck at {stage}.")
+
+        return await_signals_preprints(execution_id, on_stage=_stage, on_stuck=_stuck)
     finally:
         from hsengine.engine.webrtc_activity import mistral_workflow
 
@@ -655,17 +666,53 @@ def start_signals_preprints(name: str, url: str, kind: str) -> str:
     return str(started["execution_id"])
 
 
+def extraction_stage(status: str, progress: dict[str, Any] | None) -> str:
+    """Chip and card label for one poll of signals-preprint-analysis."""
+    state = (status or "").upper()
+    if state == "RETRYING_AFTER_ERROR":
+        return "retrying"
+    if state in {"FAILED", "CANCELED", "TERMINATED", "TIMED_OUT"}:
+        return state.lower()
+    if isinstance(progress, dict):
+        stage = str(progress.get("stage") or "").strip().lower()
+        if stage:
+            return stage[:22]
+    if state == "RUNNING":
+        return "running"
+    return (state.lower() or "running")[:22]
+
+
+def _query_progress(execution_id: str, key: str) -> dict[str, Any] | None:
+    status, body = _mistral_json(
+        "POST",
+        _WORKFLOW_QUERY.format(execution_id=execution_id),
+        {"name": "progress"},
+        key,
+    )
+    if status >= 300 or not isinstance(body, dict):
+        return None
+    result = body.get("result")
+    return result if isinstance(result, dict) else None
+
+
 def await_signals_preprints(
     execution_id: str,
     *,
     sleep: Callable[[float], None] | None = None,
     key: str | None = None,
+    on_stage: Callable[[str], None] | None = None,
+    on_stuck: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
+    from hsengine.engine.webrtc_activity import mistral_note
+
     key = _mistral_key(key)
     if not key:
         raise RuntimeError("MISTRAL_API_KEY is unset")
     pause = sleep or time.sleep
     deadline = time.monotonic() + _WORKFLOW_WAIT_S
+    last = ""
+    idle_from = time.monotonic()
+    warned = False
     while True:
         status, body = _mistral_json(
             "GET",
@@ -676,6 +723,28 @@ def await_signals_preprints(
         if status >= 300 or not isinstance(body, dict):
             raise RuntimeError(f"workflow status HTTP {status}")
         state = str(body.get("status") or "")
+        progress = _query_progress(execution_id, key) if state == "RUNNING" else None
+        stage = extraction_stage(state, progress)
+        if stage != last:
+            last = stage
+            if stage not in {"running", "queued"}:
+                idle_from = time.monotonic()
+            mistral_note(stage)
+            if on_stage is not None:
+                on_stage(stage)
+        elif (
+            progress is not None
+            and stage in {"running", "queued"}
+            and not warned
+            and time.monotonic() - idle_from >= 90
+        ):
+            warned = True
+            if on_stuck is not None:
+                on_stuck(stage)
+        if state == "RETRYING_AFTER_ERROR" and not warned:
+            warned = True
+            if on_stuck is not None:
+                on_stuck(stage)
         if state == "COMPLETED":
             result = body.get("result")
             if isinstance(result, str):
@@ -1388,6 +1457,16 @@ def _chip_leave() -> None:
         end("hicks")
     except Exception:
         log.debug("extract chip end skipped", exc_info=True)
+
+
+def _tell_call(text: str) -> None:
+    """The next spoken turn hears an extract that cannot progress."""
+    try:
+        from hsengine.engine.primary_hermes import offer_steer
+
+        offer_steer(text)
+    except Exception:
+        log.debug("extract steer skipped", exc_info=True)
 
 
 def _refresh() -> None:
