@@ -585,8 +585,13 @@ def _curated_source(
             _comment(task_id, f"Workflow {name} is not registered. OCR runs in this process.")
             return dict(analyze(url, kind=kind))
         raise
-    _comment(task_id, f"Mistral workflow {name} execution {execution_id}.")
-    return await_signals_preprints(execution_id)
+    try:
+        _comment(task_id, f"Mistral workflow {name} execution {execution_id}.")
+        return await_signals_preprints(execution_id)
+    finally:
+        from hsengine.engine.webrtc_activity import mistral_workflow
+
+        mistral_workflow(False)
 
 
 _WORKFLOW_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -624,9 +629,15 @@ def execute_workflow(
     if status >= 300 or not isinstance(body, dict) or not body.get("execution_id"):
         raise RuntimeError(f"workflow execute HTTP {status}")
     execution_id = str(body["execution_id"])
+    from hsengine.engine.webrtc_activity import mistral_workflow
+
+    mistral_workflow(True)
     if not wait:
         return {"execution_id": execution_id, "workflow": workflow, "status": "started"}
-    result = await_signals_preprints(execution_id, sleep=sleep, key=secret)
+    try:
+        result = await_signals_preprints(execution_id, sleep=sleep, key=secret)
+    finally:
+        mistral_workflow(False)
     return {
         "execution_id": execution_id,
         "workflow": workflow,
@@ -740,6 +751,16 @@ def mistral_analyze(url: str, *, kind: str, key: str | None = None) -> dict[str,
     key = _mistral_key(key)
     if not key:
         raise RuntimeError("MISTRAL_API_KEY is unset")
+    from hsengine.engine.webrtc_activity import mistral_workflow
+
+    mistral_workflow(True)
+    try:
+        return _mistral_analyze_call(url, kind=kind, key=key)
+    finally:
+        mistral_workflow(False)
+
+
+def _mistral_analyze_call(url: str, *, kind: str, key: str) -> dict[str, Any]:
     pdf_url = pdf_url_for(url, kind)
     payload = {
         "model": _MISTRAL_MODEL,

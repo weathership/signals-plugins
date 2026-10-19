@@ -10,6 +10,8 @@ from hsengine.engine.webrtc_activity import (
     bind,
     format_line,
     heartbeat,
+    mistral_deploy,
+    mistral_workflow,
     paint_activity,
     pulse,
     unbind,
@@ -26,6 +28,25 @@ def test_format_line_names_the_persona():
     assert format_line("hermes").startswith("Ripley")
     assert format_line("source_drop").startswith("Hicks")
     assert "extract" in format_line("source_drop")
+    assert format_line("mistral").startswith("Mistral")
+    assert "workflow" in format_line("mistral")
+
+
+def test_mistral_workflow_chip_outranks_the_deployment():
+    board = ActivityBoard()
+    bind(board)
+    try:
+        mistral_deploy(True)
+        assert "Mistral" in board.get()
+        assert "deploy" in board.get()
+        mistral_workflow(True)
+        assert "workflow" in board.get()
+        mistral_workflow(False)
+        assert "deploy" in board.get()
+        mistral_deploy(False)
+        assert board._slots["mistral"].done
+    finally:
+        unbind(board)
 
 
 def test_pulse_viz_and_fmp_show_on_the_board():

@@ -43,6 +43,7 @@ _WHO = {
     "on it": "ripley",
     "on_it": "ripley",
     "source_drop": "hicks",
+    "mistral": "mistral",
 }
 
 _LABEL = {
@@ -50,6 +51,7 @@ _LABEL = {
     "vasquez": "Vasquez",
     "ripley": "Ripley",
     "hicks": "Hicks",
+    "mistral": "Mistral",
 }
 
 _COLOR = {
@@ -57,6 +59,7 @@ _COLOR = {
     "vasquez": (140, 190, 90),
     "ripley": (232, 195, 106),
     "hicks": (120, 176, 214),
+    "mistral": (255, 122, 26),
 }
 
 _VERB = {
@@ -81,10 +84,13 @@ _VERB = {
     "vasquez": "glance",
     "ripley": "working",
     "source_drop": "extract",
+    "mistral": "workflow",
 }
 
 _mu = threading.Lock()
 _board: "ActivityBoard | None" = None
+_mistral_deploy = False
+_mistral_workflows = 0
 
 
 @dataclass
@@ -194,6 +200,35 @@ def format_line(kind: str) -> str:
     return f"{name} · {verb}"[:_MAX_LINE]
 
 
+def _mistral_paint() -> None:
+    """One Mistral chip. A running workflow wins over an idle deployment."""
+    if _mistral_workflows:
+        begin("mistral", "workflow")
+    elif _mistral_deploy:
+        begin("mistral", "deploy")
+    else:
+        end("mistral")
+
+
+def mistral_workflow(active: bool) -> None:
+    """Hold the chip while a Mistral workflow execution is in flight."""
+    global _mistral_workflows
+    with _mu:
+        if active:
+            _mistral_workflows += 1
+        else:
+            _mistral_workflows = max(0, _mistral_workflows - 1)
+    _mistral_paint()
+
+
+def mistral_deploy(up: bool) -> None:
+    """Hold the chip while the signals-preprints deployment process is up."""
+    global _mistral_deploy
+    with _mu:
+        _mistral_deploy = bool(up)
+    _mistral_paint()
+
+
 def begin(who: str, verb: str = "") -> None:
     with _mu:
         board = _board
@@ -249,6 +284,8 @@ def paint_activity(image: Any, text: str) -> Any:
             who = "vasquez"
         elif low.startswith("hicks"):
             who = "hicks"
+        elif low.startswith("mistral"):
+            who = "mistral"
         fill = _COLOR.get(who, (220, 220, 220))
         try:
             bbox = draw.textbbox((0, 0), line, font=font)
