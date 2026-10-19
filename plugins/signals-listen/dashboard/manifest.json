@@ -3,7 +3,7 @@
   "label": "Listen",
   "description": "Listen: WebRTC clip + Kyutai captions from your mic.",
   "icon": "Radio",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "tab": {
     "path": "/listen",
     "position": "after:chat"

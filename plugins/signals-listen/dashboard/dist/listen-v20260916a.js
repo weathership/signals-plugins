@@ -9,7 +9,7 @@
   const C = SDK.components;
   const API = "/api/plugins/signals-listen";
   const POSTER = "/dashboard-plugins/signals-listen/poster.jpg";
-  const JS_VERSION = "listen-js-20260928i";
+  const JS_VERSION = "listen-js-20261019a";
 
   function h(type, props) {
     const children = Array.prototype.slice.call(arguments, 2);
@@ -351,8 +351,10 @@
         });
       }
       setDetail(next
-        ? JS_VERSION + " · room muted — the mic is not sent"
-        : JS_VERSION + " · mic live");
+        ? JS_VERSION + (sessionRef.current
+          ? " · room muted — the mic is not sent"
+          : " · mute on — the mic will not be sent")
+        : JS_VERSION + (sessionRef.current ? " · mic live" : " · mute off"));
     }
 
     function toggleTextOnly() {
@@ -365,8 +367,10 @@
         audioSinkRef.current = null;
       }
       setDetail(next
-        ? JS_VERSION + " · incoming audio is off — words stay on the video"
-        : JS_VERSION + " · hearing audio");
+        ? JS_VERSION + (sessionRef.current
+          ? " · incoming audio is off — words stay on the video"
+          : " · silence on — incoming audio will stay off")
+        : JS_VERSION + (sessionRef.current ? " · hearing audio" : " · silence off"));
     }
 
     function onDraftKey(e) {
@@ -432,13 +436,11 @@
               disabled: live || !webrtcReady,
             }, busy ? "Negotiating…" : (live ? "Connected" : "Connect")),
             h(Button, { onClick: disconnect, disabled: !live && conn === "idle" }, "Disconnect"),
-            toggleControl("Mute", roomMuted, toggleRoomMute, onCall),
-            toggleControl("Silence", textOnly, toggleTextOnly, onCall),
+            toggleControl("Mute", roomMuted, toggleRoomMute, true),
+            toggleControl("Silence", textOnly, toggleTextOnly, true),
           ),
           h("p", { className: "signals-listen-status" },
-            onCall
-              ? "Mute keeps local talk off the mic. Silence cuts incoming audio; words stay on the picture."
-              : "Mute and Silence arm after Connect."
+            "Mute keeps local talk off the mic. Silence cuts incoming audio; words stay on the picture. Either can be set before Connect."
           ),
           h("p", { className: "signals-listen-status" }, detail),
           h("video", {
