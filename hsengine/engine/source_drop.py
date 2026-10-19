@@ -274,6 +274,8 @@ def enqueue(
                     "created": not existing,
                 }
             )
+    if jobs:
+        _chip_hold(len(jobs))
     for tid in comments:
         _comment(tid, _APPROVAL_REASON)
     fetcher = fetch or fetch_source
@@ -370,6 +372,7 @@ def _run(
     finally:
         with _LOCK:
             _INFLIGHT.discard(ikey)
+        _chip_leave()
         _refresh()
 
 
@@ -1328,6 +1331,42 @@ def _block(task_id: str, reason: str) -> None:
     kanban_db, conn = _connect()
     with closing(conn):
         kanban_db.block_task(conn, task_id, reason=reason[:500], kind="transient")
+
+
+_CHIP = 0
+
+
+def _chip_hold(count: int) -> None:
+    """Hold a Hicks chip for the whole extract, including after the spoken turn returns."""
+    global _CHIP
+    if count <= 0:
+        return
+    with _LOCK:
+        was = _CHIP
+        _CHIP += count
+    if was != 0:
+        return
+    try:
+        from hsengine.engine.webrtc_activity import pulse
+
+        pulse("source_drop")
+    except Exception:
+        log.debug("extract chip skipped", exc_info=True)
+
+
+def _chip_leave() -> None:
+    global _CHIP
+    with _LOCK:
+        _CHIP = max(0, _CHIP - 1)
+        last = _CHIP == 0
+    if not last:
+        return
+    try:
+        from hsengine.engine.webrtc_activity import end
+
+        end("hicks")
+    except Exception:
+        log.debug("extract chip end skipped", exc_info=True)
 
 
 def _refresh() -> None:

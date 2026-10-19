@@ -42,18 +42,21 @@ _WHO = {
     "speaking": "ripley",
     "on it": "ripley",
     "on_it": "ripley",
+    "source_drop": "hicks",
 }
 
 _LABEL = {
     "bishop": "Bishop",
     "vasquez": "Vasquez",
     "ripley": "Ripley",
+    "hicks": "Hicks",
 }
 
 _COLOR = {
     "bishop": (200, 212, 224),
     "vasquez": (140, 190, 90),
     "ripley": (232, 195, 106),
+    "hicks": (120, 176, 214),
 }
 
 _VERB = {
@@ -77,6 +80,7 @@ _VERB = {
     "bishop": "invent",
     "vasquez": "glance",
     "ripley": "working",
+    "source_drop": "extract",
 }
 
 _mu = threading.Lock()
@@ -243,6 +247,8 @@ def paint_activity(image: Any, text: str) -> Any:
             who = "bishop"
         elif low.startswith("vasquez"):
             who = "vasquez"
+        elif low.startswith("hicks"):
+            who = "hicks"
         fill = _COLOR.get(who, (220, 220, 220))
         try:
             bbox = draw.textbbox((0, 0), line, font=font)
