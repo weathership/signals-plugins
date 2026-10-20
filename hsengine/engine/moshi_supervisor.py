@@ -71,21 +71,46 @@ def _wrap_bin() -> Path:
     return devenv_root() / ".devenv" / "profile" / "bin" / "moshi-server"
 
 
+# moshi-server 0.6.4 embeds PyO3 0.23. That crate does not link CPython 3.14,
+# so the SONAME stays 3.11 even though the Hermes venv is 3.14.
+_LIBPYTHON = "libpython3.11.so.1.0"
+
+
 def python311_lib(python: Path) -> Path | None:
     """Directory of libpython3.11.so.1.0 next to a Nix Python 3.11 interpreter."""
     try:
         lib = python.resolve().parent.parent / "lib"
     except OSError:
         return None
-    if (lib / "libpython3.11.so.1.0").is_file():
+    if (lib / _LIBPYTHON).is_file():
         return lib
     return None
 
 
-def _has_libpython311(text: str) -> bool:
-    # `python3.11` is also the TTS site-packages directory and does not
-    # contain libpython3.11.so.1.0. Match the SONAME or the Nix package.
-    return "libpython3.11" in text or "python3-3.11" in text
+def _path_has_soname(parts: list[str]) -> bool:
+    """True when a directory on the path actually contains the SONAME file.
+
+    A site-packages path contains the text ``python3.11`` and does not ship
+    libpython. A wrap line that names python3-3.14 does not either.
+    """
+    for part in parts:
+        for entry in part.split(":"):
+            if entry and (Path(entry) / _LIBPYTHON).is_file():
+                return True
+    return False
+
+
+def _moshi_python_lib() -> Path | None:
+    """libpython for the profile interpreter, else the TTS venv's."""
+    root = devenv_root()
+    for python in (
+        root / ".devenv" / "profile" / "bin" / "moshi-python",
+        root / ".devenv" / "state" / "tts-venv" / "bin" / "python3.11",
+    ):
+        lib = python311_lib(python)
+        if lib is not None:
+            return lib
+    return None
 
 
 def _ld_library_path(torch_lib: Path | None) -> str:
@@ -106,10 +131,10 @@ def _ld_library_path(torch_lib: Path | None) -> str:
         pass
     if torch_lib is not None and torch_lib.is_dir():
         parts.append(str(torch_lib))
-    # A wrap generated before python311 was restored only has libpython3.14.
-    # The TTS venv's interpreter is the Nix 3.11 the ELF was linked against.
-    if not _has_libpython311(":".join(parts)):
-        lib = python311_lib(devenv_root() / ".devenv" / "state" / "tts-venv" / "bin" / "python3.11")
+    # The installed wrap can lag devenv.nix and still list python3.14, which
+    # has no libpython3.11.so.1.0. Prefer the profile interpreter.
+    if not _path_has_soname(parts):
+        lib = _moshi_python_lib()
         if lib is not None:
             parts.append(str(lib))
     return ":".join(parts)
@@ -206,6 +231,11 @@ def activate() -> dict:
             raise RuntimeError(f"moshi STT config not a file: {config}")
         log_path = state / "logs" / "moshi-server.log"
         env = _moshi_env(gpu)
+        if not _path_has_soname([env.get("LD_LIBRARY_PATH", "")]):
+            raise RuntimeError(
+                "moshi-server needs libpython3.11.so.1.0 on LD_LIBRARY_PATH "
+                "(PyO3 0.23). Rebuild the devenv profile so moshi-python exists."
+            )
         log.info("starting moshi-server binary=%s gpu=%s ld=%s", binary, gpu, env.get("LD_LIBRARY_PATH", "")[:180])
         # Truncate so a 503 tail is this start, not last week's successful run.
         log_f = open(log_path, "wb", buffering=0)
