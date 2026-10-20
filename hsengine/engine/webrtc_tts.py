@@ -128,7 +128,10 @@ _DASH_RUN = re.compile(
 
 def spoken_text(text: str) -> str:
     """Words Kyutai can say. Punctuation that would be its own silent token is gone."""
-    cleaned = _DASH_RUN.sub(", ", text or "")
+    from hsengine.engine.interactive import strip_tool_markup
+
+    cleaned = strip_tool_markup(text or "")
+    cleaned = _DASH_RUN.sub(", ", cleaned)
     cleaned = cleaned.translate(_SPOKEN_TRANSLATE)
     cleaned = re.sub(r"\s+,", ",", cleaned)
     cleaned = re.sub(r",(?:\s*,)+", ", ", cleaned)

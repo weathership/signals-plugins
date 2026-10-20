@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 import httpx
 
@@ -122,6 +123,127 @@ def _spoken_context(
     return "\n\n".join(parts), prior
 
 
+# Qwen sometimes writes the call into content instead of tool_calls.
+# Kyutai would speak the tags. Run them, and never say them.
+_TOOL_BLOCK = re.compile(r"<tool_call\b[^>]*>([\s\S]*?)</tool_call>", re.IGNORECASE)
+_TOOL_UNCLOSED = re.compile(r"<tool_call\b[^>]*>([\s\S]*)\Z", re.IGNORECASE)
+_TOOL_TAG = re.compile(
+    r"</?(?:tool_call|function|parameter)\b[^>]*>|<\|/?tool_call\|?>",
+    re.IGNORECASE,
+)
+_FN_BLOCK = re.compile(
+    r"<function=([^>]+)>([\s\S]*?)</function>",
+    re.IGNORECASE,
+)
+_PARAM_TAG = re.compile(
+    r"<parameter=([^>]+)>([\s\S]*?)</parameter>",
+    re.IGNORECASE,
+)
+
+
+def _tool_name(raw: str) -> str:
+    return re.sub(r"\s+", "_", (raw or "").strip())
+
+
+def _param_value(raw: str):
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    if text[0] in "{[":
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return text
+    if re.fullmatch(r"-?\d+", text):
+        return int(text)
+    if re.fullmatch(r"-?\d+\.\d+", text):
+        return float(text)
+    if text.lower() in ("true", "false"):
+        return text.lower() == "true"
+    return text
+
+
+def _calls_from_json(body: str) -> list[tuple[str, dict]]:
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return []
+    out: list[tuple[str, dict]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = _tool_name(str(item.get("name") or ""))
+        args = item.get("arguments", item.get("parameters", {}))
+        if isinstance(args, str):
+            try:
+                args = json.loads(args) if args else {}
+            except json.JSONDecodeError:
+                args = {}
+        if name and isinstance(args, dict):
+            out.append((name, args))
+    return out
+
+
+def _calls_in_body(body: str) -> list[tuple[str, dict]]:
+    text = (body or "").strip()
+    if not text:
+        return []
+    if text[0] in "{[":
+        parsed = _calls_from_json(text)
+        if parsed:
+            return parsed
+    out: list[tuple[str, dict]] = []
+    for name, inner in _FN_BLOCK.findall(text):
+        args = {
+            _tool_name(key): _param_value(val)
+            for key, val in _PARAM_TAG.findall(inner)
+        }
+        name = _tool_name(name)
+        if name:
+            out.append((name, args))
+    return out
+
+
+def _tool_blocks(content: str) -> list[str]:
+    found = _TOOL_BLOCK.findall(content or "")
+    if found:
+        return found
+    match = _TOOL_UNCLOSED.search(content or "")
+    if match is None:
+        return []
+    inner = match.group(1)
+    if "<function=" in inner.lower() or inner.strip()[:1] in "{[":
+        return [inner]
+    return []
+
+
+def _textual_tool_calls(content: str) -> list[dict]:
+    calls: list[dict] = []
+    for body in _tool_blocks(content):
+        for name, args in _calls_in_body(body):
+            calls.append(
+                {
+                    "id": f"call_text_{len(calls)}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(args)},
+                }
+            )
+    return calls
+
+
+def strip_tool_markup(text: str) -> str:
+    """Drop Qwen tool-call tags so a voice turn cannot read them."""
+    raw = text or ""
+    cleaned = _TOOL_BLOCK.sub(" ", raw)
+    cleaned = _TOOL_UNCLOSED.sub(" ", cleaned)
+    cleaned = _TOOL_TAG.sub(" ", cleaned)
+    return " ".join(cleaned.split())
+
+
 def _tool_calls_from(msg: dict) -> list[dict]:
     calls = msg.get("tool_calls")
     if isinstance(calls, list) and calls:
@@ -129,7 +251,23 @@ def _tool_calls_from(msg: dict) -> list[dict]:
     fn = msg.get("function_call")
     if isinstance(fn, dict) and fn.get("name"):
         return [{"id": "call_0", "type": "function", "function": fn}]
+    content = msg.get("content")
+    if isinstance(content, str) and "<tool_call" in content.lower():
+        return _textual_tool_calls(content)
     return []
+
+
+def _assistant_with_calls(msg: dict, calls: list[dict]) -> dict:
+    """Structured calls stay as the API sent them. Textual calls become tool_calls."""
+    structured = msg.get("tool_calls")
+    if isinstance(structured, list) and structured:
+        return msg
+    prose = strip_tool_markup(str(msg.get("content") or ""))
+    return {
+        "role": "assistant",
+        "content": prose or None,
+        "tool_calls": calls,
+    }
 
 
 def _run_tool_calls(calls: list[dict]) -> list[dict]:
@@ -277,10 +415,10 @@ def complete_cerebras(
                         if name:
                             tool_names.append(name)
                             pulse(name)
-                    messages.append(msg)
+                    messages.append(_assistant_with_calls(msg, calls))
                     messages.extend(_run_tool_calls(calls))
                     continue
-                text = (msg.get("content") or "").strip()
+                text = strip_tool_markup(str(msg.get("content") or ""))
                 break
             # Four tool rounds and no sentence is silence, not an answer.
             if speak and used_tools and not text:
@@ -310,7 +448,7 @@ def complete_cerebras(
                 prompt_tokens += int(usage.get("prompt_tokens") or 0)
                 completion_tokens += int(usage.get("completion_tokens") or 0)
                 finish = choice.get("finish_reason") or "stop"
-                text = (msg.get("content") or "").strip()
+                text = strip_tool_markup(str(msg.get("content") or ""))
                 log.info("cerebras spoke after tools chars=%s", len(text))
             from hsengine.engine.heard import repeats_previous_turn
 
@@ -352,7 +490,7 @@ def complete_cerebras(
                 prompt_tokens += int(usage.get("prompt_tokens") or 0)
                 completion_tokens += int(usage.get("completion_tokens") or 0)
                 finish = choice.get("finish_reason") or "stop"
-                text = (msg.get("content") or "").strip()
+                text = strip_tool_markup(str(msg.get("content") or ""))
                 if repeats_previous_turn(previous, text):
                     log.info("cerebras repeat persisted; not speaking it")
                     text = ""
@@ -432,7 +570,7 @@ def spoken_text(text: str) -> str:
     """Plain words for Kyutai TTS — no markdown, URLs, or silent STEER notes."""
     import re
 
-    raw = (text or "").strip()
+    raw = strip_tool_markup(text or "")
     if not raw:
         return ""
     if re.search(r"(?i)\bSTEER\s*:", raw) or re.search(r"(?i)\bMONOLOGUE\s*:", raw):

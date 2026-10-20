@@ -1,6 +1,7 @@
 """Interactive agent-rtc posture: Cerebras thinking, no silent local fallback."""
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +12,85 @@ from hsengine.engine import interactive
 def test_spoken_text_strips_markdown_and_urls():
     assert interactive.spoken_text("Hello **there** from https://x.ai now") == "Hello there from now"
     assert interactive.spoken_text("```code``` hi") == "hi"
+
+
+_QWEN_TOOL = (
+    "<tool_call>\n"
+    "<function=recent_thoughts>\n"
+    "<parameter=limit>\n"
+    "6\n"
+    "</parameter>\n"
+    "</function>\n"
+    "</tool_call>"
+)
+
+
+def test_spoken_text_drops_qwen_tool_markup():
+    assert interactive.spoken_text(_QWEN_TOOL) == ""
+    assert interactive.spoken_text(f"On it. {_QWEN_TOOL}") == "On it."
+
+
+def test_textual_tool_call_parses_function_and_parameter():
+    calls = interactive._tool_calls_from({"content": _QWEN_TOOL})
+    assert len(calls) == 1
+    fn = calls[0]["function"]
+    assert fn["name"] == "recent_thoughts"
+    assert json.loads(fn["arguments"]) == {"limit": 6}
+
+
+def test_textual_tool_call_is_run_and_not_spoken(monkeypatch):
+    monkeypatch.setenv("CEREBRAS_API_KEY", "test-key")
+    first = {
+        "model": "qwen-3.8-27b",
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": _QWEN_TOOL},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {},
+    }
+    second = {
+        "model": "qwen-3.8-27b",
+        "choices": [
+            {
+                "message": {
+                    "content": "Six thoughts since yesterday.",
+                    "reasoning": "",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {},
+    }
+    client = _client_with_payloads([first, second])
+
+    class _Now:
+        def __init__(self, target=None, args=(), kwargs=None, **_ignored):
+            self.target = target
+            self.args = args
+            self.kwargs = kwargs or {}
+
+        def start(self):
+            if self.target is not None:
+                self.target(*self.args, **self.kwargs)
+
+    with patch("hsengine.engine.interactive.httpx.Client", return_value=client):
+        with patch("hsengine.engine.ops.dispatch", return_value='{"thoughts":[]}') as dispatch:
+            with patch("hsengine.engine.interactive._heard_aside"):
+                with patch("hsengine.engine.interactive._speak_cerebras") as speak:
+                    with patch("hsengine.engine.interactive.threading.Thread", _Now):
+                        result = interactive.complete_cerebras(
+                            prompt="what have you been thinking",
+                            tools=True,
+                        )
+    assert result.text == "Six thoughts since yesterday."
+    dispatch.assert_called_once_with("recent_thoughts", {"limit": 6})
+    assert client.post.call_count == 2
+    speak.assert_called_once()
+    said = speak.call_args.args[0]
+    assert "tool" not in said.lower()
+    assert said == "Six thoughts since yesterday."
 
 
 def test_spoken_text_never_speaks_steer_protocol():

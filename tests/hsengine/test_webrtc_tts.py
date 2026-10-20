@@ -74,6 +74,12 @@ def test_spoken_text_does_not_leave_a_dash_as_its_own_word():
     kept = spoken_text("the 36-hour window and the follow-ups")
     assert "36-hour" in kept.split()
     assert "follow-ups" in kept.split()
+    markup = (
+        "<tool_call><function=recent_thoughts>"
+        "<parameter=limit>6</parameter></function></tool_call>"
+    )
+    assert spoken_text(markup) == ""
+    assert spoken_text(f"On it. {markup}") == "On it."
 
 
 def test_tts_phrases_group_words_at_sentence_breaks():
