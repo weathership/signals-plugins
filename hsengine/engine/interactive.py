@@ -561,7 +561,9 @@ def _heard_aside(utterance: str, session_id: str, epoch: int | None) -> None:
         if not text or not line_is_fresh(utterance, text):
             log.info("heard aside dropped %r", (text or "")[:80])
             return
-        _speak_cerebras(spoken_text(text), epoch=epoch)
+        # The lookup is still in flight. Do not drop the Ripley chip when
+        # this sentence finishes.
+        _speak_cerebras(spoken_text(text), epoch=epoch, release=False)
     except Exception:
         log.exception("heard aside failed")
 
@@ -604,7 +606,7 @@ def _speech_epoch(session_id: str) -> int | None:
 _TTS_GATE = threading.Lock()
 
 
-def _speak_cerebras(text: str, epoch: int | None = None) -> None:
+def _speak_cerebras(text: str, epoch: int | None = None, *, release: bool = True) -> None:
     # On the picture even when incoming audio is silenced locally.
     try:
         from hsengine.engine.webrtc_session import HUB
@@ -620,9 +622,11 @@ def _speak_cerebras(text: str, epoch: int | None = None) -> None:
     try:
         from hsengine.engine.webrtc_activity import begin, end
 
-        begin("ripley", "speaking")
+        if release:
+            begin("ripley", "speaking")
     except Exception:
         end = lambda *_a, **_k: None  # type: ignore[misc,assignment]
+        release = False
     try:
         from hsengine.engine.webrtc_tts import speak_on_session_boards
 
@@ -631,7 +635,8 @@ def _speak_cerebras(text: str, epoch: int | None = None) -> None:
     except Exception:
         log.exception("Kyutai TTS failed for Cerebras text")
     finally:
-        end("ripley")
+        if release:
+            end("ripley")
         _TTS_GATE.release()
 
 

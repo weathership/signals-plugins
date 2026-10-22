@@ -19,7 +19,7 @@ from hsengine.engine.webrtc_activity import (
 
 def test_format_line_names_the_persona():
     assert format_line("bishop") == "Bishop"
-    assert "hermes" in format_line("hermes")
+    assert "looking" in format_line("hermes")
     assert format_line("viz_show").startswith("Vasquez")
     assert format_line("fmp").startswith("Ripley")
     assert format_line("grok_consult").startswith("Bishop")
@@ -42,6 +42,29 @@ def test_mistral_chip_is_only_the_in_flight_workflow():
         assert board._slots["mistral"].done
     finally:
         unbind(board)
+
+
+def test_aside_does_not_clear_a_lookup_chip(monkeypatch):
+    """The 'let me look' sentence must not end the Ripley chip mid-lookup."""
+    from hsengine.engine import interactive
+
+    board = ActivityBoard()
+    bind(board)
+    monkeypatch.setattr(
+        "hsengine.engine.webrtc_tts.speak_on_session_boards",
+        lambda *_a, **_k: None,
+    )
+    try:
+        pulse("hermes")
+        interactive._speak_cerebras("Let me pull that up.", release=False)
+        shown = board.get()
+        assert "Ripley" in shown
+        assert "looking" in shown
+        assert board._slots["ripley"].done is False
+    finally:
+        unbind(board)
+        if interactive._TTS_GATE.locked():
+            interactive._TTS_GATE.release()
 
 
 def test_pulse_viz_and_fmp_show_on_the_board():

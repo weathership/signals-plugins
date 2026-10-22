@@ -75,7 +75,7 @@ _VERB = {
     "fmp": "fmp",
     "grok_consult": "consult",
     "agenda_create": "agenda",
-    "hermes": "hermes",
+    "hermes": "looking",
     "thinking": "thinking",
     "speaking": "speaking",
     "on_it": "on it",
