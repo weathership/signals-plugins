@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from hsengine.engine.chromium_hold import refuse_chromium_156
+
 log = logging.getLogger("hsengine.engine.webrtc.cdp")
 
 VIEW_W = 1280
@@ -215,6 +217,8 @@ class CdpCamera:
             debug_port=self.debug_port,
             url=url,
         )
+        # Milestone 156 must not load the viz page or any subresource.
+        refuse_chromium_156(binary)
         log.info("chromium session=%s port=%s", self.session_id, self.debug_port)
         self.proc = await asyncio.create_subprocess_exec(
             *cmd,
